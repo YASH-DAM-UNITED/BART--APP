@@ -156,7 +156,7 @@ if back:
 
 if refresh:
     st.cache_data.clear()
-    st.cache_resource.clear()
+    
     st.rerun()
 
 if "Shift" in df_full.columns:

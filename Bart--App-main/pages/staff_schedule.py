@@ -20,7 +20,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# AUTH
+# AUTH CHECK
 # =========================
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("Session expired")
@@ -38,19 +38,14 @@ if "gspread_client" not in st.session_state:
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     st.session_state.gspread_client = gspread.authorize(creds)
 
-master_sheet = st.session_state.gspread_client.open_by_key(
+sheet = st.session_state.gspread_client.open_by_key(
     "1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0"
 )
 
-# =========================
-# CONFIG
-# =========================
-SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
-
-BASE_COLS = ["Branch", "Name", "Role"]
+ws = sheet.worksheet("StaffSchedule")
 
 # =========================
-# SESSION STATE INIT
+# SESSION INIT
 # =========================
 if "shift_buffer" not in st.session_state:
     st.session_state.shift_buffer = {}
@@ -58,60 +53,72 @@ if "shift_buffer" not in st.session_state:
 if "pending_dialog" not in st.session_state:
     st.session_state.pending_dialog = None
 
-if "cached_df" not in st.session_state:
-    st.session_state.cached_df = None
-
 # =========================
-# LOAD DATA (NO SPAM REFRESH)
+# LOAD DATA (CACHED SAFE)
 # =========================
 @st.cache_data(ttl=60)
-def load_sheet():
-    ws = master_sheet.worksheet("StaffSchedule")
+def load_data():
     data = ws.get_all_records()
     return pd.DataFrame(data)
 
-df_all = load_sheet()
+df_all = load_data()
 
 # =========================
-# WEEK DETECTION
+# CONFIG
 # =========================
-columns = list(df_all.columns)
-week_cols = columns[3:]   # after Branch, Name, Role
+SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
+BASE_COLS = ["Branch", "Name", "Role"]
 
-# group 8 columns (7 days + OT)
+# =========================
+# WEEK BLOCK DETECTION (FIXED FOR YOUR SHEET)
+# =========================
 def get_week_blocks(cols):
+    cols = cols[len(BASE_COLS):]
     blocks = []
+
     i = 0
     while i < len(cols):
-        chunk = cols[i:i+8]
+        chunk = cols[i:i+8]   # 7 days + OT
         if len(chunk) < 8:
             break
-        blocks.append(chunk)
+        blocks.append({
+            "days": chunk[:7],
+            "ot": chunk[7]
+        })
         i += 8
+
     return blocks
 
-blocks = get_week_blocks(week_cols)
-ACTIVE_DAYS = blocks[0][:7]
-ACTIVE_OT = blocks[0][7]
+columns = list(df_all.columns)
+blocks = get_week_blocks(columns)
+
+if not blocks:
+    st.error("Sheet structure not detected")
+    st.stop()
+
+# default week
+ACTIVE_DAYS = blocks[0]["days"]
+ACTIVE_OT = blocks[0]["ot"]
 
 # =========================
-# DATA FILTER
+# FILTER BRANCH
 # =========================
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
 # =========================
-# BUILD DISPLAY SAFE
+# BUILD DISPLAY (CRITICAL FIX HERE)
 # =========================
-def build_df():
+def build_display():
     d = df[["Name", "Role"]].copy()
 
+    # safe column mapping (prevents KeyError)
     for col in ACTIVE_DAYS:
         if col in df.columns:
             d[col] = df[col]
         else:
             d[col] = ""
 
-    # apply buffer (IMPORTANT FIX)
+    # apply buffer correctly
     for i in range(len(d)):
         for day in ACTIVE_DAYS:
             key = f"{i}_{day}"
@@ -120,7 +127,7 @@ def build_df():
 
     return d
 
-df_display = build_df()
+df_display = build_display()
 
 # =========================
 # OT CALC
@@ -129,45 +136,45 @@ def calculate_ot(row):
     total = 0
     for d in ACTIVE_DAYS:
         val = str(row.get(d, ""))
-        m = re.search(r"\(OT\s+(\d+)", val)
-        if m:
-            total += float(m.group(1))
+        match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)", val)
+        if match:
+            total += float(match.group(1))
     return f"{total} hrs" if total > 0 else "0 hrs"
 
 df_display["Over-Time"] = df_display.apply(calculate_ot, axis=1)
 
 # =========================
-# CUSTOM TIME DIALOG (SAFE)
+# SAFE CUSTOM TIME DIALOG
 # =========================
 @st.dialog("Custom Time")
-def custom_dialog(i, name, day):
+def custom_time(row_idx, name, day):
 
     st.write(f"{name} - {day}")
 
     c1, c2 = st.columns(2)
 
     with c1:
-        sh = st.selectbox("Start", list(range(1, 13)), key=f"s_{i}_{day}")
-        sap = st.selectbox("AM/PM", ["AM", "PM"], key=f"sp_{i}_{day}")
+        sh = st.selectbox("Start", list(range(1, 13)), key=f"s_{row_idx}_{day}")
+        sap = st.selectbox("AM/PM", ["AM", "PM"], key=f"sa_{row_idx}_{day}")
 
     with c2:
-        eh = st.selectbox("End", list(range(1, 13)), key=f"e_{i}_{day}")
-        eap = st.selectbox("AM/PM", ["AM", "PM"], key=f"ep_{i}_{day}")
+        eh = st.selectbox("End", list(range(1, 13)), key=f"e_{row_idx}_{day}")
+        eap = st.selectbox("AM/PM", ["AM", "PM"], key=f"ea_{row_idx}_{day}")
 
-    if st.button("Apply"):
+    if st.button("Apply Shift"):
         value = f"{sh} {sap} - {eh} {eap} (OT 2h)"
 
-        st.session_state.shift_buffer[f"{i}_{day}"] = value
+        st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
         st.session_state.pending_dialog = None
 
         st.rerun()
 
 # =========================
-# SHOW DIALOG (ONLY HERE)
+# SHOW DIALOG (ONLY SAFE PLACE)
 # =========================
 if st.session_state.pending_dialog:
     d = st.session_state.pending_dialog
-    custom_dialog(d["row"], d["name"], d["day"])
+    custom_time(d["row"], d["name"], d["day"])
 
 # =========================
 # EDIT MODE
@@ -182,7 +189,9 @@ if edit_mode:
         use_container_width=True
     )
 
-    # detect actions (NO RERUN LOOP BUG FIXED)
+    # =========================
+    # ACTION DETECTION (NO RERUN LOOP BUG)
+    # =========================
     for i, row in edited.iterrows():
         for day in ACTIVE_DAYS:
             val = row.get(day)
@@ -198,23 +207,22 @@ if edit_mode:
                 st.session_state.shift_buffer[f"{i}_{day}"] = "OFF"
 
     # =========================
-    # SUBMIT FIXED
+    # SUBMIT FIXED (MERGES BUFFER)
     # =========================
-    if st.button("Submit"):
-        ws = master_sheet.worksheet("StaffSchedule")
+    if st.button("Submit to Google Sheet"):
 
-        final = build_df().copy()
+        final = build_display().copy()
+
         final["Branch"] = st.session_state.selected_branch
 
         ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
 
-        st.success("Saved to Google Sheet!")
+        st.success("Saved successfully!")
 
 # =========================
 # VIEW MODE
 # =========================
 else:
-
     AgGrid(df_display, height=500)
 
 # =========================

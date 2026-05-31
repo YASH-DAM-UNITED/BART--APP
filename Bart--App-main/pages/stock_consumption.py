@@ -278,7 +278,7 @@ with st.form("stock_form", clear_on_submit=False):
                 # step=1 or 0.1 depending on if you need decimals
                 value = col.number_input(
                     label,
-                    min_value=0.0,
+                    min_value=0,
                     value=None, 
                     placeholder="0",
                     key=f"{mode}_{item}_{item_data['row_idx']}"

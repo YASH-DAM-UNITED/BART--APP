@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import time
 import re
+import time
 
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 from st_aggrid import AgGrid
 
 # =========================
-# CONFIG
+# PAGE CONFIG
 # =========================
 st.set_page_config(layout="wide", page_title="BART Master Schedule")
 
@@ -21,7 +21,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# AUTH CHECK
+# AUTH
 # =========================
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("⚠ Session expired. Please login again.")
@@ -30,7 +30,7 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
     st.stop()
 
 # =========================
-# GOOGLE CLIENT
+# GOOGLE AUTH
 # =========================
 if "gspread_client" not in st.session_state:
     creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
@@ -48,13 +48,13 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 # =========================
 # CONFIG
 # =========================
-DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = [
     "Team-Member", "Acting_Team_Leader", "Team_Leader",
     "Acting_Supervisor", "Supervisor", "Branch_Manager"
 ]
+
+BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
 # SESSION INIT
@@ -64,6 +64,7 @@ if "shift_buffer" not in st.session_state:
 
 if "pending_dialog" not in st.session_state:
     st.session_state.pending_dialog = None
+
 
 # =========================
 # LOAD DATA
@@ -77,7 +78,57 @@ def load_data():
 
 
 # =========================
-# TIME LOGIC
+# WEEK BLOCK DETECTION (CRITICAL FIX)
+# =========================
+def build_week_blocks(columns):
+    cols = columns[len(BASE_COLS):]
+    blocks = []
+
+    i = 0
+    while i < len(cols):
+        chunk = cols[i:i+8]  # 7 days + OT
+        if len(chunk) < 8:
+            break
+
+        blocks.append({
+            "days": chunk[:7],
+            "ot": chunk[7]
+        })
+        i += 8
+
+    return blocks
+
+
+def find_week_index(blocks, selected_date):
+    target = selected_date.strftime("%d %b")
+
+    for idx, b in enumerate(blocks):
+        for col in b["days"]:
+            if target in str(col):
+                return idx
+
+    return 0
+
+
+# =========================
+# OT CALC (ROBUST)
+# =========================
+def calculate_row_ot(row, ot_col):
+    val = str(row.get(ot_col, "")).lower()
+
+    match = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
+    if match:
+        return f"{sum(float(x) for x in match)} hrs"
+
+    match2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
+    if match2:
+        return f"{sum(float(x) for x in match2)} hrs"
+
+    return "0 hrs"
+
+
+# =========================
+# SHIFT PARSER (UNCHANGED LOGIC)
 # =========================
 def parse_hour(val):
     hour, ap = val.split()
@@ -108,20 +159,7 @@ def format_shift(start, end):
 
 
 # =========================
-# OT CALC
-# =========================
-def calculate_row_ot(row):
-    total_ot = 0
-    for d in DAYS:
-        val = str(row.get(d, ""))
-        match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
-        if match:
-            total_ot += float(match.group(1))
-    return f"{total_ot} hrs" if total_ot > 0 else "0 hrs"
-
-
-# =========================
-# CUSTOM TIME DIALOG (FIXED SAFE VERSION)
+# CUSTOM TIME DIALOG (FIXED)
 # =========================
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_idx, row_name, day_name):
@@ -137,7 +175,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
         eh = st.selectbox("End Hour", list(range(1, 13)), index=5, key=f"eh_{row_idx}_{day_name}")
         eap = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"eap_{row_idx}_{day_name}")
 
-    apply_all = st.checkbox("Apply to all working days this week", key=f"all_{row_idx}_{day_name}")
+    apply_all = st.checkbox("Apply to all working days", key=f"all_{row_idx}_{day_name}")
 
     if st.button("Apply Shift", use_container_width=True):
         value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
@@ -146,7 +184,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
             st.error("❌ Minimum 9 hours required")
         else:
             if apply_all:
-                for d in DAYS:
+                for d in ACTIVE_DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{d}"] = value
             else:
                 st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
@@ -156,9 +194,10 @@ def custom_time_dialog(row_idx, row_name, day_name):
 
 
 # =========================
-# UI HEADER
+# UI
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
+
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
 edit_mode = st.toggle("Edit Mode Only")
@@ -169,27 +208,58 @@ edit_mode = st.toggle("Edit Mode Only")
 df_all = load_data()
 
 if df_all.empty:
-    st.error("No data found")
+    st.error("No data found in sheet")
     st.stop()
 
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
-# =========================
-# DISPLAY TABLE
-# =========================
-df_display = df[["Name", "Role"] + DAYS].copy()
+columns = list(df_all.columns)
 
-# apply buffer
+week_blocks = build_week_blocks(columns)
+
+active_week = find_week_index(week_blocks, selected_date)
+active_block = week_blocks[active_week]
+
+ACTIVE_DAYS = active_block["days"]
+ACTIVE_OT = active_block["ot"]
+
+# =========================
+# VIEW DATA BUILDER (FIXED KEY ERROR)
+# =========================
+def build_view(df):
+    display = pd.DataFrame()
+
+    display["Name"] = df["Name"]
+    display["Role"] = df["Role"]
+
+    # SAFE COLUMN ACCESS (IMPORTANT FIX)
+    for col in ACTIVE_DAYS:
+        if col in df.columns:
+            display[col] = df[col]
+        else:
+            display[col] = ""
+
+    display["Over-Time"] = df.apply(
+        lambda r: calculate_row_ot(r, ACTIVE_OT),
+        axis=1
+    )
+
+    return display
+
+
+df_display = build_view(df).reset_index(drop=True)
+
+# =========================
+# SHIFT BUFFER APPLY
+# =========================
 for i, row in df_display.iterrows():
-    for d in DAYS:
+    for d in ACTIVE_DAYS:
         key = f"{i}_{d}"
         if key in st.session_state.shift_buffer:
             df_display.loc[i, d] = st.session_state.shift_buffer[key]
 
-df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
-
 # =========================
-# 🔥 FIX: OPEN DIALOG OUTSIDE LOOP
+# OPEN DIALOG (FIXED SAFE POSITION)
 # =========================
 if st.session_state.pending_dialog:
     d = st.session_state.pending_dialog
@@ -214,7 +284,7 @@ if edit_mode:
         "Over-Time": st.column_config.TextColumn("Over-Time", disabled=True)
     }
 
-    for d in DAYS:
+    for d in ACTIVE_DAYS:
         config[d] = st.column_config.SelectboxColumn(
             label=d,
             options=SHIFT_OPTIONS,
@@ -229,10 +299,10 @@ if edit_mode:
     )
 
     # =========================
-    # TRIGGER CUSTOM TIME (FIXED)
+    # TRIGGER CUSTOM TIME
     # =========================
     for i, row in edited_df.iterrows():
-        for d in DAYS:
+        for d in ACTIVE_DAYS:
             val = row.get(d)
 
             if val == "➕ Custom Time":
@@ -250,6 +320,7 @@ if edit_mode:
     # SUBMIT
     # =========================
     if st.button("✅ Submit"):
+
         ws = master_sheet.worksheet("StaffSchedule")
 
         others = df_all[df_all["Branch"] != st.session_state.selected_branch]
@@ -273,7 +344,7 @@ else:
         {"headerName": "Role", "field": "Role"}
     ]
 
-    for d in DAYS:
+    for d in ACTIVE_DAYS:
         column_defs.append({"headerName": d, "field": d})
 
     column_defs.append({"headerName": "Over-Time", "field": "Over-Time"})
@@ -288,7 +359,7 @@ else:
     )
 
 # =========================
-# BACK
+# BACK BUTTON
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

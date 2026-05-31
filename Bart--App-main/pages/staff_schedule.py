@@ -53,7 +53,25 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# WEEK ENGINE (SUNDAY FIX)
+# SAFE DATA LOADER (FIXED CRASH)
+# =========================
+def load_data(force=False):
+    if (
+        force
+        or "cached_df" not in st.session_state
+        or st.session_state.cached_df is None
+        or not isinstance(st.session_state.cached_df, pd.DataFrame)
+        or st.session_state.cached_df.empty
+    ):
+        ws = master_sheet.worksheet("StaffSchedule")
+        data = ws.get_all_records()
+        st.session_state.cached_df = pd.DataFrame(data)
+
+    return st.session_state.cached_df
+
+
+# =========================
+# WEEK ENGINE (SUNDAY START)
 # =========================
 def get_sunday(date):
     return date - timedelta(days=(date.weekday() + 1) % 7)
@@ -89,23 +107,12 @@ def find_week_index(blocks, selected_date):
 
 
 # =========================
-# OT
+# OT CALC
 # =========================
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, ""))
     match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
     return f"{match.group(1)} hrs" if match else "0 hrs"
-
-
-# =========================
-# LOAD DATA
-# =========================
-def load_data():
-    if "cached_df" not in st.session_state:
-        ws = master_sheet.worksheet("StaffSchedule")
-        data = ws.get_all_records()
-        st.session_state.cached_df = pd.DataFrame(data)
-    return st.session_state.cached_df
 
 
 # =========================
@@ -119,23 +126,37 @@ week_start = get_sunday(selected_date)
 st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
 
 # =========================
-# REFRESH BUTTON
+# 🔄 SAFE REFRESH BUTTON
 # =========================
 col1, col2 = st.columns([1, 6])
 with col1:
     if st.button("🔄 Refresh Data", use_container_width=True):
-        st.session_state.cached_df = None
-        st.session_state.shift_buffer = {}
+        for key in ["cached_df", "shift_buffer"]:
+            if key in st.session_state:
+                del st.session_state[key]
         st.rerun()
 
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# DATA LOAD
+# LOAD DATA SAFELY
 # =========================
 df_all = load_data()
+
+# 🔥 EXTRA SAFETY (PREVENT CRASH)
+if df_all is None or not isinstance(df_all, pd.DataFrame):
+    st.error("❌ Failed to load Google Sheet data")
+    st.stop()
+
+if "Branch" not in df_all.columns:
+    st.error("❌ Invalid sheet structure: Missing 'Branch' column")
+    st.stop()
+
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
+# =========================
+# WEEK DETECTION
+# =========================
 columns = list(df_all.columns)
 week_blocks = build_week_blocks(columns)
 
@@ -146,12 +167,11 @@ ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
 
 # =========================
-# 🔥 FIX: FORCE PROPER COLUMN ORDER
+# BUILD VIEW
 # =========================
 def build_view(df):
     display = df[["Name", "Role"]].copy()
 
-    # force correct order (IMPORTANT FIX)
     for d in ACTIVE_DAYS:
         display[d] = df.get(d, "")
 
@@ -198,6 +218,9 @@ if edit_mode:
         use_container_width=True
     )
 
+    # =========================
+    # SUBMIT
+    # =========================
     if st.button("✅ Submit"):
         try:
             ws = master_sheet.worksheet("StaffSchedule")
@@ -217,7 +240,7 @@ if edit_mode:
             st.error(f"Submit failed: {e}")
 
 # =========================
-# VIEW MODE (FIXED DISPLAY)
+# VIEW MODE
 # =========================
 else:
 
@@ -243,7 +266,7 @@ else:
     )
 
 # =========================
-# BACK
+# BACK BUTTON
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

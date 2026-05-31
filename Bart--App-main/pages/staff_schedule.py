@@ -80,13 +80,33 @@ def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Configure shift for **{row_name}** on **{day_name}**")
 
     col1, col2 = st.columns(2)
-    with col1:
-        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8)
-        sap = st.selectbox("AM/PM", ["AM", "PM"])
-    with col2:
-        eh = st.selectbox("End Hour", list(range(1, 13)), index=5)
-        eap = st.selectbox("AM/PM", ["AM", "PM"])
+with col1:
+    sh = st.selectbox(
+        "Start Hour",
+        list(range(1, 13)),
+        index=8,
+        key=f"sh_{row_idx}_{day_name}"
+    )
 
+    sap = st.selectbox(
+        "AM/PM Start",
+        ["AM", "PM"],
+        key=f"sap_{row_idx}_{day_name}"
+    )
+
+with col2:
+    eh = st.selectbox(
+        "End Hour",
+        list(range(1, 13)),
+        index=5,
+        key=f"eh_{row_idx}_{day_name}"
+    )
+
+    eap = st.selectbox(
+        "AM/PM End",
+        ["AM", "PM"],
+        key=f"eap_{row_idx}_{day_name}"
+    )
     if st.button("Apply Shift", use_container_width=True):
         start = f"{sh} {sap}"
         end = f"{eh} {eap}"

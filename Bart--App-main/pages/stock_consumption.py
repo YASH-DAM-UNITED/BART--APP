@@ -14,6 +14,12 @@ import streamlit.components.v1 as components
 # UI SETUP
 # -----------------------------
 
+
+@st.dialog("⚠️ Input Error")
+def show_error_dialog(message):
+    st.error(message)
+    if st.button("Close"):
+        st.rerun()
 st.set_page_config(page_title="Stock System", layout="wide")
 
 st.markdown("""
@@ -306,9 +312,11 @@ with st.form("stock_form", clear_on_submit=False):
         missing = [item for item, val in inputs.items() if val is None]
 
         if invalid_items:
-            st.error(f"❌ Invalid entry in: {', '.join(invalid_items)}. Only numbers allowed.")
+            # Trigger the Dialog Popup
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
         elif missing:
-            st.error("Please fill in all stock quantities.")
+            # Trigger the Dialog Popup
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
         else:
             # All checks passed, move to review
             st.session_state.draft_data = inputs

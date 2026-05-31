@@ -315,7 +315,8 @@ submitted = st.form_submit_button("🔍 Review Stock")
             st.session_state.draft_data = inputs
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
-            st.rerun()# -----------------------------
+            st.rerun()
+# -----------------------------
 # REVIEW SECTION
 # -----------------------------
 if st.session_state.review_mode:

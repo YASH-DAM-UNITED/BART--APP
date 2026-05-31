@@ -53,10 +53,9 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# WEEK UTIL (SUNDAY START FIX)
+# WEEK ENGINE (SUNDAY START)
 # =========================
 def get_sunday(date):
-    """Force week start to Sunday"""
     return date - timedelta(days=(date.weekday() + 1) % 7)
 
 
@@ -90,7 +89,7 @@ def find_week_index(blocks, selected_date):
 
 
 # =========================
-# TIME LOGIC
+# SHIFT LOGIC
 # =========================
 def parse_hour(val):
     h, ap = val.split()
@@ -119,8 +118,8 @@ def calculate_row_ot(row, ot_col):
 # =========================
 # LOAD DATA
 # =========================
-def load_data():
-    if "cached_df" not in st.session_state:
+def load_data(force=False):
+    if force or "cached_df" not in st.session_state:
         ws = master_sheet.worksheet("StaffSchedule")
         data = ws.get_all_records()
         st.session_state.cached_df = pd.DataFrame(data)
@@ -128,20 +127,31 @@ def load_data():
 
 
 # =========================
-# UI
+# UI HEADER
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
-# 🔥 FIX: Sunday aligned week start
 week_start = get_sunday(selected_date)
 st.caption(f"Week starts (Sunday): {week_start.strftime('%d %b %Y')}")
+
+# =========================
+# 🔄 REFRESH BUTTON (ORIGINAL)
+# =========================
+col1, col2 = st.columns([1, 6])
+with col1:
+    if st.button("🔄 Refresh Data", use_container_width=True):
+        if "cached_df" in st.session_state:
+            del st.session_state["cached_df"]
+        if "shift_buffer" in st.session_state:
+            st.session_state.shift_buffer = {}
+        st.rerun()
 
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# DATA + WEEK DETECTION
+# DATA LOAD
 # =========================
 df_all = load_data()
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()

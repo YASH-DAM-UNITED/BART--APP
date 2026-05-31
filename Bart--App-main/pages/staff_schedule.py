@@ -56,38 +56,26 @@ ROLE_OPTIONS = [
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# LOAD DATA
+# SAFE LOAD
 # =========================
 def load_data():
-    if (
-        "cached_df" not in st.session_state
-        or st.session_state.cached_df is None
-        or not isinstance(st.session_state.cached_df, pd.DataFrame)
-    ):
+    if "cached_df" not in st.session_state or st.session_state.cached_df is None:
         ws = master_sheet.worksheet("StaffSchedule")
         data = ws.get_all_records()
         st.session_state.cached_df = pd.DataFrame(data)
-
     return st.session_state.cached_df
 
 
 # =========================
-# WEEK START (SUNDAY)
-# =========================
-def get_sunday(date):
-    return date - timedelta(days=(date.weekday() + 1) % 7)
-
-
-# =========================
-# WEEK BLOCKS
+# WEEK BLOCK ENGINE (IMPORTANT)
 # =========================
 def build_week_blocks(columns):
-    blocks = []
     cols = columns[len(BASE_COLS):]
+    blocks = []
 
     i = 0
     while i < len(cols):
-        chunk = cols[i:i+8]
+        chunk = cols[i:i+8]  # 7 days + OT
         if len(chunk) < 8:
             break
 
@@ -95,6 +83,7 @@ def build_week_blocks(columns):
             "days": chunk[:7],
             "ot": chunk[7]
         })
+
         i += 8
 
     return blocks
@@ -105,58 +94,33 @@ def find_week_index(blocks, selected_date):
 
     for idx, b in enumerate(blocks):
         for col in b["days"]:
-            if target in col:
+            if target in str(col):
                 return idx
     return 0
 
 
 # =========================
-# 🔥 FIX: SUNDAY ORDER
-# =========================
-def extract_date(col):
-    match = re.search(r"(\d{1,2}\s[A-Za-z]{3})", str(col))
-    return match.group(1) if match else None
-
-
-def sort_sunday_first(days):
-    def sort_key(col):
-        date_str = extract_date(col)
-        if not date_str:
-            return 999
-        try:
-            dt = datetime.strptime(f"{date_str} 2026", "%d %b %Y")
-            return (dt.weekday() + 1) % 7  # Sunday = 0
-        except:
-            return 999
-
-    return sorted(days, key=sort_key)
-
-
-# =========================
-# 🔥 FIXED OT CALCULATOR (IMPORTANT)
+# OT FIX (WORKS FOR ALL BLOCKS)
 # =========================
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, "")).lower()
 
-    # Case 1: 2h / 2 h / 2.5h / OT 2h / (OT 2h)
-    match = re.search(r"(\d+(?:\.\d+)?)\s*h", val)
+    match = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
     if match:
-        return f"{match.group(1)} hrs"
+        return f"{sum(float(x) for x in match)} hrs"
 
-    # Case 2: OT: 2 / OT-2
-    match2 = re.search(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
+    match2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
     if match2:
-        return f"{match2.group(1)} hrs"
+        return f"{sum(float(x) for x in match2)} hrs"
 
     return "0 hrs"
 
 
 # =========================
-# BUILD VIEW
+# VIEW BUILDER (DYNAMIC WEEK)
 # =========================
 def build_view(df):
     display = pd.DataFrame()
-
     display["Name"] = df["Name"]
     display["Role"] = df["Role"]
 
@@ -178,22 +142,19 @@ st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
-week_start = get_sunday(selected_date)
-st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
-
 # =========================
 # LOAD DATA
 # =========================
 df_all = load_data()
 
-if df_all is None or df_all.empty:
-    st.error("No data found in Google Sheet")
+if df_all.empty:
+    st.error("No data found in sheet")
     st.stop()
 
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
 # =========================
-# WEEK DETECTION
+# BUILD WEEK SYSTEM
 # =========================
 columns = list(df_all.columns)
 week_blocks = build_week_blocks(columns)
@@ -201,17 +162,36 @@ week_blocks = build_week_blocks(columns)
 active_week = find_week_index(week_blocks, selected_date)
 active_block = week_blocks[active_week]
 
-ACTIVE_DAYS = sort_sunday_first(active_block["days"])
+ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
+
+# =========================
+# SHIFT BUFFER (RESTORED)
+# =========================
+if "shift_buffer" not in st.session_state:
+    st.session_state.shift_buffer = {}
+
+edit_mode = st.toggle("Edit Mode Only")
+
+# =========================
+# DISPLAY DATA
+# =========================
+def apply_buffer(df_display):
+    for i, row in df_display.iterrows():
+        for d in ACTIVE_DAYS:
+            key = f"{i}_{d}"
+            if key in st.session_state.shift_buffer:
+                df_display.loc[i, d] = st.session_state.shift_buffer[key]
+    return df_display
+
 
 # =========================
 # EDIT MODE
 # =========================
-edit_mode = st.toggle("Edit Mode Only")
-
 if edit_mode:
 
     df_display = build_view(df)
+    df_display = apply_buffer(df_display)
 
     config = {
         "Name": st.column_config.SelectboxColumn(
@@ -241,23 +221,32 @@ if edit_mode:
         use_container_width=True
     )
 
+    # SHIFT BUFFER SAVE
+    for i, row in edited_df.iterrows():
+        for d in ACTIVE_DAYS:
+            val = row.get(d)
+
+            if val == "📴 Day Off":
+                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
+
+            if val == "➕ Custom Time":
+                st.session_state.shift_buffer[f"{i}_{d}"] = "CUSTOM"
+
+    # SUBMIT
     if st.button("✅ Submit"):
-        try:
-            ws = master_sheet.worksheet("StaffSchedule")
 
-            others = df_all[df_all["Branch"] != st.session_state.selected_branch]
+        ws = master_sheet.worksheet("StaffSchedule")
 
-            new_data = edited_df.copy()
-            new_data["Branch"] = st.session_state.selected_branch
+        others = df_all[df_all["Branch"] != st.session_state.selected_branch]
 
-            final = pd.concat([others, new_data], ignore_index=True)
+        new_data = edited_df.copy()
+        new_data["Branch"] = st.session_state.selected_branch
 
-            ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
+        final = pd.concat([others, new_data], ignore_index=True)
 
-            st.success("Submitted successfully!")
+        ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
 
-        except Exception as e:
-            st.error(f"Submit failed: {e}")
+        st.success("Submitted successfully!")
 
 # =========================
 # VIEW MODE
@@ -286,7 +275,7 @@ else:
     )
 
 # =========================
-# BACK BUTTON
+# BACK
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

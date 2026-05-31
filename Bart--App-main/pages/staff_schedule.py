@@ -60,7 +60,36 @@ SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 # =========================
-# FUNCTIONS
+# DIALOGS
+# =========================
+@st.dialog("⏰ Set Custom Time")
+def custom_time_dialog(row_idx, row_name, day_name):
+    st.write(f"Configure shift for **{row_name}** on **{day_name}**")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8)
+        sap = st.selectbox("AM/PM", ["AM", "PM"])
+    with col2:
+        eh = st.selectbox("End Hour", list(range(1, 13)), index=5)
+        eap = st.selectbox("AM/PM", ["AM", "PM"])
+
+    if st.button("Apply Shift", use_container_width=True):
+        start = f"{sh} {sap}"
+        end = f"{eh} {eap}"
+        hrs = calculate_hours(start, end)
+
+        if hrs < 9:
+            st.error("❌ Minimum 9 hours required")
+        else:
+            ot = max(0, hrs - 9)
+            value = f"{start} - {end}" + (f" (OT {ot}h)" if ot > 0 else "")
+
+            st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+            st.rerun()
+
+# =========================
+# DATA LOAD
 # =========================
 def load_data(force_reload=False):
     if force_reload or st.session_state.get("cached_df") is None:
@@ -68,15 +97,6 @@ def load_data(force_reload=False):
             ws = master_sheet.worksheet("StaffSchedule")
             data = ws.get_all_records()
             df = pd.DataFrame(data) if data else pd.DataFrame()
-
-            if not df.empty:
-                new_cols = {}
-                for col in df.columns:
-                    for day in DAYS:
-                        if day in col:
-                            new_cols[col] = day
-                            break
-                df = df.rename(columns=new_cols)
 
             if df.empty:
                 df = pd.DataFrame(columns=["Branch", "Name", "Role"] + DAYS)
@@ -89,125 +109,187 @@ def load_data(force_reload=False):
 
     return st.session_state.cached_df
 
-
+# =========================
+# SHIFT LOGIC
+# =========================
 def parse_hour(val):
     hour, ap = val.split()
     hour = int(hour)
-    if ap == "PM" and hour != 12: hour += 12
-    if ap == "AM" and hour == 12: hour = 0
+    if ap == "PM" and hour != 12:
+        hour += 12
+    if ap == "AM" and hour == 12:
+        hour = 0
     return hour
-
 
 def calculate_hours(start, end):
     s = parse_hour(start)
     e = parse_hour(end)
-    if e <= s: e += 24
+    if e <= s:
+        e += 24
     return e - s
 
-
-def format_shift(start, end):
-    hrs = calculate_hours(start, end)
-    if hrs < 9:
-        return None, hrs
-    ot = max(0, hrs - 9)
-    if ot > 0:
-        return (f"{start} - {end} (OT {ot}h)", hrs)
-    return (f"{start} - {end}", hrs)
-
-
+# FIXED OT CALC (MULTI COLUMN SAFE)
 def calculate_row_ot(row):
     total_ot = 0
-
-    # ✅ FIX: supports Over-Time, Over-Time1, Over-Time2...
-    ot_cols = [c for c in row.index if "Over-Time" in c]
-
-    for col in ot_cols:
-        val = str(row.get(col, ""))
-        match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
-        if match:
-            total_ot += float(match.group(1))
+    for col in row.index:
+        if "Over-Time" in col:
+            val = str(row.get(col, ""))
+            match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
+            if match:
+                total_ot += float(match.group(1))
 
     return f"{total_ot} hrs" if total_ot > 0 else "0 hrs"
 
-
 # =========================
-# INIT
+# INIT SESSION STATE
 # =========================
 if "shift_buffer" not in st.session_state:
     st.session_state.shift_buffer = {}
 
-if "previous_week" not in st.session_state:
-    st.session_state.previous_week = None
-
 if "deleted_staff" not in st.session_state:
     st.session_state.deleted_staff = set()
 
+# =========================
+# UI HEADER
+# =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 week_start = selected_date - timedelta(days=(selected_date.weekday() + 1) % 7)
-week_start_str = week_start.strftime('%d %b %Y')
 
-st.caption(f"Week starting: {week_start_str}")
+day_labels = {d: f"{d} ({(week_start + timedelta(days=i)).strftime('%d %b')})"
+              for i, d in enumerate(DAYS)}
 
-if st.session_state.previous_week != week_start_str:
-    st.session_state.shift_buffer = {}
-    st.session_state.deleted_staff = set()
-    st.session_state.previous_week = week_start_str
-
-edit_mode = st.toggle("Edit Mode Only")
-
+# =========================
+# LOAD DATA
+# =========================
 all_data_df = load_data()
 
-df = all_data_df[all_data_df["Branch"] == st.session_state.selected_branch].copy() \
-    if not all_data_df.empty else pd.DataFrame(columns=["Branch", "Name", "Role"] + DAYS)
+df = all_data_df[all_data_df["Branch"] == st.session_state.selected_branch].copy()
 
 # =========================
-# DISPLAY DF SAFE FIX
+# EDIT MODE
 # =========================
-df_display = df.copy()
+edit_mode = st.toggle("Edit Mode Only")
 
-if st.session_state.deleted_staff and not df_display.empty:
-    df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
+if edit_mode:
 
-# IMPORTANT FIX: never assign [] (this caused your crash before)
-if df_display.empty:
-    df_display = pd.DataFrame(columns=["Name", "Role"] + DAYS)
+    df_display = df[["Name", "Role"]].drop_duplicates().reset_index(drop=True)
 
-# ensure OT column always exists safely
-if "Over-Time" not in df_display.columns:
-    df_display["Over-Time"] = ""
+    for d in DAYS:
+        df_display[d] = ""
 
-df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else ""
+    # apply buffer
+    for i, row in df_display.iterrows():
+        for d in DAYS:
+            key = f"{i}_{d}"
+            if key in st.session_state.shift_buffer:
+                df_display.loc[i, d] = st.session_state.shift_buffer[key]
+
+    df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
+
+    config = {
+        "Name": st.column_config.SelectboxColumn("Name",
+            options=df["Name"].dropna().unique().tolist() if not df.empty else [],
+            width=90, required=True),
+
+        "Role": st.column_config.SelectboxColumn("Role",
+            options=ROLE_OPTIONS, width=90),
+
+        "Over-Time": st.column_config.TextColumn("Over-Time", disabled=True, width=70)
+    }
+
+    for d in DAYS:
+        config[d] = st.column_config.SelectboxColumn(
+            label=day_labels[d],
+            options=SHIFT_OPTIONS,
+            width=120
+        )
+
+    edited_df = st.data_editor(
+        df_display,
+        column_config=config,
+        num_rows="dynamic",
+        use_container_width=True
+    )
+
+    # handle custom actions
+    for i, row in edited_df.iterrows():
+        for d in DAYS:
+            val = row.get(d)
+
+            if val == "📴 Day Off":
+                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
+                st.rerun()
+
+            if val == "➕ Custom Time":
+                custom_time_dialog(i, row["Name"], d)
+
+    # =========================
+    # SUBMIT
+    # =========================
+    if st.button("✅ Submit"):
+        try:
+            ws = master_sheet.worksheet("StaffSchedule")
+
+            others = st.session_state.cached_df[
+                st.session_state.cached_df["Branch"] != st.session_state.selected_branch
+            ].copy()
+
+            new_data = edited_df.copy()
+            new_data["Branch"] = st.session_state.selected_branch
+
+            final = pd.concat([others, new_data], ignore_index=True)
+
+            # FIX: preserve all Over-Time columns
+            rename_map = {day: day_labels[day] for day in DAYS}
+            for col in final.columns:
+                if "Over-Time" in col:
+                    rename_map[col] = col
+
+            final = final.rename(columns=rename_map)
+
+            ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
+
+            st.session_state.cached_df = final
+            st.session_state.shift_buffer = {}
+            st.session_state.deleted_staff = set()
+
+            st.success("Submitted Successfully!")
+
+        except Exception as e:
+            st.error(f"❌ Submission Failed: {e}")
 
 # =========================
-# AGGRID SAFE COLUMN BUILD
+# VIEW MODE
 # =========================
-column_defs = [
-    {"headerName": "Name", "field": "Name", "pinned": "left", "width": 120},
-    {"headerName": "Role", "field": "Role", "width": 140}
-]
+else:
 
-for d in DAYS:
-    if d in df_display.columns:
-        column_defs.append({"headerName": d, "field": d, "width": 120})
+    if st.button("🔄 Refresh Data"):
+        st.session_state.cached_df = None
+        st.rerun()
 
-# ✅ FIX: also include dynamic OT columns (NEW SHEET SUPPORT)
-ot_cols = [c for c in df_display.columns if "Over-Time" in c]
-for ot in ot_cols:
-    column_defs.append({"headerName": ot, "field": ot, "width": 110})
+    df_display = df.copy()
+    df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
 
-# =========================
-# GRID
-# =========================
-AgGrid(
-    df_display,
-    gridOptions={
-        "columnDefs": column_defs,
-        "defaultColDef": {"resizable": True}
-    },
-    height=500
-)
+    column_defs = [
+        {"headerName": "Name", "field": "Name", "width": 120},
+        {"headerName": "Role", "field": "Role", "width": 140},
+    ]
+
+    for d in DAYS:
+        column_defs.append({"headerName": day_labels[d], "field": d, "width": 130})
+
+    column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 120})
+
+    AgGrid(
+        df_display,
+        gridOptions={
+            "columnDefs": column_defs,
+            "defaultColDef": {"resizable": True}
+        },
+        height=500
+    )
 
 # =========================
 # BACK BUTTON

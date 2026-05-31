@@ -294,24 +294,23 @@ with st.form("stock_form", clear_on_submit=False):
 
                 inputs[item] = value.strip() if value.strip() else None
 
-submitted = st.form_submit_button("🔍 Review Stock")
+# -----------------------------
+    # 3. VALIDATION & SUBMISSION
+    # -----------------------------
+    submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # 1. Validate for Numbers Only
-        invalid_items = []
-        for item, value in inputs.items():
-            if value and not value.isdigit():
-                invalid_items.append(item)
-        
-        # 2. Check for missing values
-        missing = [k for k, v in inputs.items() if v is None]
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
 
         if invalid_items:
-            st.error(f"❌ Invalid characters in: {', '.join(invalid_items)}. Only numbers are allowed.")
+            st.error(f"❌ Invalid entry in: {', '.join(invalid_items)}. Only numbers allowed.")
         elif missing:
             st.error("Please fill in all stock quantities.")
         else:
-            # Proceed to Review
+            # All checks passed, move to review
             st.session_state.draft_data = inputs
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True

@@ -60,7 +60,7 @@ SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 # =========================
-# NORMALIZE NEW SHEET FORMAT
+# NORMALIZE SHEET COLUMNS
 # =========================
 def normalize_day_columns(df):
     day_map = {d: [] for d in DAYS}
@@ -73,40 +73,42 @@ def normalize_day_columns(df):
     return df, day_map
 
 # =========================
-# DIALOGS (UNCHANGED)
+# DIALOG (FIXED keys ONLY)
 # =========================
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Configure shift for **{row_name}** on **{day_name}**")
 
     col1, col2 = st.columns(2)
-with col1:
-    sh = st.selectbox(
-        "Start Hour",
-        list(range(1, 13)),
-        index=8,
-        key=f"sh_{row_idx}_{day_name}"
-    )
 
-    sap = st.selectbox(
-        "AM/PM Start",
-        ["AM", "PM"],
-        key=f"sap_{row_idx}_{day_name}"
-    )
+    with col1:
+        sh = st.selectbox(
+            "Start Hour",
+            list(range(1, 13)),
+            index=8,
+            key=f"sh_{row_idx}_{day_name}"
+        )
 
-with col2:
-    eh = st.selectbox(
-        "End Hour",
-        list(range(1, 13)),
-        index=5,
-        key=f"eh_{row_idx}_{day_name}"
-    )
+        sap = st.selectbox(
+            "AM/PM Start",
+            ["AM", "PM"],
+            key=f"sap_{row_idx}_{day_name}"
+        )
 
-    eap = st.selectbox(
-        "AM/PM End",
-        ["AM", "PM"],
-        key=f"eap_{row_idx}_{day_name}"
-    )
+    with col2:
+        eh = st.selectbox(
+            "End Hour",
+            list(range(1, 13)),
+            index=5,
+            key=f"eh_{row_idx}_{day_name}"
+        )
+
+        eap = st.selectbox(
+            "AM/PM End",
+            ["AM", "PM"],
+            key=f"eap_{row_idx}_{day_name}"
+        )
+
     if st.button("Apply Shift", use_container_width=True):
         start = f"{sh} {sap}"
         end = f"{eh} {eap}"
@@ -122,7 +124,7 @@ with col2:
             st.rerun()
 
 # =========================
-# DATA LOAD (FIXED)
+# LOAD DATA (FIXED)
 # =========================
 def load_data(force_reload=False):
     if force_reload or st.session_state.get("cached_df") is None:
@@ -134,11 +136,10 @@ def load_data(force_reload=False):
             if df.empty:
                 df = pd.DataFrame(columns=["Branch", "Name", "Role"] + DAYS)
 
-            # FIX: normalize dynamic sheet columns
             df, day_map = normalize_day_columns(df)
 
-            st.session_state.day_map = day_map
             st.session_state.cached_df = df
+            st.session_state.day_map = day_map
 
         except Exception as e:
             st.error(f"Error loading data: {e}")
@@ -187,7 +188,7 @@ if "deleted_staff" not in st.session_state:
     st.session_state.deleted_staff = set()
 
 # =========================
-# UI HEADER
+# HEADER
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
@@ -203,7 +204,7 @@ all_data_df = load_data()
 
 df = all_data_df[all_data_df["Branch"] == st.session_state.selected_branch].copy()
 
-# SAFE FIX: ensure columns exist
+# SAFE FIX for dynamic columns
 for d in DAYS:
     if d not in df.columns:
         df[d] = ""
@@ -242,7 +243,7 @@ if edit_mode:
 
     for d in DAYS:
         config[d] = st.column_config.SelectboxColumn(
-            label=day_labels[d],
+            label=d,
             options=SHIFT_OPTIONS,
             width=120
         )

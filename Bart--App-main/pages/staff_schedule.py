@@ -29,7 +29,7 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
     st.stop()
 
 # =========================
-# GOOGLE AUTH
+# GOOGLE SHEETS AUTH
 # =========================
 if "gspread_client" not in st.session_state:
     creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
@@ -61,7 +61,7 @@ BASE_COLS = ["Branch", "Name", "Role"]
 st.session_state.setdefault("shift_buffer", {})
 st.session_state.setdefault("pending_dialog", None)
 st.session_state.setdefault("cached_df", None)
-st.session_state.setdefault("dialog_opened", False)
+st.session_state.setdefault("dialog_open", False)
 
 # =========================
 # LOAD DATA
@@ -106,9 +106,9 @@ def find_week_index(blocks, selected_date):
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, "")).lower()
 
-    m1 = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
-    if m1:
-        return f"{sum(float(x) for x in m1)} hrs"
+    m = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
+    if m:
+        return f"{sum(float(x) for x in m)} hrs"
 
     m2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
     if m2:
@@ -122,10 +122,12 @@ def calculate_row_ot(row, ot_col):
 def parse_hour(val):
     hour, ap = val.split()
     hour = int(hour)
+
     if ap == "PM" and hour != 12:
         hour += 12
     if ap == "AM" and hour == 12:
         hour = 0
+
     return hour
 
 
@@ -139,33 +141,62 @@ def calculate_hours(start, end):
 
 def format_shift(start, end):
     hrs = calculate_hours(start, end)
+
     if hrs < 9:
         return None, hrs
+
     ot = max(0, hrs - 9)
+
     if ot > 0:
         return (f"{start} - {end} (OT {ot}h)", hrs)
+
     return (f"{start} - {end}", hrs)
 
 # =========================
-# CUSTOM TIME DIALOG
+# CUSTOM TIME DIALOG (FIXED DUPLICATE IDS)
 # =========================
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_key, row_name, day_name):
-    st.write(f"Configure shift for **{row_name}** on **{day_name}**")
+
+    st.write(f"Shift for **{row_name}** → **{day_name}**")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8)
-        sap = st.selectbox("AM/PM", ["AM", "PM"])
+        sh = st.selectbox(
+            "Start Hour",
+            list(range(1, 13)),
+            index=8,
+            key=f"sh_{row_key}_{day_name}"
+        )
+
+        sap = st.selectbox(
+            "AM/PM Start",
+            ["AM", "PM"],
+            key=f"sap_{row_key}_{day_name}"
+        )
 
     with col2:
-        eh = st.selectbox("End Hour", list(range(1, 13)), index=5)
-        eap = st.selectbox("AM/PM", ["AM", "PM"])
+        eh = st.selectbox(
+            "End Hour",
+            list(range(1, 13)),
+            index=5,
+            key=f"eh_{row_key}_{day_name}"
+        )
 
-    apply_all = st.checkbox("Apply to all working days")
+        eap = st.selectbox(
+            "AM/PM End",
+            ["AM", "PM"],
+            key=f"eap_{row_key}_{day_name}"
+        )
 
-    if st.button("Apply Shift", use_container_width=True):
+    apply_all = st.checkbox(
+        "Apply to all working days",
+        key=f"all_{row_key}_{day_name}"
+    )
+
+    if st.button("Apply Shift", key=f"apply_{row_key}_{day_name}", use_container_width=True):
+
         value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
 
         if value is None:
@@ -180,9 +211,10 @@ def custom_time_dialog(row_key, row_name, day_name):
 
         st.session_state.pending_dialog = None
         st.rerun()
+        st.stop()
 
 # =========================
-# UI HEADER
+# HEADER
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
@@ -201,6 +233,7 @@ if df_all.empty:
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
 columns = list(df_all.columns)
+
 week_blocks = build_week_blocks(columns)
 active_week = find_week_index(week_blocks, selected_date)
 
@@ -218,6 +251,7 @@ df["row_key"] = df["Name"].astype(str) + "_" + df["Role"].astype(str)
 # =========================
 def build_view(df):
     out = pd.DataFrame()
+
     out["row_key"] = df["row_key"]
     out["Name"] = df["Name"]
     out["Role"] = df["Role"]
@@ -236,25 +270,27 @@ def build_view(df):
 df_display = build_view(df)
 
 # =========================
-# APPLY BUFFER
+# APPLY SHIFT BUFFER
 # =========================
 for i, row in df_display.iterrows():
     key = row["row_key"]
+
     for d in ACTIVE_DAYS:
         buf_key = f"{key}_{d}"
         if buf_key in st.session_state.shift_buffer:
             df_display.loc[i, d] = st.session_state.shift_buffer[buf_key]
 
 # =========================
-# DIALOG HANDLING (NO LOOP FIX)
+# DIALOG CONTROL (NO LOOP BUG)
 # =========================
-if st.session_state.pending_dialog and not st.session_state.dialog_opened:
-    st.session_state.dialog_opened = True
+if st.session_state.pending_dialog and not st.session_state.dialog_open:
 
+    st.session_state.dialog_open = True
     d = st.session_state.pending_dialog
+
     custom_time_dialog(d["row_key"], d["row_name"], d["day_name"])
 
-st.session_state.dialog_opened = False
+st.session_state.dialog_open = False
 
 # =========================
 # EDIT MODE
@@ -291,12 +327,14 @@ if edit_mode:
     )
 
     # =========================
-    # TRIGGER CUSTOM TIME (FIXED)
+    # TRIGGER CUSTOM TIME (SAFE)
     # =========================
     for _, row in edited_df.iterrows():
+
         row_key = row["row_key"]
 
         for d in ACTIVE_DAYS:
+
             val = row.get(d)
 
             if val == "➕ Custom Time":
@@ -328,6 +366,7 @@ if edit_mode:
         ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
 
         st.session_state.cached_df = None
+
         st.success("Submitted successfully!")
         st.rerun()
 
@@ -351,7 +390,7 @@ else:
     )
 
 # =========================
-# BACK
+# BACK BUTTON
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

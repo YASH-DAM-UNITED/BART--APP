@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import time
 import re
 
 from google.oauth2.service_account import Credentials
@@ -21,14 +20,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# AUTH CHECK
+# AUTH
 # =========================
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("⚠ Session expired. Please login again.")
-    col1, col2, col3 = st.columns(3)
-    with col2:
-        if st.button("⬅ Back to Staff Login", use_container_width=True):
-            st.switch_page("app.py")
+    if st.button("⬅ Back to Staff Login"):
+        st.switch_page("app.py")
     st.stop()
 
 # =========================
@@ -56,8 +53,13 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# WEEK BLOCK ENGINE
+# WEEK UTIL (SUNDAY START FIX)
 # =========================
+def get_sunday(date):
+    """Force week start to Sunday"""
+    return date - timedelta(days=(date.weekday() + 1) % 7)
+
+
 def build_week_blocks(columns):
     blocks = []
     cols = columns[len(BASE_COLS):]
@@ -87,14 +89,17 @@ def find_week_index(blocks, selected_date):
     return 0
 
 
+# =========================
+# TIME LOGIC
+# =========================
 def parse_hour(val):
-    hour, ap = val.split()
-    hour = int(hour)
-    if ap == "PM" and hour != 12:
-        hour += 12
-    if ap == "AM" and hour == 12:
-        hour = 0
-    return hour
+    h, ap = val.split()
+    h = int(h)
+    if ap == "PM" and h != 12:
+        h += 12
+    if ap == "AM" and h == 12:
+        h = 0
+    return h
 
 
 def calculate_hours(start, end):
@@ -103,16 +108,6 @@ def calculate_hours(start, end):
     if e <= s:
         e += 24
     return e - s
-
-
-def format_shift(start, end):
-    hrs = calculate_hours(start, end)
-    if hrs < 9:
-        return None, hrs
-    ot = max(0, hrs - 9)
-    if ot > 0:
-        return (f"{start} - {end} (OT {ot}h)", hrs)
-    return (f"{start} - {end}", hrs)
 
 
 def calculate_row_ot(row, ot_col):
@@ -124,34 +119,34 @@ def calculate_row_ot(row, ot_col):
 # =========================
 # LOAD DATA
 # =========================
-def load_data(force_reload=False):
-    if force_reload or st.session_state.get("cached_df") is None:
+def load_data():
+    if "cached_df" not in st.session_state:
         ws = master_sheet.worksheet("StaffSchedule")
         data = ws.get_all_records()
-        df = pd.DataFrame(data)
-        st.session_state.cached_df = df
+        st.session_state.cached_df = pd.DataFrame(data)
     return st.session_state.cached_df
 
 
 # =========================
-# SESSION INIT
+# UI
 # =========================
-if "shift_buffer" not in st.session_state:
-    st.session_state.shift_buffer = {}
-
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
+# 🔥 FIX: Sunday aligned week start
+week_start = get_sunday(selected_date)
+st.caption(f"Week starts (Sunday): {week_start.strftime('%d %b %Y')}")
+
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# LOAD + WEEK DETECTION
+# DATA + WEEK DETECTION
 # =========================
-all_data_df = load_data()
-df = all_data_df[all_data_df["Branch"] == st.session_state.selected_branch].copy()
+df_all = load_data()
+df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
-columns = list(all_data_df.columns)
+columns = list(df_all.columns)
 week_blocks = build_week_blocks(columns)
 
 active_week = find_week_index(week_blocks, selected_date)
@@ -159,11 +154,6 @@ active_block = week_blocks[active_week]
 
 ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
-
-# =========================
-# DISPLAY LABELS
-# =========================
-day_labels = {d: d for d in ACTIVE_DAYS}
 
 # =========================
 # EDIT MODE
@@ -175,12 +165,6 @@ if edit_mode:
     for d in ACTIVE_DAYS:
         df_display[d] = ""
 
-    for i, row in df_display.iterrows():
-        for d in ACTIVE_DAYS:
-            key = f"{i}_{d}"
-            if key in st.session_state.shift_buffer:
-                df_display.loc[i, d] = st.session_state.shift_buffer[key]
-
     df_display["Over-Time"] = df_display.apply(
         lambda r: calculate_row_ot(r, ACTIVE_OT),
         axis=1
@@ -190,7 +174,7 @@ if edit_mode:
         "Name": st.column_config.SelectboxColumn(
             "Name",
             options=df["Name"].dropna().unique().tolist(),
-            width=100
+            width=120
         ),
         "Role": st.column_config.SelectboxColumn(
             "Role",
@@ -204,7 +188,7 @@ if edit_mode:
         config[d] = st.column_config.SelectboxColumn(
             label=d,
             options=SHIFT_OPTIONS,
-            width=130
+            width=140
         )
 
     edited_df = st.data_editor(
@@ -214,18 +198,6 @@ if edit_mode:
         use_container_width=True
     )
 
-    # handle shifts
-    for i, row in edited_df.iterrows():
-        for d in ACTIVE_DAYS:
-            val = row.get(d)
-
-            if val == "📴 Day Off":
-                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
-                st.rerun()
-
-            if val == "➕ Custom Time":
-                st.session_state.shift_buffer[f"{i}_{d}"] = "CUSTOM"
-
     # =========================
     # SUBMIT
     # =========================
@@ -233,7 +205,7 @@ if edit_mode:
         try:
             ws = master_sheet.worksheet("StaffSchedule")
 
-            others = all_data_df[all_data_df["Branch"] != st.session_state.selected_branch]
+            others = df_all[df_all["Branch"] != st.session_state.selected_branch]
 
             new_data = edited_df.copy()
             new_data["Branch"] = st.session_state.selected_branch
@@ -243,7 +215,6 @@ if edit_mode:
             ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
 
             st.success("Submitted successfully!")
-            st.session_state.shift_buffer = {}
 
         except Exception as e:
             st.error(f"Submit failed: {e}")
@@ -252,6 +223,7 @@ if edit_mode:
 # VIEW MODE
 # =========================
 else:
+
     df_display = df.copy()
 
     df_display["Over-Time"] = df_display.apply(

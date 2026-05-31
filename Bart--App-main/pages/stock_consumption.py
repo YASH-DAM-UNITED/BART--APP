@@ -142,29 +142,68 @@ if daily_start is None or weekly_start is None:
     st.stop()
 
 # -----------------------------
-# MODE SELECT
+# DIALOG FOR DUPLICATE SUBMISSION
+# -----------------------------
+@st.dialog("Submission Restricted")
+def show_duplicate_warning():
+    st.warning("Data for this date has already been submitted.")
+    st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
+    if st.button("Close"):
+        st.rerun()
+
+# -----------------------------
+# MODE SELECT & DATE CHECK
 # -----------------------------
 if st.session_state.page == "mode_select":
-    st.session_state.show_success = False
+    st.markdown("## Select Date & Option")
+    
+    # Select Date
+    yesterday = datetime.now().date() - timedelta(days=1)
+    selected_date = st.date_input("Select Date", value=yesterday)
+    date_str = str(selected_date)
 
-    st.markdown("## Select Option")
     c1, c2 = st.columns(2)
 
+    def check_if_submitted(mode):
+        headers = sheet_data[0]
+        if date_str not in headers:
+            return False # Date column doesn't exist yet, safe to proceed
+        
+        col_index = headers.index(date_str)
+        
+        # Determine range to check based on mode
+        if mode == "daily":
+            range_to_check = range(daily_start + 1, weekly_start)
+        else: # weekly
+            range_to_check = range(weekly_start + 1, len(sheet_data))
+            
+        # Check if any cell in this range for this column is not empty
+        for i in range_to_check:
+            if i < len(sheet_data) and sheet_data[i][col_index].strip() != "":
+                return True # Found data!
+        
+        return False
+
     if c1.button("📦 Daily Stock"):
-        st.session_state.mode = "daily"
-        st.session_state.page = "stock_entry"
-        st.rerun()
+        if check_if_submitted("daily"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "daily"
+            st.session_state.page = "stock_entry"
+            st.rerun()
 
     if c2.button("📊 Weekly Stock"):
-        st.session_state.mode = "weekly"
-        st.session_state.page = "stock_entry"
-        st.rerun()
+        if check_if_submitted("weekly"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "weekly"
+            st.session_state.page = "stock_entry"
+            st.rerun()
 
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
 
     st.stop()
-
 # -----------------------------
 # FILTER ITEMS & PRESERVE ROW DATA
 # -----------------------------

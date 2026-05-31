@@ -262,33 +262,36 @@ st.markdown("## Enter Stock")
 inputs = {}
 
 with st.form("stock_form", clear_on_submit=False):
-
     for i in range(0, len(processed_items), 4):
         cols = st.columns(4)
-
         for j, col in enumerate(cols):
             if i + j < len(processed_items):
                 item_data = processed_items[i + j]
                 item = item_data["name"]
                 umo = item_data["umo"]
-                
                 label = f"{item} [{umo}]" if umo else item
-
-                # CHANGE: Use st.number_input for automatic mobile numeric keypad
-                # step=1 or 0.1 depending on if you need decimals
-                value = col.number_input(
+                
+                # YOUR ORIGINAL INPUT BOX
+                val = col.text_input(
                     label,
-                    min_value=0,
-                    value=None, 
-                    placeholder="0",
+                    placeholder="Enter quantity",
                     key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
+                
+                # Inject numeric inputmode via JS to force keypad on mobile
+                components.html(f"""
+                    <script>
+                        var input = window.parent.document.querySelector('input[key="{mode}_{item}_{item_data['row_idx']}"]');
+                        if (input) {{
+                            input.setAttribute('inputmode', 'numeric');
+                            input.setAttribute('pattern', '[0-9]*');
+                        }}
+                    </script>
+                """, height=0)
 
-                # Store as string or float depending on your spreadsheet requirements
-                inputs[item] = str(value) if value is not None else None
+                inputs[item] = val.strip() if val.strip() else None
 
     submitted = st.form_submit_button("🔍 Review Stock")
-    # ... rest of your code
 # -----------------------------
 # REVIEW SECTION
 # -----------------------------

@@ -56,7 +56,7 @@ ROLE_OPTIONS = [
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# SAFE LOAD
+# LOAD DATA
 # =========================
 def load_data():
     if (
@@ -111,13 +111,11 @@ def find_week_index(blocks, selected_date):
 
 
 # =========================
-# 🔥 FIX: SORT SUNDAY-FIRST
+# 🔥 FIX: SUNDAY ORDER
 # =========================
 def extract_date(col):
     match = re.search(r"(\d{1,2}\s[A-Za-z]{3})", str(col))
-    if match:
-        return match.group(1)
-    return None
+    return match.group(1) if match else None
 
 
 def sort_sunday_first(days):
@@ -125,7 +123,6 @@ def sort_sunday_first(days):
         date_str = extract_date(col)
         if not date_str:
             return 999
-
         try:
             dt = datetime.strptime(f"{date_str} 2026", "%d %b %Y")
             return (dt.weekday() + 1) % 7  # Sunday = 0
@@ -136,12 +133,22 @@ def sort_sunday_first(days):
 
 
 # =========================
-# OT CALC
+# 🔥 FIXED OT CALCULATOR (IMPORTANT)
 # =========================
 def calculate_row_ot(row, ot_col):
-    val = str(row.get(ot_col, ""))
-    match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
-    return f"{match.group(1)} hrs" if match else "0 hrs"
+    val = str(row.get(ot_col, "")).lower()
+
+    # Case 1: 2h / 2 h / 2.5h / OT 2h / (OT 2h)
+    match = re.search(r"(\d+(?:\.\d+)?)\s*h", val)
+    if match:
+        return f"{match.group(1)} hrs"
+
+    # Case 2: OT: 2 / OT-2
+    match2 = re.search(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
+    if match2:
+        return f"{match2.group(1)} hrs"
+
+    return "0 hrs"
 
 
 # =========================
@@ -175,19 +182,6 @@ week_start = get_sunday(selected_date)
 st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
 
 # =========================
-# REFRESH
-# =========================
-col1, col2 = st.columns([1, 6])
-with col1:
-    if st.button("🔄 Refresh Data", use_container_width=True):
-        for key in ["cached_df", "shift_buffer"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.rerun()
-
-edit_mode = st.toggle("Edit Mode Only")
-
-# =========================
 # LOAD DATA
 # =========================
 df_all = load_data()
@@ -207,13 +201,14 @@ week_blocks = build_week_blocks(columns)
 active_week = find_week_index(week_blocks, selected_date)
 active_block = week_blocks[active_week]
 
-# 🔥 FIXED ORDER HERE
 ACTIVE_DAYS = sort_sunday_first(active_block["days"])
 ACTIVE_OT = active_block["ot"]
 
 # =========================
 # EDIT MODE
 # =========================
+edit_mode = st.toggle("Edit Mode Only")
+
 if edit_mode:
 
     df_display = build_view(df)

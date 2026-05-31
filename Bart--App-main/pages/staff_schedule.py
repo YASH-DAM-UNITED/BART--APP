@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from st_aggrid import AgGrid
 
 # =========================
-# CONFIG
+# PAGE CONFIG
 # =========================
 st.set_page_config(layout="wide", page_title="BART Master Schedule")
 
@@ -53,15 +53,13 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# SAFE DATA LOADER (FIXED CRASH)
+# SAFE LOAD
 # =========================
-def load_data(force=False):
+def load_data():
     if (
-        force
-        or "cached_df" not in st.session_state
+        "cached_df" not in st.session_state
         or st.session_state.cached_df is None
         or not isinstance(st.session_state.cached_df, pd.DataFrame)
-        or st.session_state.cached_df.empty
     ):
         ws = master_sheet.worksheet("StaffSchedule")
         data = ws.get_all_records()
@@ -71,7 +69,7 @@ def load_data(force=False):
 
 
 # =========================
-# WEEK ENGINE (SUNDAY START)
+# SUNDAY WEEK SYSTEM
 # =========================
 def get_sunday(date):
     return date - timedelta(days=(date.weekday() + 1) % 7)
@@ -116,6 +114,27 @@ def calculate_row_ot(row, ot_col):
 
 
 # =========================
+# BUILD VIEW (🔥 FIXED - IMPORTANT)
+# =========================
+def build_view(df):
+    display = pd.DataFrame()
+
+    display["Name"] = df["Name"]
+    display["Role"] = df["Role"]
+
+    # ONLY ACTIVE WEEK COLUMNS (FIX FOR FRIDAY ISSUE)
+    for d in ACTIVE_DAYS:
+        display[d] = df.get(d, "")
+
+    display["Over-Time"] = df.apply(
+        lambda r: calculate_row_ot(r, ACTIVE_OT),
+        axis=1
+    )
+
+    return display
+
+
+# =========================
 # UI
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
@@ -126,7 +145,7 @@ week_start = get_sunday(selected_date)
 st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
 
 # =========================
-# 🔄 SAFE REFRESH BUTTON
+# REFRESH BUTTON (SAFE)
 # =========================
 col1, col2 = st.columns([1, 6])
 with col1:
@@ -139,17 +158,12 @@ with col1:
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# LOAD DATA SAFELY
+# LOAD DATA
 # =========================
 df_all = load_data()
 
-# 🔥 EXTRA SAFETY (PREVENT CRASH)
-if df_all is None or not isinstance(df_all, pd.DataFrame):
-    st.error("❌ Failed to load Google Sheet data")
-    st.stop()
-
-if "Branch" not in df_all.columns:
-    st.error("❌ Invalid sheet structure: Missing 'Branch' column")
+if df_all is None or df_all.empty:
+    st.error("No data found in Google Sheet")
     st.stop()
 
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
@@ -165,23 +179,6 @@ active_block = week_blocks[active_week]
 
 ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
-
-# =========================
-# BUILD VIEW
-# =========================
-def build_view(df):
-    display = df[["Name", "Role"]].copy()
-
-    for d in ACTIVE_DAYS:
-        display[d] = df.get(d, "")
-
-    display["Over-Time"] = df.apply(
-        lambda r: calculate_row_ot(r, ACTIVE_OT),
-        axis=1
-    )
-
-    return display
-
 
 # =========================
 # EDIT MODE
@@ -218,9 +215,6 @@ if edit_mode:
         use_container_width=True
     )
 
-    # =========================
-    # SUBMIT
-    # =========================
     if st.button("✅ Submit"):
         try:
             ws = master_sheet.worksheet("StaffSchedule")
@@ -244,7 +238,7 @@ if edit_mode:
 # =========================
 else:
 
-    df_display = build_view(df)
+    df_display = build_view(df).reset_index(drop=True)
 
     column_defs = [
         {"headerName": "Name", "field": "Name"},

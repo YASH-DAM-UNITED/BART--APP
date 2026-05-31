@@ -446,7 +446,7 @@ if st.session_state.show_success:
     """, unsafe_allow_html=True)
 
     st.toast(f"Submitted ✔ | TX: {st.session_state.tx_id}", icon="✔")
-    time.sleep(3)
+    time.sleep(6)
 
     st.session_state.page = "mode_select"
     st.session_state.mode = None

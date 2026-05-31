@@ -53,10 +53,22 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# WEEK ENGINE (SUNDAY START)
+# 🔥 SUNDAY-FIRST WEEK SYSTEM (CORE FIX)
 # =========================
 def get_sunday(date):
+    """
+    FORCE WEEK START TO SUNDAY (0 = Monday in python, so we fix it)
+    """
     return date - timedelta(days=(date.weekday() + 1) % 7)
+
+
+def get_week_range(date):
+    """
+    Returns full Sunday-Saturday range
+    """
+    start = get_sunday(date)
+    end = start + timedelta(days=6)
+    return start, end
 
 
 def build_week_blocks(columns):
@@ -101,14 +113,6 @@ def parse_hour(val):
     return h
 
 
-def calculate_hours(start, end):
-    s = parse_hour(start)
-    e = parse_hour(end)
-    if e <= s:
-        e += 24
-    return e - s
-
-
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, ""))
     match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
@@ -127,31 +131,30 @@ def load_data(force=False):
 
 
 # =========================
-# UI HEADER
+# UI
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
-week_start = get_sunday(selected_date)
-st.caption(f"Week starts (Sunday): {week_start.strftime('%d %b %Y')}")
+# 🔥 STRICT SUNDAY DISPLAY
+week_start, week_end = get_week_range(selected_date)
+st.caption(f"Week (Sunday → Saturday): {week_start.strftime('%d %b')} → {week_end.strftime('%d %b')}")
 
 # =========================
-# 🔄 REFRESH BUTTON (ORIGINAL)
+# 🔄 REFRESH BUTTON
 # =========================
 col1, col2 = st.columns([1, 6])
 with col1:
     if st.button("🔄 Refresh Data", use_container_width=True):
-        if "cached_df" in st.session_state:
-            del st.session_state["cached_df"]
-        if "shift_buffer" in st.session_state:
-            st.session_state.shift_buffer = {}
+        st.session_state.cached_df = None
+        st.session_state.shift_buffer = {}
         st.rerun()
 
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# DATA LOAD
+# DATA
 # =========================
 df_all = load_data()
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
@@ -208,9 +211,6 @@ if edit_mode:
         use_container_width=True
     )
 
-    # =========================
-    # SUBMIT
-    # =========================
     if st.button("✅ Submit"):
         try:
             ws = master_sheet.worksheet("StaffSchedule")

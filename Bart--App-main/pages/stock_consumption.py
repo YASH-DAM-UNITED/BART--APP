@@ -172,7 +172,7 @@ if st.session_state.page == "mode_select":
     date_str = str(selected_date)
 
     # 1. Define your fixed boundaries
-    DAILY_ROWS = range(1, 65)    # Rows 1 to 64
+    DAILY_ROWS = range(2, 65)    # Rows 1 to 64
     WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
 
     def is_submitted(mode):

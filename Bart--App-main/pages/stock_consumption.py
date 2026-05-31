@@ -152,40 +152,49 @@ def show_duplicate_warning():
         st.rerun()
 
 # -----------------------------
+# DIALOG FOR DUPLICATE SUBMISSION
+# -----------------------------
+@st.dialog("Submission Restricted")
+def show_duplicate_warning():
+    st.warning("Data for this date has already been submitted.")
+    st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
+    if st.button("Close"):
+        st.rerun()
+
+# -----------------------------
 # MODE SELECT & DATE CHECK
 # -----------------------------
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
     
-    # Select Date
     yesterday = datetime.now().date() - timedelta(days=1)
     selected_date = st.date_input("Select Date", value=yesterday)
     date_str = str(selected_date)
 
-    c1, c2 = st.columns(2)
+    # 1. Define your fixed boundaries
+    DAILY_ROWS = range(1, 65)    # Rows 1 to 64
+    WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
 
-    def check_if_submitted(mode):
+    def is_submitted(mode):
         headers = sheet_data[0]
         if date_str not in headers:
-            return False # Date column doesn't exist yet, safe to proceed
+            return False 
         
         col_index = headers.index(date_str)
-        
-        # Determine range to check based on mode
-        if mode == "daily":
-            range_to_check = range(daily_start + 1, weekly_start)
-        else: # weekly
-            range_to_check = range(weekly_start + 1, len(sheet_data))
+        target_range = DAILY_ROWS if mode == "daily" else WEEKLY_ROWS
             
-        # Check if any cell in this range for this column is not empty
-        for i in range_to_check:
-            if i < len(sheet_data) and sheet_data[i][col_index].strip() != "":
-                return True # Found data!
-        
+        for row_idx in target_range:
+            # Check if row index exists in our loaded data
+            if row_idx - 1 < len(sheet_data): 
+                # row_idx - 1 because list is 0-indexed
+                if str(sheet_data[row_idx - 1][col_index]).strip() != "":
+                    return True
         return False
 
+    c1, c2 = st.columns(2)
+
     if c1.button("📦 Daily Stock"):
-        if check_if_submitted("daily"):
+        if is_submitted("daily"):
             show_duplicate_warning()
         else:
             st.session_state.mode = "daily"
@@ -193,7 +202,7 @@ if st.session_state.page == "mode_select":
             st.rerun()
 
     if c2.button("📊 Weekly Stock"):
-        if check_if_submitted("weekly"):
+        if is_submitted("weekly"):
             show_duplicate_warning()
         else:
             st.session_state.mode = "weekly"

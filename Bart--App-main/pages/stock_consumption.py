@@ -274,28 +274,21 @@ with st.form("stock_form", clear_on_submit=False):
                 
                 label = f"{item} [{umo}]" if umo else item
 
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
+                # CHANGE: Use st.number_input for automatic mobile numeric keypad
+                # step=1 or 0.1 depending on if you need decimals
+                value = col.number_input(
                     label,
-                    placeholder="Enter quantity",
+                    min_value=0.0,
+                    value=None, 
+                    placeholder="0",
                     key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
 
-                inputs[item] = value.strip() if value.strip() else None
+                # Store as string or float depending on your spreadsheet requirements
+                inputs[item] = str(value) if value is not None else None
 
     submitted = st.form_submit_button("🔍 Review Stock")
-
-    if submitted:
-        missing = [k for k, v in inputs.items() if v is None]
-
-        if missing:
-            st.error("Missing inputs")
-        else:
-            st.session_state.draft_data = inputs
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
-
+    # ... rest of your code
 # -----------------------------
 # REVIEW SECTION
 # -----------------------------

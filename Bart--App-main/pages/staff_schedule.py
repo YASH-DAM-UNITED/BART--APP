@@ -48,7 +48,10 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 # CONFIG
 # =========================
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
-ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
+ROLE_OPTIONS = [
+    "Team-Member", "Acting_Team_Leader", "Team_Leader",
+    "Acting_Supervisor", "Supervisor", "Branch_Manager"
+]
 
 BASE_COLS = ["Branch", "Name", "Role"]
 
@@ -69,12 +72,15 @@ def load_data():
 
 
 # =========================
-# SUNDAY WEEK SYSTEM
+# WEEK START (SUNDAY)
 # =========================
 def get_sunday(date):
     return date - timedelta(days=(date.weekday() + 1) % 7)
 
 
+# =========================
+# WEEK BLOCKS
+# =========================
 def build_week_blocks(columns):
     blocks = []
     cols = columns[len(BASE_COLS):]
@@ -105,6 +111,31 @@ def find_week_index(blocks, selected_date):
 
 
 # =========================
+# 🔥 FIX: SORT SUNDAY-FIRST
+# =========================
+def extract_date(col):
+    match = re.search(r"(\d{1,2}\s[A-Za-z]{3})", str(col))
+    if match:
+        return match.group(1)
+    return None
+
+
+def sort_sunday_first(days):
+    def sort_key(col):
+        date_str = extract_date(col)
+        if not date_str:
+            return 999
+
+        try:
+            dt = datetime.strptime(f"{date_str} 2026", "%d %b %Y")
+            return (dt.weekday() + 1) % 7  # Sunday = 0
+        except:
+            return 999
+
+    return sorted(days, key=sort_key)
+
+
+# =========================
 # OT CALC
 # =========================
 def calculate_row_ot(row, ot_col):
@@ -114,7 +145,7 @@ def calculate_row_ot(row, ot_col):
 
 
 # =========================
-# BUILD VIEW (🔥 FIXED - IMPORTANT)
+# BUILD VIEW
 # =========================
 def build_view(df):
     display = pd.DataFrame()
@@ -122,7 +153,6 @@ def build_view(df):
     display["Name"] = df["Name"]
     display["Role"] = df["Role"]
 
-    # ONLY ACTIVE WEEK COLUMNS (FIX FOR FRIDAY ISSUE)
     for d in ACTIVE_DAYS:
         display[d] = df.get(d, "")
 
@@ -145,7 +175,7 @@ week_start = get_sunday(selected_date)
 st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
 
 # =========================
-# REFRESH BUTTON (SAFE)
+# REFRESH
 # =========================
 col1, col2 = st.columns([1, 6])
 with col1:
@@ -177,7 +207,8 @@ week_blocks = build_week_blocks(columns)
 active_week = find_week_index(week_blocks, selected_date)
 active_block = week_blocks[active_week]
 
-ACTIVE_DAYS = active_block["days"]
+# 🔥 FIXED ORDER HERE
+ACTIVE_DAYS = sort_sunday_first(active_block["days"])
 ACTIVE_OT = active_block["ot"]
 
 # =========================

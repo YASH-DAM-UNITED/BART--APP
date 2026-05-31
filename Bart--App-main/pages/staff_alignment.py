@@ -155,7 +155,7 @@ if back:
     st.switch_page("pages/management_dashboard.py")
 
 if refresh:
-    st.cache_data.clear()
+    
     
     st.rerun()
 

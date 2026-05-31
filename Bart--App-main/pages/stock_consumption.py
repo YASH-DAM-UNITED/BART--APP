@@ -142,29 +142,67 @@ if daily_start is None or weekly_start is None:
     st.stop()
 
 # -----------------------------
-# MODE SELECT
+# DIALOG FOR DUPLICATE SUBMISSION
+# -----------------------------
+@st.dialog("Submission Restricted")
+def show_duplicate_warning():
+    st.warning("Data for this date has already been submitted.")
+    st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
+    if st.button("Close"):
+        st.rerun()
+
+# -----------------------------
+# MODE SELECT & DATE CHECK
 # -----------------------------
 if st.session_state.page == "mode_select":
-    st.session_state.show_success = False
+    st.markdown("## Select Date & Option")
+    
+    yesterday = datetime.now().date() - timedelta(days=1)
+    selected_date = st.date_input("Select Date", value=yesterday)
+    date_str = str(selected_date)
 
-    st.markdown("## Select Option")
+    # 1. Define your fixed boundaries
+    DAILY_ROWS = range(2, 65)    # Rows 1 to 64
+    WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
+
+    def is_submitted(mode):
+        headers = sheet_data[0]
+        if date_str not in headers:
+            return False 
+        
+        col_index = headers.index(date_str)
+        target_range = DAILY_ROWS if mode == "daily" else WEEKLY_ROWS
+            
+        for row_idx in target_range:
+            # Check if row index exists in our loaded data
+            if row_idx - 1 < len(sheet_data): 
+                # row_idx - 1 because list is 0-indexed
+                if str(sheet_data[row_idx - 1][col_index]).strip() != "":
+                    return True
+        return False
+
     c1, c2 = st.columns(2)
 
     if c1.button("📦 Daily Stock"):
-        st.session_state.mode = "daily"
-        st.session_state.page = "stock_entry"
-        st.rerun()
+        if is_submitted("daily"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "daily"
+            st.session_state.page = "stock_entry"
+            st.rerun()
 
     if c2.button("📊 Weekly Stock"):
-        st.session_state.mode = "weekly"
-        st.session_state.page = "stock_entry"
-        st.rerun()
+        if is_submitted("weekly"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "weekly"
+            st.session_state.page = "stock_entry"
+            st.rerun()
 
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
 
     st.stop()
-
 # -----------------------------
 # FILTER ITEMS & PRESERVE ROW DATA
 # -----------------------------
@@ -206,6 +244,27 @@ yesterday = datetime.now().date() - timedelta(days=1)
 date = st.date_input("Select Date", value=yesterday)
 date_str = str(date)
 
+
+
+
+# -----------------------------
+# FORCE NUMERIC KEYPAD ON MOBILE
+# -----------------------------
+# This script targets all text inputs and forces them to show the number pad
+# without changing the visual appearance or functionality of the input box.
+components.html("""
+<script>
+    function setNumericKeypad() {
+        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
+        inputs.forEach(function(input) {
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
+        });
+    }
+    // Run after a short delay to ensure elements are rendered
+    setTimeout(setNumericKeypad, 500);
+</script>
+""", height=0)
 # -----------------------------
 # INPUT FORM
 # -----------------------------

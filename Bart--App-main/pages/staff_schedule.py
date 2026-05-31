@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import gspread
+import time
 import re
 
 from google.oauth2.service_account import Credentials
@@ -8,7 +9,7 @@ from datetime import datetime, timedelta
 from st_aggrid import AgGrid
 
 # =========================
-# PAGE CONFIG
+# CONFIG
 # =========================
 st.set_page_config(layout="wide", page_title="BART Master Schedule")
 
@@ -20,7 +21,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================
-# AUTH
+# AUTH CHECK
 # =========================
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("⚠ Session expired. Please login again.")
@@ -29,7 +30,7 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
     st.stop()
 
 # =========================
-# GOOGLE AUTH
+# GOOGLE CLIENT
 # =========================
 if "gspread_client" not in st.session_state:
     creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
@@ -47,16 +48,25 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 # =========================
 # CONFIG
 # =========================
+DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = [
     "Team-Member", "Acting_Team_Leader", "Team_Leader",
     "Acting_Supervisor", "Supervisor", "Branch_Manager"
 ]
 
-BASE_COLS = ["Branch", "Name", "Role"]
+# =========================
+# SESSION INIT
+# =========================
+if "shift_buffer" not in st.session_state:
+    st.session_state.shift_buffer = {}
+
+if "pending_dialog" not in st.session_state:
+    st.session_state.pending_dialog = None
 
 # =========================
-# SAFE LOAD
+# LOAD DATA
 # =========================
 def load_data():
     if "cached_df" not in st.session_state or st.session_state.cached_df is None:
@@ -67,80 +77,91 @@ def load_data():
 
 
 # =========================
-# WEEK BLOCK ENGINE (IMPORTANT)
+# TIME LOGIC
 # =========================
-def build_week_blocks(columns):
-    cols = columns[len(BASE_COLS):]
-    blocks = []
-
-    i = 0
-    while i < len(cols):
-        chunk = cols[i:i+8]  # 7 days + OT
-        if len(chunk) < 8:
-            break
-
-        blocks.append({
-            "days": chunk[:7],
-            "ot": chunk[7]
-        })
-
-        i += 8
-
-    return blocks
+def parse_hour(val):
+    hour, ap = val.split()
+    hour = int(hour)
+    if ap == "PM" and hour != 12:
+        hour += 12
+    if ap == "AM" and hour == 12:
+        hour = 0
+    return hour
 
 
-def find_week_index(blocks, selected_date):
-    target = selected_date.strftime("%d %b")
+def calculate_hours(start, end):
+    s = parse_hour(start)
+    e = parse_hour(end)
+    if e <= s:
+        e += 24
+    return e - s
 
-    for idx, b in enumerate(blocks):
-        for col in b["days"]:
-            if target in str(col):
-                return idx
-    return 0
+
+def format_shift(start, end):
+    hrs = calculate_hours(start, end)
+    if hrs < 9:
+        return None, hrs
+    ot = max(0, hrs - 9)
+    if ot > 0:
+        return (f"{start} - {end} (OT {ot}h)", hrs)
+    return (f"{start} - {end}", hrs)
 
 
 # =========================
-# OT FIX (WORKS FOR ALL BLOCKS)
+# OT CALC
 # =========================
-def calculate_row_ot(row, ot_col):
-    val = str(row.get(ot_col, "")).lower()
-
-    match = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
-    if match:
-        return f"{sum(float(x) for x in match)} hrs"
-
-    match2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
-    if match2:
-        return f"{sum(float(x) for x in match2)} hrs"
-
-    return "0 hrs"
+def calculate_row_ot(row):
+    total_ot = 0
+    for d in DAYS:
+        val = str(row.get(d, ""))
+        match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
+        if match:
+            total_ot += float(match.group(1))
+    return f"{total_ot} hrs" if total_ot > 0 else "0 hrs"
 
 
 # =========================
-# VIEW BUILDER (DYNAMIC WEEK)
+# CUSTOM TIME DIALOG (FIXED SAFE VERSION)
 # =========================
-def build_view(df):
-    display = pd.DataFrame()
-    display["Name"] = df["Name"]
-    display["Role"] = df["Role"]
+@st.dialog("⏰ Set Custom Time")
+def custom_time_dialog(row_idx, row_name, day_name):
+    st.write(f"Configure shift for **{row_name}** on **{day_name}**")
 
-    for d in ACTIVE_DAYS:
-        display[d] = df.get(d, "")
+    col1, col2 = st.columns(2)
 
-    display["Over-Time"] = df.apply(
-        lambda r: calculate_row_ot(r, ACTIVE_OT),
-        axis=1
-    )
+    with col1:
+        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8, key=f"sh_{row_idx}_{day_name}")
+        sap = st.selectbox("AM/PM", ["AM", "PM"], key=f"sap_{row_idx}_{day_name}")
 
-    return display
+    with col2:
+        eh = st.selectbox("End Hour", list(range(1, 13)), index=5, key=f"eh_{row_idx}_{day_name}")
+        eap = st.selectbox("AM/PM", ["AM", "PM"], index=1, key=f"eap_{row_idx}_{day_name}")
+
+    apply_all = st.checkbox("Apply to all working days this week", key=f"all_{row_idx}_{day_name}")
+
+    if st.button("Apply Shift", use_container_width=True):
+        value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
+
+        if value is None:
+            st.error("❌ Minimum 9 hours required")
+        else:
+            if apply_all:
+                for d in DAYS:
+                    st.session_state.shift_buffer[f"{row_idx}_{d}"] = value
+            else:
+                st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+
+            st.session_state.pending_dialog = None
+            st.rerun()
 
 
 # =========================
-# UI
+# UI HEADER
 # =========================
 st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
-
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
+
+edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
 # LOAD DATA
@@ -148,50 +169,36 @@ selected_date = st.date_input("📅 Select Date", value=datetime.today())
 df_all = load_data()
 
 if df_all.empty:
-    st.error("No data found in sheet")
+    st.error("No data found")
     st.stop()
 
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
 # =========================
-# BUILD WEEK SYSTEM
+# DISPLAY TABLE
 # =========================
-columns = list(df_all.columns)
-week_blocks = build_week_blocks(columns)
+df_display = df[["Name", "Role"] + DAYS].copy()
 
-active_week = find_week_index(week_blocks, selected_date)
-active_block = week_blocks[active_week]
+# apply buffer
+for i, row in df_display.iterrows():
+    for d in DAYS:
+        key = f"{i}_{d}"
+        if key in st.session_state.shift_buffer:
+            df_display.loc[i, d] = st.session_state.shift_buffer[key]
 
-ACTIVE_DAYS = active_block["days"]
-ACTIVE_OT = active_block["ot"]
-
-# =========================
-# SHIFT BUFFER (RESTORED)
-# =========================
-if "shift_buffer" not in st.session_state:
-    st.session_state.shift_buffer = {}
-
-edit_mode = st.toggle("Edit Mode Only")
+df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
 
 # =========================
-# DISPLAY DATA
+# 🔥 FIX: OPEN DIALOG OUTSIDE LOOP
 # =========================
-def apply_buffer(df_display):
-    for i, row in df_display.iterrows():
-        for d in ACTIVE_DAYS:
-            key = f"{i}_{d}"
-            if key in st.session_state.shift_buffer:
-                df_display.loc[i, d] = st.session_state.shift_buffer[key]
-    return df_display
-
+if st.session_state.pending_dialog:
+    d = st.session_state.pending_dialog
+    custom_time_dialog(d["row_idx"], d["row_name"], d["day_name"])
 
 # =========================
 # EDIT MODE
 # =========================
 if edit_mode:
-
-    df_display = build_view(df)
-    df_display = apply_buffer(df_display)
 
     config = {
         "Name": st.column_config.SelectboxColumn(
@@ -207,7 +214,7 @@ if edit_mode:
         "Over-Time": st.column_config.TextColumn("Over-Time", disabled=True)
     }
 
-    for d in ACTIVE_DAYS:
+    for d in DAYS:
         config[d] = st.column_config.SelectboxColumn(
             label=d,
             options=SHIFT_OPTIONS,
@@ -221,20 +228,28 @@ if edit_mode:
         use_container_width=True
     )
 
-    # SHIFT BUFFER SAVE
+    # =========================
+    # TRIGGER CUSTOM TIME (FIXED)
+    # =========================
     for i, row in edited_df.iterrows():
-        for d in ACTIVE_DAYS:
+        for d in DAYS:
             val = row.get(d)
+
+            if val == "➕ Custom Time":
+                st.session_state.pending_dialog = {
+                    "row_idx": i,
+                    "row_name": row["Name"],
+                    "day_name": d
+                }
+                st.rerun()
 
             if val == "📴 Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
 
-            if val == "➕ Custom Time":
-                st.session_state.shift_buffer[f"{i}_{d}"] = "CUSTOM"
-
+    # =========================
     # SUBMIT
+    # =========================
     if st.button("✅ Submit"):
-
         ws = master_sheet.worksheet("StaffSchedule")
 
         others = df_all[df_all["Branch"] != st.session_state.selected_branch]
@@ -253,14 +268,12 @@ if edit_mode:
 # =========================
 else:
 
-    df_display = build_view(df).reset_index(drop=True)
-
     column_defs = [
         {"headerName": "Name", "field": "Name"},
         {"headerName": "Role", "field": "Role"}
     ]
 
-    for d in ACTIVE_DAYS:
+    for d in DAYS:
         column_defs.append({"headerName": d, "field": d})
 
     column_defs.append({"headerName": "Over-Time", "field": "Over-Time"})

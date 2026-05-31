@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 # -----------------------------
 # UI SETUP
 # -----------------------------
-
+set_background("barthomepage.jpg")
 st.set_page_config(page_title="Stock System", layout="wide")
 
 st.markdown("""
@@ -142,77 +142,29 @@ if daily_start is None or weekly_start is None:
     st.stop()
 
 # -----------------------------
-# DIALOG FOR DUPLICATE SUBMISSION
-# -----------------------------
-@st.dialog("Submission Restricted")
-def show_duplicate_warning():
-    st.warning("Data for this date has already been submitted.")
-    st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
-    if st.button("Close"):
-        st.rerun()
-
-# -----------------------------
-# DIALOG FOR DUPLICATE SUBMISSION
-# -----------------------------
-@st.dialog("Submission Restricted")
-def show_duplicate_warning():
-    st.warning("Data for this date has already been submitted.")
-    st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
-    if st.button("Close"):
-        st.rerun()
-
-# -----------------------------
-# MODE SELECT & DATE CHECK
+# MODE SELECT
 # -----------------------------
 if st.session_state.page == "mode_select":
-    st.markdown("## Select Date & Option")
-    
-    yesterday = datetime.now().date() - timedelta(days=1)
-    selected_date = st.date_input("Select Date", value=yesterday)
-    date_str = str(selected_date)
+    st.session_state.show_success = False
 
-    # 1. Define your fixed boundaries
-    DAILY_ROWS = range(2, 65)    # Rows 1 to 64
-    WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
-
-    def is_submitted(mode):
-        headers = sheet_data[0]
-        if date_str not in headers:
-            return False 
-        
-        col_index = headers.index(date_str)
-        target_range = DAILY_ROWS if mode == "daily" else WEEKLY_ROWS
-            
-        for row_idx in target_range:
-            # Check if row index exists in our loaded data
-            if row_idx - 1 < len(sheet_data): 
-                # row_idx - 1 because list is 0-indexed
-                if str(sheet_data[row_idx - 1][col_index]).strip() != "":
-                    return True
-        return False
-
+    st.markdown("## Select Option")
     c1, c2 = st.columns(2)
 
     if c1.button("📦 Daily Stock"):
-        if is_submitted("daily"):
-            show_duplicate_warning()
-        else:
-            st.session_state.mode = "daily"
-            st.session_state.page = "stock_entry"
-            st.rerun()
+        st.session_state.mode = "daily"
+        st.session_state.page = "stock_entry"
+        st.rerun()
 
     if c2.button("📊 Weekly Stock"):
-        if is_submitted("weekly"):
-            show_duplicate_warning()
-        else:
-            st.session_state.mode = "weekly"
-            st.session_state.page = "stock_entry"
-            st.rerun()
+        st.session_state.mode = "weekly"
+        st.session_state.page = "stock_entry"
+        st.rerun()
 
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
 
     st.stop()
+
 # -----------------------------
 # FILTER ITEMS & PRESERVE ROW DATA
 # -----------------------------
@@ -262,36 +214,40 @@ st.markdown("## Enter Stock")
 inputs = {}
 
 with st.form("stock_form", clear_on_submit=False):
+
     for i in range(0, len(processed_items), 4):
         cols = st.columns(4)
+
         for j, col in enumerate(cols):
             if i + j < len(processed_items):
                 item_data = processed_items[i + j]
                 item = item_data["name"]
                 umo = item_data["umo"]
-                label = f"{item} [{umo}]" if umo else item
                 
-                # YOUR ORIGINAL INPUT BOX
-                val = col.text_input(
+                label = f"{item} [{umo}]" if umo else item
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
                     label,
                     placeholder="Enter quantity",
                     key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
-                
-                # Inject numeric inputmode via JS to force keypad on mobile
-                components.html(f"""
-                    <script>
-                        var input = window.parent.document.querySelector('input[key="{mode}_{item}_{item_data['row_idx']}"]');
-                        if (input) {{
-                            input.setAttribute('inputmode', 'numeric');
-                            input.setAttribute('pattern', '[0-9]*');
-                        }}
-                    </script>
-                """, height=0)
 
-                inputs[item] = val.strip() if val.strip() else None
+                inputs[item] = value.strip() if value.strip() else None
 
     submitted = st.form_submit_button("🔍 Review Stock")
+
+    if submitted:
+        missing = [k for k, v in inputs.items() if v is None]
+
+        if missing:
+            st.error("Missing inputs")
+        else:
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
+
 # -----------------------------
 # REVIEW SECTION
 # -----------------------------

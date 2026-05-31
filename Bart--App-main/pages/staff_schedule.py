@@ -64,7 +64,7 @@ st.session_state.setdefault("cached_df", None)
 st.session_state.setdefault("dialog_opened", False)
 
 # =========================
-# LOAD DATA (NO STALE CACHE AFTER SUBMIT FIX)
+# LOAD DATA
 # =========================
 def load_data(force=False):
     if force or st.session_state.cached_df is None:
@@ -72,7 +72,6 @@ def load_data(force=False):
         data = ws.get_all_records()
         st.session_state.cached_df = pd.DataFrame(data)
     return st.session_state.cached_df
-
 
 # =========================
 # WEEK BLOCKS
@@ -94,12 +93,12 @@ def build_week_blocks(columns):
 
 def find_week_index(blocks, selected_date):
     target = selected_date.strftime("%d %b")
+
     for idx, b in enumerate(blocks):
         for col in b["days"]:
             if target in str(col):
                 return idx
     return 0
-
 
 # =========================
 # OT CALC
@@ -107,16 +106,15 @@ def find_week_index(blocks, selected_date):
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, "")).lower()
 
-    match = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
-    if match:
-        return f"{sum(float(x) for x in match)} hrs"
+    m1 = re.findall(r"(\d+(?:\.\d+)?)\s*h", val)
+    if m1:
+        return f"{sum(float(x) for x in m1)} hrs"
 
-    match2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
-    if match2:
-        return f"{sum(float(x) for x in match2)} hrs"
+    m2 = re.findall(r"ot\s*[:\-]?\s*(\d+(?:\.\d+)?)", val)
+    if m2:
+        return f"{sum(float(x) for x in m2)} hrs"
 
     return "0 hrs"
-
 
 # =========================
 # SHIFT LOGIC
@@ -148,9 +146,8 @@ def format_shift(start, end):
         return (f"{start} - {end} (OT {ot}h)", hrs)
     return (f"{start} - {end}", hrs)
 
-
 # =========================
-# CUSTOM TIME DIALOG (FIXED LOOP SAFE)
+# CUSTOM TIME DIALOG
 # =========================
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_key, row_name, day_name):
@@ -173,16 +170,16 @@ def custom_time_dialog(row_key, row_name, day_name):
 
         if value is None:
             st.error("❌ Minimum 9 hours required")
+            return
+
+        if apply_all:
+            for d in ACTIVE_DAYS:
+                st.session_state.shift_buffer[f"{row_key}_{d}"] = value
         else:
-            if apply_all:
-                for d in ACTIVE_DAYS:
-                    st.session_state.shift_buffer[f"{row_key}_{d}"] = value
-            else:
-                st.session_state.shift_buffer[f"{row_key}_{day_name}"] = value
+            st.session_state.shift_buffer[f"{row_key}_{day_name}"] = value
 
-            st.session_state.pending_dialog = None
-            st.rerun()
-
+        st.session_state.pending_dialog = None
+        st.rerun()
 
 # =========================
 # UI HEADER
@@ -193,7 +190,7 @@ selected_date = st.date_input("📅 Select Date", value=datetime.today())
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# DATA
+# LOAD DATA
 # =========================
 df_all = load_data()
 
@@ -204,7 +201,6 @@ if df_all.empty:
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
 
 columns = list(df_all.columns)
-
 week_blocks = build_week_blocks(columns)
 active_week = find_week_index(week_blocks, selected_date)
 
@@ -213,7 +209,7 @@ ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
 
 # =========================
-# STABLE KEY CREATION (IMPORTANT FIX)
+# ROW KEY (CRITICAL FIX)
 # =========================
 df["row_key"] = df["Name"].astype(str) + "_" + df["Role"].astype(str)
 
@@ -221,26 +217,26 @@ df["row_key"] = df["Name"].astype(str) + "_" + df["Role"].astype(str)
 # BUILD VIEW
 # =========================
 def build_view(df):
-    display = pd.DataFrame()
-    display["row_key"] = df["row_key"]
-    display["Name"] = df["Name"]
-    display["Role"] = df["Role"]
+    out = pd.DataFrame()
+    out["row_key"] = df["row_key"]
+    out["Name"] = df["Name"]
+    out["Role"] = df["Role"]
 
-    for col in ACTIVE_DAYS:
-        display[col] = df[col] if col in df.columns else ""
+    for c in ACTIVE_DAYS:
+        out[c] = df[c] if c in df.columns else ""
 
-    display["Over-Time"] = df.apply(
+    out["Over-Time"] = df.apply(
         lambda r: calculate_row_ot(r, ACTIVE_OT),
         axis=1
     )
 
-    return display
+    return out
 
 
 df_display = build_view(df)
 
 # =========================
-# APPLY SHIFT BUFFER SAFELY
+# APPLY BUFFER
 # =========================
 for i, row in df_display.iterrows():
     key = row["row_key"]
@@ -250,7 +246,7 @@ for i, row in df_display.iterrows():
             df_display.loc[i, d] = st.session_state.shift_buffer[buf_key]
 
 # =========================
-# OPEN DIALOG SAFELY (NO LOOP)
+# DIALOG HANDLING (NO LOOP FIX)
 # =========================
 if st.session_state.pending_dialog and not st.session_state.dialog_opened:
     st.session_state.dialog_opened = True
@@ -258,9 +254,7 @@ if st.session_state.pending_dialog and not st.session_state.dialog_opened:
     d = st.session_state.pending_dialog
     custom_time_dialog(d["row_key"], d["row_name"], d["day_name"])
 
-# reset flag after render cycle
 st.session_state.dialog_opened = False
-
 
 # =========================
 # EDIT MODE
@@ -268,6 +262,7 @@ st.session_state.dialog_opened = False
 if edit_mode:
 
     config = {
+        "row_key": st.column_config.Column("row_key", disabled=True),
         "Name": st.column_config.SelectboxColumn(
             "Name",
             options=df["Name"].dropna().unique().tolist(),
@@ -289,33 +284,35 @@ if edit_mode:
         )
 
     edited_df = st.data_editor(
-        df_display.drop(columns=["row_key"]),
+        df_display,
         column_config=config,
         use_container_width=True,
         key="editor"
     )
 
     # =========================
-    # TRIGGER CUSTOM TIME (SAFE)
+    # TRIGGER CUSTOM TIME (FIXED)
     # =========================
-    for i, row in edited_df.iterrows():
+    for _, row in edited_df.iterrows():
+        row_key = row["row_key"]
+
         for d in ACTIVE_DAYS:
             val = row.get(d)
 
             if val == "➕ Custom Time":
                 st.session_state.pending_dialog = {
-                    "row_key": df_display.iloc[i]["row_key"],
+                    "row_key": row_key,
                     "row_name": row["Name"],
                     "day_name": d
                 }
                 st.rerun()
+                st.stop()
 
             if val == "📴 Day Off":
-                key = f'{df_display.iloc[i]["row_key"]}_{d}'
-                st.session_state.shift_buffer[key] = "OFF"
+                st.session_state.shift_buffer[f"{row_key}_{d}"] = "OFF"
 
     # =========================
-    # SUBMIT FIX (CACHE REFRESH)
+    # SUBMIT
     # =========================
     if st.button("✅ Submit"):
 
@@ -323,15 +320,14 @@ if edit_mode:
 
         others = df_all[df_all["Branch"] != st.session_state.selected_branch]
 
-        new_data = edited_df.copy()
+        new_data = edited_df.drop(columns=["row_key"])
         new_data["Branch"] = st.session_state.selected_branch
 
         final = pd.concat([others, new_data], ignore_index=True)
 
         ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
 
-        st.session_state.cached_df = None  # FORCE REFRESH FIX
-
+        st.session_state.cached_df = None
         st.success("Submitted successfully!")
         st.rerun()
 
@@ -350,16 +346,12 @@ else:
 
     AgGrid(
         df_display.drop(columns=["row_key"]),
-        gridOptions={
-            "columnDefs": column_defs,
-            "defaultColDef": {"resizable": True}
-        },
+        gridOptions={"columnDefs": column_defs},
         height=500
     )
 
-
 # =========================
-# BACK BUTTON
+# BACK
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

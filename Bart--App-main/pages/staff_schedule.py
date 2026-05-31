@@ -53,22 +53,10 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 BASE_COLS = ["Branch", "Name", "Role"]
 
 # =========================
-# 🔥 SUNDAY-FIRST WEEK SYSTEM (CORE FIX)
+# WEEK ENGINE (SUNDAY FIX)
 # =========================
 def get_sunday(date):
-    """
-    FORCE WEEK START TO SUNDAY (0 = Monday in python, so we fix it)
-    """
     return date - timedelta(days=(date.weekday() + 1) % 7)
-
-
-def get_week_range(date):
-    """
-    Returns full Sunday-Saturday range
-    """
-    start = get_sunday(date)
-    end = start + timedelta(days=6)
-    return start, end
 
 
 def build_week_blocks(columns):
@@ -101,18 +89,8 @@ def find_week_index(blocks, selected_date):
 
 
 # =========================
-# SHIFT LOGIC
+# OT
 # =========================
-def parse_hour(val):
-    h, ap = val.split()
-    h = int(h)
-    if ap == "PM" and h != 12:
-        h += 12
-    if ap == "AM" and h == 12:
-        h = 0
-    return h
-
-
 def calculate_row_ot(row, ot_col):
     val = str(row.get(ot_col, ""))
     match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
@@ -122,8 +100,8 @@ def calculate_row_ot(row, ot_col):
 # =========================
 # LOAD DATA
 # =========================
-def load_data(force=False):
-    if force or "cached_df" not in st.session_state:
+def load_data():
+    if "cached_df" not in st.session_state:
         ws = master_sheet.worksheet("StaffSchedule")
         data = ws.get_all_records()
         st.session_state.cached_df = pd.DataFrame(data)
@@ -137,12 +115,11 @@ st.title(f"🏢 Schedule: {st.session_state.selected_branch}")
 
 selected_date = st.date_input("📅 Select Date", value=datetime.today())
 
-# 🔥 STRICT SUNDAY DISPLAY
-week_start, week_end = get_week_range(selected_date)
-st.caption(f"Week (Sunday → Saturday): {week_start.strftime('%d %b')} → {week_end.strftime('%d %b')}")
+week_start = get_sunday(selected_date)
+st.caption(f"Week starts Sunday: {week_start.strftime('%d %b %Y')}")
 
 # =========================
-# 🔄 REFRESH BUTTON
+# REFRESH BUTTON
 # =========================
 col1, col2 = st.columns([1, 6])
 with col1:
@@ -154,7 +131,7 @@ with col1:
 edit_mode = st.toggle("Edit Mode Only")
 
 # =========================
-# DATA
+# DATA LOAD
 # =========================
 df_all = load_data()
 df = df_all[df_all["Branch"] == st.session_state.selected_branch].copy()
@@ -169,19 +146,29 @@ ACTIVE_DAYS = active_block["days"]
 ACTIVE_OT = active_block["ot"]
 
 # =========================
+# 🔥 FIX: FORCE PROPER COLUMN ORDER
+# =========================
+def build_view(df):
+    display = df[["Name", "Role"]].copy()
+
+    # force correct order (IMPORTANT FIX)
+    for d in ACTIVE_DAYS:
+        display[d] = df.get(d, "")
+
+    display["Over-Time"] = df.apply(
+        lambda r: calculate_row_ot(r, ACTIVE_OT),
+        axis=1
+    )
+
+    return display
+
+
+# =========================
 # EDIT MODE
 # =========================
 if edit_mode:
 
-    df_display = df[["Name", "Role"]].copy()
-
-    for d in ACTIVE_DAYS:
-        df_display[d] = ""
-
-    df_display["Over-Time"] = df_display.apply(
-        lambda r: calculate_row_ot(r, ACTIVE_OT),
-        axis=1
-    )
+    df_display = build_view(df)
 
     config = {
         "Name": st.column_config.SelectboxColumn(
@@ -230,16 +217,11 @@ if edit_mode:
             st.error(f"Submit failed: {e}")
 
 # =========================
-# VIEW MODE
+# VIEW MODE (FIXED DISPLAY)
 # =========================
 else:
 
-    df_display = df.copy()
-
-    df_display["Over-Time"] = df_display.apply(
-        lambda r: calculate_row_ot(r, ACTIVE_OT),
-        axis=1
-    )
+    df_display = build_view(df)
 
     column_defs = [
         {"headerName": "Name", "field": "Name"},
@@ -261,7 +243,7 @@ else:
     )
 
 # =========================
-# BACK BUTTON
+# BACK
 # =========================
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 # -----------------------------
 # UI SETUP
 # -----------------------------
-set_background("barthomepage.jpg")
+
 st.set_page_config(page_title="Stock System", layout="wide")
 
 st.markdown("""

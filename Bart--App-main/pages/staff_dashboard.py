@@ -235,66 +235,84 @@ if st.session_state.selected_branch != "-- Select Branch --":
             else:
                 st.error("Wrong admin password")
 
-    # ---------------- AFTER LOGIN ----------------
-    if st.session_state.authenticated:
-        st.success(f"Logged in: {st.session_state.selected_branch}")
-        col1, col2, col3 = st.columns(3)
+# ---------------- AFTER LOGIN ----------------
+if st.session_state.authenticated:
+    st.success(f"Logged in: {st.session_state.selected_branch}")
+    col1, col2, col3 = st.columns(3)
 
-        if col1.button("📦 Stock Record"):
-            refresh_activity()
-            st.switch_page("pages/stock_consumption.py")
+    if col1.button("📦 Stock Record"):
+        refresh_activity()
+        st.switch_page("pages/stock_consumption.py")
 
-        if col2.button("📅 Staff Schedule"):
-            refresh_activity()
-            st.switch_page("pages/staff_schedule.py")
+    if col2.button("📅 Staff Schedule"):
+        refresh_activity()
+        st.switch_page("pages/staff_schedule.py")
 
-        # STOCK VIEW BUTTON LOGIC
-        if col3.button("🔍 Stock View"):
-            refresh_activity()
-            st.session_state.show_stock_view = True
+    # STOCK VIEW BUTTON LOGIC
+    if col3.button("🔍 Stock View"):
+        refresh_activity()
+        st.session_state.show_stock_view = True
 
-        if st.session_state.get("show_stock_view", False):
-            sheet = client.open_by_key(branch_info["SheetID"])
-            ws = sheet.worksheet("Stocks")
-            data = ws.get_all_values()
-            headers = data[0]
-            date_columns = headers[1:]
-            daily, weekly = [], []
-            current_section = None
+    if st.session_state.get("show_stock_view", False):
+        sheet = client.open_by_key(branch_info["SheetID"])
+        ws = sheet.worksheet("Stocks")
+        data = ws.get_all_values()
+        headers = data[0]
+        date_columns = headers[1:]
+        daily, weekly = [], []
+        current_section = None
 
-            for row in data:
-                row_text = " ".join(row).strip().lower()
-                if "daily item" in row_text: current_section = "daily"; continue
-                if "weekly item" in row_text: current_section = "weekly"; continue
-                if current_section is None or not row or not row[0]: continue
-                
-                item = row[0].strip()
-                values = row[1:] + [""] * (len(date_columns) - len(values))
-                cleaned, total = [], 0
-                for i, v in enumerate(values):
-                    if i < 3: cleaned.append(v); continue
-                    try: num = float(v) if v != "" else 0
-                    except: num = 0
-                    cleaned.append(num); total += num
-                
-                row_dict = {"Item": item}
-                for i, col in enumerate(date_columns): row_dict[col] = cleaned[i]
-                row_dict["Total"] = total
-                if current_section == "daily": daily.append(row_dict)
-                else: weekly.append(row_dict)
+        for row in data:
+            row_text = " ".join(row).strip().lower()
+            if "daily item" in row_text: 
+                current_section = "daily"
+                continue
+            if "weekly item" in row_text: 
+                current_section = "weekly"
+                continue
+            if current_section is None or not row or not row[0]: 
+                continue
+            
+            item = row[0].strip()
+            # Fix for NameError: define source slice and pad safely
+            row_values = row[1:]
+            padding_needed = len(date_columns) - len(row_values)
+            values = row_values + ([""] * max(0, padding_needed))
+            
+            cleaned, total = [], 0
+            for i, v in enumerate(values):
+                if i < 3: 
+                    cleaned.append(v)
+                    continue
+                try: 
+                    num = float(v) if v != "" else 0
+                except: 
+                    num = 0
+                cleaned.append(num)
+                total += num
+            
+            row_dict = {"Item": item}
+            for i, col in enumerate(date_columns): 
+                row_dict[col] = cleaned[i]
+            row_dict["Total"] = total
+            
+            if current_section == "daily": 
+                daily.append(row_dict)
+            else: 
+                weekly.append(row_dict)
 
-            st.subheader("📦 Daily Items Stock")
-            st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-            st.subheader("📦 Weekly Items Stock")
-            st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
+        st.subheader("📦 Daily Items Stock")
+        st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
+        st.subheader("📦 Weekly Items Stock")
+        st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
 
-            # NEW BUTTONS ADDED UNDER STOCK VIEW
-            st.markdown("---")
-            b_col1, b_col2 = st.columns(2)
-            if b_col1.button("🚀 Internal Transfer"):
-                st.switch_page("pages/stock_transfer.py")
-            if b_col2.button("🔔 Notifications"):
-                st.switch_page("pages/notifications.py")
+        # NEW BUTTONS ADDED UNDER STOCK VIEW
+        st.markdown("---")
+        b_col1, b_col2 = st.columns(2)
+        if b_col1.button("🚀 Internal Transfer"):
+            st.switch_page("pages/stock_transfer.py")
+        if b_col2.button("🔔 Notifications"):
+            st.switch_page("pages/notifications.py")
 
 # --- 1. Notification Check (Run on load) ---
 def check_notifications():

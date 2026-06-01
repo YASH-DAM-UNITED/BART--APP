@@ -223,22 +223,57 @@ if edit_mode:
             if value == "➕ Custom Time":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
-    if st.button("✅ Submit"):
+if st.button("✅ Submit"):
         if not existing_week_data.empty:
             duplicate_submission_dialog()
             st.stop()
+            
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            others = st.session_state.cached_df[st.session_state.cached_df["Branch"] != st.session_state.selected_branch].copy()
-            new_data = edited_df.copy()
-            new_data["Branch"] = st.session_state.selected_branch
-            final = pd.concat([others, new_data], ignore_index=True)
-            final = final.rename(columns={day: day_labels[day] for day in DAYS})
-            ws.update([final.columns.tolist()] + final.fillna("").values.tolist())
-            st.session_state.cached_df = final
+            # Get all current values to find row/col coordinates
+            all_data = ws.get_all_values()
+            headers = all_data[0] # The first row (column names)
+            
+            # Prepare batch update list
+            cell_updates = []
+            
+            for i, row in edited_df.iterrows():
+                # 1. Find or create Row Index
+                # Logic: Find row where Branch matches and Name matches
+                row_idx = None
+                for r_idx, r_val in enumerate(all_data):
+                    if r_idx > 0 and r_val[0] == st.session_state.selected_branch and r_val[1] == row["Name"]:
+                        row_idx = r_idx + 1
+                        break
+                
+                # If row doesn't exist, add it to the bottom
+                if not row_idx:
+                    row_idx = len(all_data) + 1
+                    all_data.append([st.session_state.selected_branch, row["Name"]] + [""] * (len(headers) - 2))
+                    ws.update_cell(row_idx, 1, st.session_state.selected_branch)
+                    ws.update_cell(row_idx, 2, row["Name"])
+
+                # 2. Find or create Column Index for each day
+                for d in DAYS:
+                    day_header = day_labels[d]
+                    try:
+                        col_idx = headers.index(day_header) + 1
+                    except ValueError:
+                        # Append new column to the end
+                        col_idx = len(headers) + 1
+                        ws.update_cell(1, col_idx, day_header)
+                        headers.append(day_header)
+                    
+                    # 3. Add to batch update
+                    cell_updates.append(gspread.Cell(row=row_idx, col=col_idx, value=str(row[d])))
+            
+            # Perform batch update for speed
+            ws.update_cells(cell_updates)
+            
             st.session_state.shift_buffer = {}
             st.session_state.deleted_staff = set()
             success_dialog()
+            
         except Exception as e:
             st.error(f"❌ Submission Failed: {e}")
 else:

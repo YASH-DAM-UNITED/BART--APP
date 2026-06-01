@@ -295,43 +295,32 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Prepare and filter data
+    # 1. Fetch data
     df_display = df.copy()
     
-    # Remove duplicate columns if the sheet accidentally has them
+    # 2. Identify Headers
+    # Current week day columns
+    week_cols = [day_labels[d] for d in DAYS]
+    
+    # Identify OT column: Look for ANY column starting with "Over-Time"
+    # This automatically finds "Over-Time", "Over-Time 1", "Over-Time 2", etc.
+    ot_cols = [col for col in df_display.columns if col.startswith("Over-Time")]
+    
+    # 3. Filter: Only keep Name, Role, the 7 days, and the relevant OT column(s)
+    # This combines your required columns and ensures we don't crash
+    target_columns = ["Name", "Role"] + week_cols + ot_cols
+    valid_columns = [col for col in target_columns if col in df_display.columns]
+    
+    df_display = df_display[valid_columns]
     df_display = df_display.loc[:, ~df_display.columns.duplicated()]
-    
-    # Calculate current OT header
-    start_date_comparison = datetime(2026, 5, 1)
-    week_start_dt = datetime.combine(week_start, datetime.min.time())
-    week_diff = (week_start_dt - start_date_comparison).days // 7
-    ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
-    
-    # 2. Build target columns dynamically
-    # Only include columns that actually exist in the dataframe to prevent KeyErrors
-    day_cols = [day_labels[d] for d in DAYS if day_labels[d] in df_display.columns]
-    target_columns = ["Name", "Role"] + day_cols
-    if ot_col_name in df_display.columns:
-        target_columns.append(ot_col_name)
-    
-    # 3. Clean and Filter
-    df_display = df_display.reindex(columns=target_columns)
     df_display = df_display.fillna("").astype(str)
     
-    # 4. Define Grid Configuration
+    # 4. Render the Grid
     column_defs = [
-        {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
-        {"headerName": "Role", "field": "Role", "width": 140}
+        {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
+        for col in df_display.columns
     ]
-    for d in DAYS:
-        label = day_labels[d]
-        if label in df_display.columns:
-            column_defs.append({"headerName": label, "field": label, "width": 135})
-            
-    if ot_col_name in df_display.columns:
-        column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
 
-    # 5. Render the Grid
     AgGrid(
         df_display, 
         gridOptions={
@@ -340,6 +329,7 @@ else:
         }, 
         height=500,
         fit_columns_on_grid_load=True
+    )
     )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

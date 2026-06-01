@@ -285,6 +285,5 @@ else:
         height=500,
         fit_columns_on_grid_load=True
     )
-    )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

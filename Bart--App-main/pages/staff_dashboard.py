@@ -97,23 +97,20 @@ def check_timeout():
 
 check_timeout()
 
-# ---------------- GOOGLE SHEETS (PERSISTENT CONNECTION) ----------------
-@st.cache_resource
-def get_master_sheet_connection():
-    # Load JSON from secrets
+# ---------------- SELF-HEALING GOOGLE CONNECTION ----------------
+def get_fresh_client():
     creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-    
-    # Define the scope
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    
-    # Use google-auth instead of oauth2client
+    # Always create a fresh credential object to avoid stale token issues
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    client = gspread.authorize(creds)
-    
-    return client.open("MASTERBRANCHSHEET")
+    return gspread.authorize(creds)
+
+# Ensure client exists and is fresh
+if "gs_client" not in st.session_state:
+    st.session_state.gs_client = get_fresh_client()
 # ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
 @st.cache_data(ttl=None)  # Keeps data cached for 5 minutes for instant lookups
 def load_master_branch_data():

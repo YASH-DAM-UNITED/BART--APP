@@ -231,44 +231,47 @@ if st.button("✅ Submit"):
         try:
             ws = master_sheet.worksheet("StaffSchedule")
             
-            # 1. Fetch current header/row structure ONLY ONCE
-            # Do not use pd.concat or ws.update()
-            all_values = ws.get_all_values()
-            headers = all_values[0] 
+            # 1. Get the current headers from the sheet to know which columns exist
+            headers = ws.row_values(1)
+            
+            # 2. Get all data as records to find specific rows by criteria
+            all_records = ws.get_all_records()
             
             updates = []
             
-            # 2. Iterate through your current edited data
             for i, row in edited_df.iterrows():
-                # Locate Row
-                row_idx = None
-                for r_idx, r_val in enumerate(all_values):
-                    if r_idx > 0 and r_val[0] == st.session_state.selected_branch and r_val[1] == row["Name"]:
-                        row_idx = r_idx + 1
+                # Find the row index in the sheet
+                # We search for the row where Branch and Name match
+                target_row_idx = None
+                for idx, record in enumerate(all_records):
+                    if record.get("Branch") == st.session_state.selected_branch and record.get("Name") == row["Name"]:
+                        target_row_idx = idx + 2 # +2 because get_all_records skips header, and row index is 1-based
                         break
                 
-                # If row doesn't exist, create it at the very bottom
-                if not row_idx:
-                    row_idx = len(all_values) + 1
-                    ws.update_cell(row_idx, 1, st.session_state.selected_branch)
-                    ws.update_cell(row_idx, 2, row["Name"])
-                    # Update local list to prevent duplicate row creation
-                    all_values.append([st.session_state.selected_branch, row["Name"]])
+                # If row doesn't exist, append at the bottom
+                if not target_row_idx:
+                    target_row_idx = len(all_records) + 2
+                    ws.update_cell(target_row_idx, 1, st.session_state.selected_branch)
+                    ws.update_cell(target_row_idx, 2, row["Name"])
+                    # Add to all_records so next loop knows it exists
+                    all_records.append({"Branch": st.session_state.selected_branch, "Name": row["Name"]})
 
-                # 3. Locate Column
+                # 3. Locate Column for each day
                 for d in DAYS:
                     day_header = day_labels[d]
-                    if day_header in headers:
-                        col_idx = headers.index(day_header) + 1
-                    else:
-                        col_idx = len(headers) + 1
-                        ws.update_cell(1, col_idx, day_header)
+                    if day_header not in headers:
+                        # Append new column if it doesn't exist
+                        new_col_idx = len(headers) + 1
+                        ws.update_cell(1, new_col_idx, day_header)
                         headers.append(day_header)
+                        col_idx = new_col_idx
+                    else:
+                        col_idx = headers.index(day_header) + 1
                     
-                    # 4. Queue update for this specific cell
-                    updates.append(gspread.Cell(row=row_idx, col=col_idx, value=str(row[d])))
+                    # 4. Queue update
+                    updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[d])))
             
-            # 5. EXECUTE: This ONLY touches the cells defined in 'updates'
+            # 5. Execute all updates at once
             ws.update_cells(updates)
             
             st.session_state.shift_buffer = {}

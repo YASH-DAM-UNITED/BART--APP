@@ -9,7 +9,7 @@ import time
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(layout="wide", page_title="BART Staff Dashboard")
 
-SESSION_TIMEOUT = 2 * 60
+SESSION_TIMEOUT = None
 
 # ---------------- CLEAN UI STYLE ----------------
 st.markdown("""
@@ -104,7 +104,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 client = gspread.authorize(creds)
 
 # ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
-@st.cache_data(ttl=300)  # Keeps data cached for 5 minutes for instant lookups
+@st.cache_data(ttl=None)  # Keeps data cached for 5 minutes for instant lookups
 def load_master_branch_data():
     sheet = client.open("MASTERBRANCHSHEET").sheet1
     records = sheet.get_all_records()

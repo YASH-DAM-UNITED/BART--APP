@@ -363,7 +363,7 @@ col1, col2, col3 = st.columns(3)
 if col1.button("🚀 Internal Transfer"):
     st.switch_page("pages/internal_transfer.py")
 
-if col2.button("📦 Stock Record"):
+if col2.button(" Notifications  "):
     st.switch_page("pages/stock_consumption.py")
 
 # --- 3. Cached Data Access ---

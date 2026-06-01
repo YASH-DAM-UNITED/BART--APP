@@ -241,18 +241,45 @@ if edit_mode:
             success_dialog()
         except Exception as e:
             st.error(f"❌ Submission Failed: {e}")
+# --- Updated Non-Edit Mode Block ---
 else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
+
     df_display = df.copy()
-    if st.session_state.deleted_staff and not df_display.empty: df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
-    df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else []
     
-    column_defs = [{"headerName": "Name", "field": "Name", "pinned": "left", "width": 90}, {"headerName": "Role", "field": "Role", "width": 140}]
-    for d in DAYS: column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
-    column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
-    AgGrid(df_display, gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, height=500)
+    # Ensure data is clean
+    if not df_display.empty:
+        if st.session_state.deleted_staff:
+            df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)]
+        
+        # Ensure we have the necessary day columns even if they are empty
+        for d in DAYS:
+            if d not in df_display.columns:
+                df_display[d] = ""
+        
+        df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
+        
+        # Cast to string to prevent serialization errors
+        df_display = df_display.astype(str)
+
+        column_defs = [
+            {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
+            {"headerName": "Role", "field": "Role", "width": 140}
+        ]
+        for d in DAYS:
+            column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
+        column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
+
+        AgGrid(
+            df_display, 
+            gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
+            height=500,
+            fit_columns_on_grid_load=True
+        )
+    else:
+        st.info("No schedule data found for this branch.")
 
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

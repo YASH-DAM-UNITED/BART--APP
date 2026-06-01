@@ -289,7 +289,10 @@ if edit_mode:
             st.error(f"❌ Submission Failed: {e}")
 # =========================
 # VIEW MODE
-# =========================else:
+# =========================
+    
+
+else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()

@@ -295,27 +295,31 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Fetch data
+    # 1. Start with a fresh copy
     df_display = df.copy()
     
-    # 2. Identify Headers
-    # Current week day columns
+    # 2. CRITICAL: Force remove all duplicate columns
+    # This keeps only the first instance of every column name
+    df_display = df_display.loc[:, ~df_display.columns.duplicated()]
+    
+    # 3. Identify headers for this specific week
     week_cols = [day_labels[d] for d in DAYS]
     
-    # Identify OT column: Look for ANY column starting with "Over-Time"
-    # This automatically finds "Over-Time", "Over-Time 1", "Over-Time 2", etc.
+    # Dynamically find ANY column that looks like an Over-Time column
     ot_cols = [col for col in df_display.columns if col.startswith("Over-Time")]
     
-    # 3. Filter: Only keep Name, Role, the 7 days, and the relevant OT column(s)
-    # This combines your required columns and ensures we don't crash
+    # 4. Define final structure
+    # We only want Name, Role, the 7 days, and any found OT columns
     target_columns = ["Name", "Role"] + week_cols + ot_cols
+    
+    # 5. Filter: Only reindex if the column actually exists in our cleaned df
     valid_columns = [col for col in target_columns if col in df_display.columns]
     
+    # Now this will not crash because duplicates are gone and we check existence
     df_display = df_display[valid_columns]
-    df_display = df_display.loc[:, ~df_display.columns.duplicated()]
     df_display = df_display.fillna("").astype(str)
     
-    # 4. Render the Grid
+    # 6. Render the Grid
     column_defs = [
         {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
         for col in df_display.columns
@@ -329,7 +333,6 @@ else:
         }, 
         height=500,
         fit_columns_on_grid_load=True
-    )
     )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

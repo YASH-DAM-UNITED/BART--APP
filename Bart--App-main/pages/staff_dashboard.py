@@ -202,30 +202,22 @@ if st.session_state.selected_branch != "-- Select Branch --":
 if st.session_state.selected_branch != "-- Select Branch --":
 
     if not st.session_state.authenticated:
-
         st.subheader("Branch Login")
-
         password = st.text_input("Password", type="password")
-
         col1, col2 = st.columns(2)
-
         with col1:
             if st.button("Login"):
                 with st.spinner("Verifying credentials..."):
-                    # Compares password instantly against cached memory dict
                     if passwords.get(st.session_state.selected_branch, "") == password:
                         st.session_state.authenticated = True
                         st.session_state.auth_branch = st.session_state.selected_branch
                         st.session_state.last_activity = time.time()
-
                         st.session_state.sheet_id = branch_info["SheetID"]
                         st.session_state.tab_name = "Stocks"
                         st.session_state.branch_info = branch_info
-
                         st.rerun()
                     else:
                         st.error("Incorrect password")
-
         with col2:
             if st.button("Reset Password"):
                 st.session_state.reset_mode = True
@@ -233,10 +225,8 @@ if st.session_state.selected_branch != "-- Select Branch --":
     # ---------------- RESET PASSWORD ----------------
     if st.session_state.reset_mode:
         st.subheader("Reset Password")
-
         admin_pass = st.text_input("Admin Password", type="password")
         new_pass = st.text_input("New Password", type="password")
-
         if st.button("Update Password"):
             if admin_pass == load_admin()["admin"]:
                 save_passwords(st.session_state.selected_branch, new_pass)
@@ -247,9 +237,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 
     # ---------------- AFTER LOGIN ----------------
     if st.session_state.authenticated:
-
         st.success(f"Logged in: {st.session_state.selected_branch}")
-
         col1, col2, col3 = st.columns(3)
 
         if col1.button("📦 Stock Record"):
@@ -260,80 +248,53 @@ if st.session_state.selected_branch != "-- Select Branch --":
             refresh_activity()
             st.switch_page("pages/staff_schedule.py")
 
+        # STOCK VIEW BUTTON LOGIC
         if col3.button("🔍 Stock View"):
             refresh_activity()
+            st.session_state.show_stock_view = True
 
+        if st.session_state.get("show_stock_view", False):
             sheet = client.open_by_key(branch_info["SheetID"])
             ws = sheet.worksheet("Stocks")
-
             data = ws.get_all_values()
-
             headers = data[0]
             date_columns = headers[1:]
-
-            daily = []
-            weekly = []
-
+            daily, weekly = [], []
             current_section = None
 
             for row in data:
                 row_text = " ".join(row).strip().lower()
-
-                if "daily item" in row_text:
-                    current_section = "daily"
-                    continue
-
-                if "weekly item" in row_text:
-                    current_section = "weekly"
-                    continue
-
-                if current_section is None:
-                    continue
-
-                if not row or not row[0]:
-                    continue
-
+                if "daily item" in row_text: current_section = "daily"; continue
+                if "weekly item" in row_text: current_section = "weekly"; continue
+                if current_section is None or not row or not row[0]: continue
+                
                 item = row[0].strip()
-
-                values = row[1:]
-                values += [""] * (len(date_columns) - len(values))
-
-                cleaned = []
-                total = 0
-
+                values = row[1:] + [""] * (len(date_columns) - len(values))
+                cleaned, total = [], 0
                 for i, v in enumerate(values):
-                    if i < 3:
-                        cleaned.append(v)
-                        continue
-
-                    try:
-                        num = float(v) if v != "" else 0
-                    except:
-                        num = 0
-
-                    cleaned.append(num)
-                    total += num
-
+                    if i < 3: cleaned.append(v); continue
+                    try: num = float(v) if v != "" else 0
+                    except: num = 0
+                    cleaned.append(num); total += num
+                
                 row_dict = {"Item": item}
-
-                for i, col in enumerate(date_columns):
-                    row_dict[col] = cleaned[i]
-
+                for i, col in enumerate(date_columns): row_dict[col] = cleaned[i]
                 row_dict["Total"] = total
-
-                if current_section == "daily":
-                    daily.append(row_dict)
-                else:
-                    weekly.append(row_dict)
+                if current_section == "daily": daily.append(row_dict)
+                else: weekly.append(row_dict)
 
             st.subheader("📦 Daily Items Stock")
             st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-
             st.subheader("📦 Weekly Items Stock")
             st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
 
-
-
+            # NEW BUTTONS ADDED UNDER STOCK VIEW
+            st.markdown("---")
+            b_col1, b_col2 = st.columns(2)
+            if b_col1.button("🚀 Internal Transfer"):
+                st.switch_page("pages/stock_transfer.py")
+            if b_col2.button("🔔 Notifications"):
+                st.switch_page("pages/notifications.py")
 
 # --- 1. Notification Check (Run on load) ---
 def check_notifications():
@@ -351,24 +312,7 @@ def check_notifications():
         # Update sheet to 'read' to prevent loop
         # (Add logic here to find row index and update status to 'read')
 
-# Run it immediately after login
-check_notifications()
 
-# --- 2. Dashboard UI ---
-st.success(f"Logged in: {st.session_state.selected_branch}")
-
-col1, col2, col3 = st.columns(3)
-
-# The new "Internal Transfer" Button
-if col1.button("🚀 Internal Transfer"):
-    st.switch_page("pages/stock_transfer.py")
-
-if col2.button(" Notifications  "):
-    st.switch_page("pages/stock_consumption.py")
-
-# --- 3. Cached Data Access ---
-# Use the session_state.branch_info which was cached during login
-# No API calls needed here if you store the stock list in session_state!
 
 # ---------------- BACK ----------------
 if st.button("⬅ Back"):

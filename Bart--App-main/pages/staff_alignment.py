@@ -104,34 +104,30 @@ def clean(text):
     return text
 
 def get_shift(cell):
-    if not cell:
+    if not cell or not isinstance(cell, str):
         return None
 
-    # 1. Clean the text: Remove anything in parentheses (like OT 0h)
-    text = clean(cell)
-    
-    # 2. Find all time instances (e.g., "5 AM", "12 PM")
-    # This regex looks for digits followed by optional space and AM/PM
-    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", text, re.I)
+    # This regex looks for: Digits, optional space, AM or PM
+    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", cell, re.I)
 
     if len(matches) < 2:
         return None
 
-    def convert(hour_str, am_pm):
+    def to_minutes(hour_str, am_pm):
         h = int(hour_str)
-        am_pm = am_pm.upper()
+        m = am_pm.upper()
+        
+        # 12 AM -> 0 (00:00)
+        # 1 AM - 11 AM -> 1 - 11
+        # 12 PM -> 12 (12:00)
+        # 1 PM - 11 PM -> 13 - 23
+        if m == "AM":
+            return (0 if h == 12 else h) * 60
+        else:
+            return (12 if h == 12 else h + 12) * 60
 
-        if am_pm == "AM":
-            if h == 12:
-                h = 0
-        else: # PM
-            if h != 12:
-                h += 12
-        return h * 60
-
-    # matches[0] is the start time, matches[1] is the end time
-    start_min = convert(matches[0][0], matches[0][1])
-    end_min = convert(matches[1][0], matches[1][1])
+    start_min = to_minutes(matches[0][0], matches[0][1])
+    end_min = to_minutes(matches[1][0], matches[1][1])
 
     return start_min, end_min
 
@@ -141,11 +137,19 @@ def is_active(cell, now_min):
         return False
 
     start, end = shift
+    
+    # Debug: uncomment the line below if you still have issues
+    # st.sidebar.write(f"Cell: {cell} | Start: {start}, End: {end}, Now: {now_min}")
 
+    # Standard Shift (e.g., 5 AM to 12 PM)
     if start < end:
         return start <= now_min < end
+    
+    # Overnight Shift (e.g., 10 PM to 6 AM)
     else:
         return now_min >= start or now_min < end
+
+
 
 meta_cols = ["Branch", "Name", "Role"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]

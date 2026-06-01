@@ -66,28 +66,37 @@ def get_fresh_sheet():
     return client.open_by_key(SHEET_ID)
 
 
-# Initialize the token
+# --- 1. CONFIGURATION & STATE ---
 if "data_refresh_token" not in st.session_state:
     st.session_state.data_refresh_token = 0
 
+# --- 2. DATA LOADING LOGIC ---
+@st.cache_resource
+def get_client():
+    creds = Credentials.from_service_account_info(
+        st.secrets["GOOGLE_CREDS_JSON"],
+        scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    )
+    return gspread.authorize(creds)
+
 @st.cache_data(ttl=900)
 def load_data(refresh_token):
-    # Re-connecting to the sheet inside the function ensures 
-    # we aren't using a stale worksheet object
+    # This block runs ONLY when refresh_token changes or cache expires
+    client = get_client()
     sheet = client.open_by_key(SHEET_ID)
     ws = sheet.worksheet(TAB_NAME)
     
-    # get_all_values() is the raw call to Google API
+    # Fetch raw data
     raw = ws.get_all_values()
-    
     if not raw:
         return pd.DataFrame()
     
     df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
     return df
 
-# Load the data
+# Load the data - Streamlit watches 'refresh_token' to decide if it needs to re-run
 df_full = load_data(st.session_state.data_refresh_token)
+df_full = df_full.loc[:, ~df_full.columns.duplicated()].copy()
 def clean(text):
     text = str(text).replace("–", "-").replace("—", "-")
     text = re.sub(r"\(.*?\)", "", text)
@@ -162,10 +171,11 @@ with col1:
 
 with col2:
     if st.button("🔄", use_container_width=True):
-        load_data.clear()  # This forces a refresh of ONLY this function
+        # Clear the specific cache entry
+        load_data.clear()
+        # Increment token to force a cache miss on the next load
         st.session_state.data_refresh_token += 1
-        st.rerun()
-with col3:
+        st.rerun()with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
 

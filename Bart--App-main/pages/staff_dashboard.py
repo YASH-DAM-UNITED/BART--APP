@@ -265,7 +265,7 @@ if st.session_state.authenticated:
         st.switch_page("pages/staff_schedule.py")
 
     # STOCK VIEW BUTTON LOGIC
-    if col3.button("🔍 Stock View"):
+    if col3.button("🔍 Stock View & Stock Transfer "):
         refresh_activity()
         st.session_state.show_stock_view = True
 

@@ -230,47 +230,46 @@ if st.button("✅ Submit"):
             
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            # 1. Fetch existing sheet content
+            
+            # 1. Fetch current header/row structure ONLY ONCE
+            # Do not use pd.concat or ws.update()
             all_values = ws.get_all_values()
             headers = all_values[0] 
             
-            # 2. Prepare a list to track updates
-            cell_updates = []
+            updates = []
             
-            # 3. Process your edited dataframe
+            # 2. Iterate through your current edited data
             for i, row in edited_df.iterrows():
-                # Find or create Row Index (Match Branch + Name)
+                # Locate Row
                 row_idx = None
                 for r_idx, r_val in enumerate(all_values):
-                    # Check if row matches Branch (col 0) and Name (col 1)
                     if r_idx > 0 and r_val[0] == st.session_state.selected_branch and r_val[1] == row["Name"]:
                         row_idx = r_idx + 1
                         break
                 
-                # If name doesn't exist, append new row to the end
+                # If row doesn't exist, create it at the very bottom
                 if not row_idx:
                     row_idx = len(all_values) + 1
                     ws.update_cell(row_idx, 1, st.session_state.selected_branch)
                     ws.update_cell(row_idx, 2, row["Name"])
-                    # Refresh all_values slightly if needed, or just append
+                    # Update local list to prevent duplicate row creation
                     all_values.append([st.session_state.selected_branch, row["Name"]])
 
-                # 4. Find or create Column Index (Match Date Header)
+                # 3. Locate Column
                 for d in DAYS:
                     day_header = day_labels[d]
                     if day_header in headers:
                         col_idx = headers.index(day_header) + 1
                     else:
-                        # Append new column if it doesn't exist
                         col_idx = len(headers) + 1
                         ws.update_cell(1, col_idx, day_header)
                         headers.append(day_header)
                     
-                    # 5. Add to queue (don't write yet)
-                    cell_updates.append(gspread.Cell(row=row_idx, col=col_idx, value=str(row[d])))
+                    # 4. Queue update for this specific cell
+                    updates.append(gspread.Cell(row=row_idx, col=col_idx, value=str(row[d])))
             
-            # 6. WRITE EVERYTHING AT ONCE (Does not delete other cells)
-            ws.update_cells(cell_updates)
+            # 5. EXECUTE: This ONLY touches the cells defined in 'updates'
+            ws.update_cells(updates)
             
             st.session_state.shift_buffer = {}
             st.session_state.deleted_staff = set()

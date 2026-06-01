@@ -295,27 +295,49 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
+    # 1. Prepare and filter data
     df_display = df.copy()
+    
+    # Remove duplicate columns if the sheet accidentally has them
+    df_display = df_display.loc[:, ~df_display.columns.duplicated()]
+    
+    # Calculate current OT header
     start_date_comparison = datetime(2026, 5, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    target_columns = ["Name", "Role"] + list(day_labels.values()) + [ot_col_name]
+    # 2. Build target columns dynamically
+    # Only include columns that actually exist in the dataframe to prevent KeyErrors
+    day_cols = [day_labels[d] for d in DAYS if day_labels[d] in df_display.columns]
+    target_columns = ["Name", "Role"] + day_cols
+    if ot_col_name in df_display.columns:
+        target_columns.append(ot_col_name)
+    
+    # 3. Clean and Filter
     df_display = df_display.reindex(columns=target_columns)
     df_display = df_display.fillna("").astype(str)
     
+    # 4. Define Grid Configuration
     column_defs = [
         {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
         {"headerName": "Role", "field": "Role", "width": 140}
     ]
     for d in DAYS:
-        column_defs.append({"headerName": day_labels[d], "field": day_labels[d], "width": 135})
-    column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
+        label = day_labels[d]
+        if label in df_display.columns:
+            column_defs.append({"headerName": label, "field": label, "width": 135})
+            
+    if ot_col_name in df_display.columns:
+        column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
 
+    # 5. Render the Grid
     AgGrid(
         df_display, 
-        gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
+        gridOptions={
+            "columnDefs": column_defs, 
+            "defaultColDef": {"resizable": True}
+        }, 
         height=500,
         fit_columns_on_grid_load=True
     )

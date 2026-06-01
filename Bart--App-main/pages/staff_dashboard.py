@@ -265,7 +265,7 @@ if st.session_state.authenticated:
         refresh_activity()
         st.switch_page("pages/staff_schedule.py")
 
-    if col4.button("transfer"):
+    if col4.button("📦 Stock Transfer Internal "):
         st.switch_page("pages/stock_transfer.py")
 
     # CORRECTED: Indentation fixed here

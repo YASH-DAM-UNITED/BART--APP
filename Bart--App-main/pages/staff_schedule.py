@@ -289,20 +289,22 @@ if edit_mode:
             st.error(f"❌ Submission Failed: {e}")
 # =========================
 # VIEW MODE
-# =========================
-else:
+# =========================else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Start with a fresh copy
-    df_raw = df.copy()
+    # 1. Fetch raw data without indexing by column names initially
+    ws = master_sheet.worksheet("StaffSchedule")
+    all_values = ws.get_all_values()
     
-    # 2. SANITIZE: Force remove all duplicate column names from the sheet data
-    # This keeps only the first column that matches a name and drops any others
-    df_raw = df_raw.loc[:, ~df_raw.columns.duplicated(keep='first')]
+    if not all_values:
+        st.warning("No data found.")
+        st.stop()
+
+    headers = all_values[0]
     
-    # 3. Calculate target columns for this specific week
+    # 2. Calculate the headers we NEED for this specific week
     week_cols = [day_labels[d] for d in DAYS]
     
     start_date_comparison = datetime(2026, 5, 1)
@@ -310,17 +312,31 @@ else:
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    target_columns = ["Name", "Role"] + week_cols + [ot_col_name]
+    target_headers = ["Name", "Role"] + week_cols + [ot_col_name]
     
-    # 4. Extract columns safely
-    # Use reindex only AFTER we have sanitized duplicates and verified columns
-    # We filter target_columns to only those that exist in our sanitized df
-    valid_cols = [c for c in target_columns if c in df_raw.columns]
+    # 3. Find column indices that exactly match our target headers
+    # We map header names to their index position in the raw list
+    header_to_idx = {h: i for i, h in enumerate(headers)}
     
-    # Create the final viewable dataframe
-    df_display = df_raw[valid_cols].copy()
-    df_display = df_display.fillna("").astype(str)
-    
+    # Identify which columns to extract based on the header text
+    # We use a dictionary to ensure we only get unique indices
+    indices_to_extract = {}
+    for h in target_headers:
+        if h in header_to_idx:
+            indices_to_extract[h] = header_to_idx[h]
+            
+    # 4. Construct clean dataframe from indices
+    data_rows = all_values[1:]
+    clean_data = []
+    for row in data_rows:
+        new_row = {}
+        for h, idx in indices_to_extract.items():
+            # Ensure row has enough length
+            new_row[h] = row[idx] if idx < len(row) else ""
+        clean_data.append(new_row)
+        
+    df_display = pd.DataFrame(clean_data)
+
     # 5. Render the Grid
     column_defs = [
         {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}

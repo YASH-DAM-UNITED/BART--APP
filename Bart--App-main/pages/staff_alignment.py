@@ -61,7 +61,10 @@ def get_client():
     return gspread.authorize(creds)
 
 client = get_client()
-sheet = client.open_by_key(SHEET_ID)
+# Remove 'sheet = client.open_by_key(SHEET_ID)' and use this instead
+def get_fresh_sheet():
+    return client.open_by_key(SHEET_ID)
+
 
 # Initialize the token
 if "data_refresh_token" not in st.session_state:

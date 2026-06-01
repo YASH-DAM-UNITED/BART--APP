@@ -105,51 +105,27 @@ def duplicate_submission_dialog():
 # =========================
 # LOGIC FUNCTIONS
 # =========================
-def get_week_cols(week_start):
-    """Generates the specific header names for the current week."""
-    week_dates = [(week_start + timedelta(days=i)).strftime('%d %b') for i in range(7)]
-    # This creates a dict mapping: {'Friday': 'Friday (01 Jun)', ...}
-    return {day: f"{day} ({date})" for day, date in zip(DAYS, week_dates)}
-
 def load_data(force_reload=False):
     if force_reload or st.session_state.get("cached_df") is None:
         try:
             ws = master_sheet.worksheet("StaffSchedule")
             data = ws.get_all_records()
-            df = pd.DataFrame(data)
-            
-            # Ensure critical columns exist
-            if "Branch" not in df.columns:
-                df["Branch"] = ""
-            if "Name" not in df.columns:
-                df["Name"] = ""
-                
+            df = pd.DataFrame(data) if data else pd.DataFrame()
+            if not df.empty:
+                new_cols = {}
+                for col in df.columns:
+                    for day in DAYS:
+                        if day in col:
+                            new_cols[col] = day
+                            break
+                df = df.rename(columns=new_cols)
+            if df.empty:
+                df = pd.DataFrame(columns=["Branch", "Name", "Role"] + DAYS + ["Over-Time"])
             st.session_state.cached_df = df
         except Exception as e:
             st.error(f"Error loading data: {e}")
-            st.session_state.cached_df = pd.DataFrame()
+            st.session_state.cached_df = pd.DataFrame(columns=["Branch", "Name", "Role"] + DAYS + ["Over-Time"])
     return st.session_state.cached_df
-
-# --- How to use this in your Main Logic ---
-all_data_df = load_data()
-
-# 1. Get the map for the CURRENT week
-week_start = selected_date - timedelta(days=(selected_date.weekday() + 1) % 7)
-week_map = get_week_cols(week_start) # Returns {'Friday': 'Friday (01 Jun)', ...}
-
-# 2. Extract only the columns that exist in the sheet for this week
-# We use .get() to avoid KeyErrors if a column is missing
-target_columns = ["Branch", "Name", "Role"] + [week_map[d] for d in DAYS if week_map[d] in all_data_df.columns]
-
-# 3. Create the working DF
-df = all_data_df[target_columns].copy()
-
-# 4. Rename them to generic "Sunday", "Monday", etc. for your internal logic
-# This makes your code work regardless of the date in the header
-df = df.rename(columns={v: k for k, v in week_map.items()})
-
-# Now 'df' has clean columns: ["Branch", "Name", "Role", "Sunday", "Monday"...]
-# You can perform your logic on 'df' easily!
 
 def parse_hour(val):
     hour, ap = val.split()
@@ -269,53 +245,14 @@ else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
-
-    # 1. Logic to identify the columns for the selected week
-    # We look for columns that contain the specific dates for this week
-    week_start = selected_date - timedelta(days=(selected_date.weekday() + 1) % 7)
-    week_dates = [(week_start + timedelta(days=i)).strftime('%d %b') for i in range(7)]
+    df_display = df.copy()
+    if st.session_state.deleted_staff and not df_display.empty: df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
+    df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else []
     
-    # 2. Map the actual column headers to our standard DAYS
-    # This finds the exact column name in the sheet that matches the date
-    active_col_map = {}
-    for day in DAYS:
-        for col in df.columns:
-            if day in col and any(d in col for d in week_dates):
-                active_col_map[day] = col
-                break
-
-    # 3. Filter DataFrame to include only Name, Role, and the 7 week-specific columns
-    target_cols = ["Name", "Role"] + list(active_col_map.values())
-    df_filtered = df[df["Branch"] == st.session_state.selected_branch].copy()
-    
-    # Check if columns exist to prevent KeyError
-    existing_cols = [c for c in target_cols if c in df_filtered.columns]
-    df_display = df_filtered[existing_cols].copy()
-
-    # Add dummy/calculated Over-Time for the view
-    df_display["Over-Time (Week)"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else "0 hrs"
-
-    # 4. Configure AgGrid columns dynamically
-    column_defs = [
-        {"headerName": "Name", "field": "Name", "pinned": "left", "width": 120},
-        {"headerName": "Role", "field": "Role", "width": 140}
-    ]
-    # Append the dynamic date columns
-    for day, sheet_col in active_col_map.items():
-        column_defs.append({"headerName": day, "field": sheet_col, "width": 130})
-    
-    column_defs.append({"headerName": "Over-Time", "field": "Over-Time (Week)", "width": 100})
-
-    # 5. Render
-    AgGrid(
-        df_display, 
-        gridOptions={
-            "columnDefs": column_defs, 
-            "defaultColDef": {"resizable": True, "sortable": True}
-        }, 
-        height=500,
-        fit_columns_on_grid_load=True
-    )
+    column_defs = [{"headerName": "Name", "field": "Name", "pinned": "left", "width": 90}, {"headerName": "Role", "field": "Role", "width": 140}]
+    for d in DAYS: column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
+    column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
+    AgGrid(df_display, gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, height=500)
 
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

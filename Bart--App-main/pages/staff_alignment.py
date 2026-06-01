@@ -63,17 +63,22 @@ def get_client():
 client = get_client()
 sheet = client.open_by_key(SHEET_ID)
 
+# Initialize the refresh token in session state
+if "data_refresh_token" not in st.session_state:
+    st.session_state.data_refresh_token = 0
+
 @st.cache_data(ttl=900)
-def load_data():
+def load_data(refresh_token):
     ws = sheet.worksheet(TAB_NAME)
     raw = ws.get_all_values()
+    # Handle case where sheet might be empty
+    if not raw:
+        return pd.DataFrame()
     df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
     return df
 
-df_full = load_data()
-df_full = df_full.loc[:, ~df_full.columns.duplicated()].copy()
-
-def clean(text):
+# Load the data using the token
+df_full = load_data(st.session_state.data_refresh_token)
     text = str(text).replace("–", "-").replace("—", "-")
     text = re.sub(r"\(.*?\)", "", text)
     text = re.sub(r"\s+", " ", text).strip()

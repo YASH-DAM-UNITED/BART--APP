@@ -152,22 +152,16 @@ with col1:
     )
 
 with col2:
-    refresh = st.button("🔄", use_container_width=True)
-if refresh:
-    st.session_state.data_refresh_token += 1
-    st.rerun()    
+    # This button updates the state and triggers a rerun
+    if st.button("🔄", use_container_width=True):
+        st.session_state.data_refresh_token += 1
+        st.rerun()
 
 with col3:
-    back = st.button("⬅", use_container_width=True)
+    if st.button("⬅", use_container_width=True):
+        st.switch_page("pages/management_dashboard.py")
 
-if back:
-    st.switch_page("pages/management_dashboard.py")
-
-if refresh:
-    
-    
-    st.rerun()
-
+# Ensure the Shift column is updated based on the selection
 if "Shift" in df_full.columns:
     df_full = df_full.drop(columns=["Shift"])
 

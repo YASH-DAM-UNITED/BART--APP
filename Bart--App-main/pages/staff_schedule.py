@@ -245,14 +245,53 @@ else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
-    df_display = df.copy()
-    if st.session_state.deleted_staff and not df_display.empty: df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
-    df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else []
+
+    # 1. Logic to identify the columns for the selected week
+    # We look for columns that contain the specific dates for this week
+    week_start = selected_date - timedelta(days=(selected_date.weekday() + 1) % 7)
+    week_dates = [(week_start + timedelta(days=i)).strftime('%d %b') for i in range(7)]
     
-    column_defs = [{"headerName": "Name", "field": "Name", "pinned": "left", "width": 90}, {"headerName": "Role", "field": "Role", "width": 140}]
-    for d in DAYS: column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
-    column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
-    AgGrid(df_display, gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, height=500)
+    # 2. Map the actual column headers to our standard DAYS
+    # This finds the exact column name in the sheet that matches the date
+    active_col_map = {}
+    for day in DAYS:
+        for col in df.columns:
+            if day in col and any(d in col for d in week_dates):
+                active_col_map[day] = col
+                break
+
+    # 3. Filter DataFrame to include only Name, Role, and the 7 week-specific columns
+    target_cols = ["Name", "Role"] + list(active_col_map.values())
+    df_filtered = df[df["Branch"] == st.session_state.selected_branch].copy()
+    
+    # Check if columns exist to prevent KeyError
+    existing_cols = [c for c in target_cols if c in df_filtered.columns]
+    df_display = df_filtered[existing_cols].copy()
+
+    # Add dummy/calculated Over-Time for the view
+    df_display["Over-Time (Week)"] = df_display.apply(calculate_row_ot, axis=1) if not df_display.empty else "0 hrs"
+
+    # 4. Configure AgGrid columns dynamically
+    column_defs = [
+        {"headerName": "Name", "field": "Name", "pinned": "left", "width": 120},
+        {"headerName": "Role", "field": "Role", "width": 140}
+    ]
+    # Append the dynamic date columns
+    for day, sheet_col in active_col_map.items():
+        column_defs.append({"headerName": day, "field": sheet_col, "width": 130})
+    
+    column_defs.append({"headerName": "Over-Time", "field": "Over-Time (Week)", "width": 100})
+
+    # 5. Render
+    AgGrid(
+        df_display, 
+        gridOptions={
+            "columnDefs": column_defs, 
+            "defaultColDef": {"resizable": True, "sortable": True}
+        }, 
+        height=500,
+        fit_columns_on_grid_load=True
+    )
 
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

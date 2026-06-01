@@ -268,15 +268,18 @@ if st.session_state.authenticated:
     if col4.button("transfer"):
         st.switch_page("pages/stock_transfer.py")
 
+
+    if col3.button("🔍 Toggle Stock View"):
+    st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
+    refresh_activity()
+    st.rerun()
+
     
 
 
 # ---------------- STOCK VIEW SECTION ----------------
 # 1. Button to Toggle State
-if col3.button("🔍 Toggle Stock View"):
-    st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
-    refresh_activity()
-    st.rerun()
+
 
 # 2. Only execute fetch and display logic if True
 if st.session_state.get("show_stock_view", False):

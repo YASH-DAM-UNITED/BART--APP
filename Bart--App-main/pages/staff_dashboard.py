@@ -301,10 +301,6 @@ if st.session_state.authenticated:
             else: 
                 weekly.append(row_dict)
 
-        st.subheader("📦 Daily Items Stock")
-        st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-        st.subheader("📦 Weekly Items Stock")
-        st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
 
         # NEW BUTTONS ADDED UNDER STOCK VIEW
         st.markdown("---")
@@ -313,6 +309,13 @@ if st.session_state.authenticated:
             st.switch_page("pages/stock_transfer.py")
         if b_col2.button("🔔 Notifications"):
             st.switch_page("pages/notifications.py")
+
+
+        st.subheader("📦 Daily Items Stock")
+        st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
+        st.subheader("📦 Weekly Items Stock")
+        st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
+
 
 # --- 1. Notification Check (Run on load) ---
 def check_notifications():

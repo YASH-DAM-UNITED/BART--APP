@@ -255,7 +255,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 # ---------------- AFTER LOGIN ----------------
 if st.session_state.authenticated:
     st.success(f"Logged in: {st.session_state.selected_branch}")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
 
     if col1.button("📦 Stock Record"):
         refresh_activity()
@@ -265,9 +265,15 @@ if st.session_state.authenticated:
         refresh_activity()
         st.switch_page("pages/staff_schedule.py")
 
+    if col4.button("transfer"):
+        st.switch_page("pages/stock_transfer.py")
+
+    
+
+
 # ---------------- STOCK VIEW SECTION ----------------
 # 1. Button to Toggle State
-if col3.button("🔍 Toggle Stock View"):
+if col3.button("🔍 Stock View"):
     st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
     refresh_activity()
     st.rerun()

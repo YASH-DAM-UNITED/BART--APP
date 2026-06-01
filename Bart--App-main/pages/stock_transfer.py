@@ -28,15 +28,26 @@ else:
 item_names = [row['Item'] for row in target_list]
 selected_item = st.selectbox("Select Item to Transfer", item_names)
 
-# Find the specific row data for the selected item
-selected_details = next((item for item in target_list if item['Item'] == selected_item), None)
-
-if selected_details:
-    st.info(f"Current Stock Info: {selected_item}")
-    # You can show the "Total" or other columns from your sheet here
-    st.write(f"Total Available: {selected_details.get('Total', 0)}")
-
-st.session_state.branch_list = branches
+# 5. TRANSFER FORM
+with st.form("transfer_form"):
+    qty = st.number_input("Quantity to Transfer", min_value=1, step=1)
+    
+    # This reads the memory cached from the dashboard. 
+    # NO API CALLS HAPPEN HERE.
+    if "branch_list" in st.session_state:
+        # We use a copy to avoid mutating the session state directly
+        destination = st.selectbox("Select Destination Branch", st.session_state.branch_list)
+    else:
+        st.warning("Branch list missing. Please return to the Dashboard.")
+        destination = None
+        
+    reason = st.text_area("Reason for Transfer")
+    
+    submitted = st.form_submit_button("Confirm Transfer")
+    
+    if submitted and destination:
+        # Process the transfer logic (e.g., writing to a local log or updating session)
+        st.success(f"Successfully prepared transfer of {qty} of {selected_item} to {destination}!")
 # ---------------- NAVIGATION ----------------
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

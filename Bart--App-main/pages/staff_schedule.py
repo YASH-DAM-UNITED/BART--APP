@@ -191,6 +191,7 @@ if not st.session_state.cached_df.empty:
 # EDIT MODE
 # =========================
 if edit_mode:
+    # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)
     if st.session_state.deleted_staff: df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
     for d in DAYS: df_display[d] = ""
@@ -200,6 +201,7 @@ if edit_mode:
             if key in st.session_state.shift_buffer: df_display.loc[i, d] = st.session_state.shift_buffer[key]
     df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
 
+    # 2. Config & Editor
     config = {
         "Name": st.column_config.SelectboxColumn("Name", options=(df["Name"].dropna().unique().tolist() if not df.empty else []), width=90, required=True),
         "Role": st.column_config.SelectboxColumn("Role", options=ROLE_OPTIONS, width=90),
@@ -210,6 +212,7 @@ if edit_mode:
 
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
     
+    # 3. Logic to handle state
     current_names = set(edited_df["Name"].dropna().tolist())
     for name in df_display["Name"].tolist():
         if name not in current_names: st.session_state.deleted_staff.add(name)
@@ -223,104 +226,73 @@ if edit_mode:
             if value == "➕ Custom Time":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
-if st.button("✅ Submit"):
+    # 4. SUBMIT BUTTON (Strictly inside Edit Mode)
+    if st.button("✅ Submit"):
         if not existing_week_data.empty:
             duplicate_submission_dialog()
             st.stop()
-            
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            
-            # 1. Get the current headers from the sheet to know which columns exist
             headers = ws.row_values(1)
-            
-            # 2. Get all data as records to find specific rows by criteria
             all_records = ws.get_all_records()
-            
             updates = []
-            
             for i, row in edited_df.iterrows():
-                # Find the row index in the sheet
-                # We search for the row where Branch and Name match
                 target_row_idx = None
                 for idx, record in enumerate(all_records):
                     if record.get("Branch") == st.session_state.selected_branch and record.get("Name") == row["Name"]:
-                        target_row_idx = idx + 2 # +2 because get_all_records skips header, and row index is 1-based
+                        target_row_idx = idx + 2
                         break
-                
-                # If row doesn't exist, append at the bottom
                 if not target_row_idx:
                     target_row_idx = len(all_records) + 2
                     ws.update_cell(target_row_idx, 1, st.session_state.selected_branch)
                     ws.update_cell(target_row_idx, 2, row["Name"])
-                    # Add to all_records so next loop knows it exists
                     all_records.append({"Branch": st.session_state.selected_branch, "Name": row["Name"]})
-
-                # 3. Locate Column for each day
                 for d in DAYS:
                     day_header = day_labels[d]
                     if day_header not in headers:
-                        # Append new column if it doesn't exist
                         new_col_idx = len(headers) + 1
                         ws.update_cell(1, new_col_idx, day_header)
                         headers.append(day_header)
                         col_idx = new_col_idx
                     else:
                         col_idx = headers.index(day_header) + 1
-                    
-                    # 4. Queue update
                     updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[d])))
-            
-            # 5. Execute all updates at once
             ws.update_cells(updates)
-            
             st.session_state.shift_buffer = {}
             st.session_state.deleted_staff = set()
             success_dialog()
-            
         except Exception as e:
             st.error(f"❌ Submission Failed: {e}")
+
+# =========================
+# VIEW MODE
+# =========================
 else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Prepare and filter data
     df_display = df.copy()
-    
-    # Safely convert date to datetime for calculation
     start_date_comparison = datetime(2026, 5, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
-    
-    # Calculate week index to find the correct Over-Time column
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    # Define columns to keep (Name, Role, 7 Days, and the specific OT column)
     target_columns = ["Name", "Role"] + list(day_labels.values()) + [ot_col_name]
-    
-    # Filter the dataframe to only include these columns
     df_display = df_display.reindex(columns=target_columns)
     df_display = df_display.fillna("").astype(str)
     
-    # 2. Define Grid Configuration
     column_defs = [
         {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
         {"headerName": "Role", "field": "Role", "width": 140}
     ]
-    # Add day columns
     for d in DAYS:
         column_defs.append({"headerName": day_labels[d], "field": day_labels[d], "width": 135})
-    # Add the specific OT column for this week
     column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
 
-    # 3. Render the Grid
     AgGrid(
         df_display, 
-        gridOptions={
-            "columnDefs": column_defs, 
-            "defaultColDef": {"resizable": True}
-        }, 
+        gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
         height=500,
         fit_columns_on_grid_load=True
     )

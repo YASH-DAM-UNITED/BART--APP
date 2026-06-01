@@ -246,42 +246,35 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
+    # --- NEW FILTERED LOGIC ---
     df_display = df.copy()
     
-    # 1. Handle empty state
-    if not df_display.empty:
-        if st.session_state.deleted_staff:
-            df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)]
-        
-        # 2. CRITICAL: Ensure every expected column exists in the DataFrame
-        # This prevents the "KeyError" or "Grid Data Mismatch" inside AgGrid
-        required_columns = ["Name", "Role"] + DAYS + ["Over-Time"]
-        for col in required_columns:
-            if col not in df_display.columns:
-                df_display[col] = "" # Add missing columns as empty
-        
-        df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
-        
-        # 3. Final cleanup: Convert all columns to string to ensure JSON serializability
-        df_display = df_display.astype(str)
+    # 1. Dynamically select the correct Over-Time column for this week
+    # Assuming start date is 01 May 2026, calculate week index
+    week_diff = (week_start - datetime(2026, 5, 1)).days // 7
+    ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
+    
+    # 2. Define exactly which columns to show
+    target_columns = ["Name", "Role"] + list(day_labels.values()) + [ot_col_name]
+    
+    # 3. Filter DataFrame so AgGrid doesn't crash on too many columns
+    df_display = df_display.reindex(columns=target_columns)
+    df_display = df_display.fillna("").astype(str)
+    
+    # 4. Define Grid
+    column_defs = [
+        {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
+        {"headerName": "Role", "field": "Role", "width": 140}
+    ]
+    for d in DAYS:
+        column_defs.append({"headerName": day_labels[d], "field": day_labels[d], "width": 135})
+    column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
 
-        # 4. Define Grid Options
-        column_defs = [
-            {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
-            {"headerName": "Role", "field": "Role", "width": 140}
-        ]
-        for d in DAYS:
-            column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
-        column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
-
-        # 5. Render
-        AgGrid(
-            df_display[required_columns], # Ensure only these columns are passed
-            gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
-            height=500,
-            fit_columns_on_grid_load=True
-        )
-    else:
-        st.info("No schedule data found for this branch.")
+    AgGrid(
+        df_display, 
+        gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
+        height=500,
+        fit_columns_on_grid_load=True
+    )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

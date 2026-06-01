@@ -230,44 +230,46 @@ if st.button("✅ Submit"):
             
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            # Get all current values to find row/col coordinates
-            all_data = ws.get_all_values()
-            headers = all_data[0] # The first row (column names)
+            # 1. Fetch existing sheet content
+            all_values = ws.get_all_values()
+            headers = all_values[0] 
             
-            # Prepare batch update list
+            # 2. Prepare a list to track updates
             cell_updates = []
             
+            # 3. Process your edited dataframe
             for i, row in edited_df.iterrows():
-                # 1. Find or create Row Index
-                # Logic: Find row where Branch matches and Name matches
+                # Find or create Row Index (Match Branch + Name)
                 row_idx = None
-                for r_idx, r_val in enumerate(all_data):
+                for r_idx, r_val in enumerate(all_values):
+                    # Check if row matches Branch (col 0) and Name (col 1)
                     if r_idx > 0 and r_val[0] == st.session_state.selected_branch and r_val[1] == row["Name"]:
                         row_idx = r_idx + 1
                         break
                 
-                # If row doesn't exist, add it to the bottom
+                # If name doesn't exist, append new row to the end
                 if not row_idx:
-                    row_idx = len(all_data) + 1
-                    all_data.append([st.session_state.selected_branch, row["Name"]] + [""] * (len(headers) - 2))
+                    row_idx = len(all_values) + 1
                     ws.update_cell(row_idx, 1, st.session_state.selected_branch)
                     ws.update_cell(row_idx, 2, row["Name"])
+                    # Refresh all_values slightly if needed, or just append
+                    all_values.append([st.session_state.selected_branch, row["Name"]])
 
-                # 2. Find or create Column Index for each day
+                # 4. Find or create Column Index (Match Date Header)
                 for d in DAYS:
                     day_header = day_labels[d]
-                    try:
+                    if day_header in headers:
                         col_idx = headers.index(day_header) + 1
-                    except ValueError:
-                        # Append new column to the end
+                    else:
+                        # Append new column if it doesn't exist
                         col_idx = len(headers) + 1
                         ws.update_cell(1, col_idx, day_header)
                         headers.append(day_header)
                     
-                    # 3. Add to batch update
+                    # 5. Add to queue (don't write yet)
                     cell_updates.append(gspread.Cell(row=row_idx, col=col_idx, value=str(row[d])))
             
-            # Perform batch update for speed
+            # 6. WRITE EVERYTHING AT ONCE (Does not delete other cells)
             ws.update_cells(cell_updates)
             
             st.session_state.shift_buffer = {}

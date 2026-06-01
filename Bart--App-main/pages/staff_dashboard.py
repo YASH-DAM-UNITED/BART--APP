@@ -361,7 +361,7 @@ col1, col2, col3 = st.columns(3)
 
 # The new "Internal Transfer" Button
 if col1.button("🚀 Internal Transfer"):
-    st.switch_page("pages/internal_transfer.py")
+    st.switch_page("pages/stock_transfer.py")
 
 if col2.button(" Notifications  "):
     st.switch_page("pages/stock_consumption.py")

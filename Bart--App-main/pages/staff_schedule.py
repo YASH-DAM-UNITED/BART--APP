@@ -295,39 +295,46 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Create a clean copy and force-remove duplicate column names
-    # This keeps the first occurrence and drops subsequent columns with the same name
-    df_display = df.copy().loc[:, ~df.columns.duplicated()]
+    # 1. Fetch raw data
+    df_raw = df.copy()
     
-    # 2. Identify the headers for your currently selected week
-    # These match the exact format: "Sunday (07 Jun)"
+    # 2. Define the columns we want to extract
     week_cols = [day_labels[d] for d in DAYS]
     
-    # 3. Calculate the specific Over-Time header for this week
+    # Calculate OT column name
     start_date_comparison = datetime(2026, 5, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    # 4. Filter: Only keep Name, Role, the 7 Days, and the specific OT column
-    # We use a list comprehension to ensure we only pick columns that exist
-    target_columns = ["Name", "Role"] + week_cols + [ot_col_name]
-    valid_columns = [col for col in target_columns if col in df_display.columns]
+    # 3. Build a new, clean DataFrame from scratch
+    # We explicitly pull only the columns we need, ignoring the rest of the spreadsheet
+    cols_to_extract = ["Name", "Role"] + week_cols + [ot_col_name]
     
-    # Use direct bracket indexing (instead of reindex) to avoid duplicate label errors
-    df_display = df_display[valid_columns]
+    df_clean = pd.DataFrame()
+    for col in cols_to_extract:
+        # Check if the column exists in the messy raw data
+        if col in df_raw.columns:
+            # If multiple columns exist with the same name, this takes the first one
+            if isinstance(df_raw[col], pd.DataFrame):
+                df_clean[col] = df_raw[col].iloc[:, 0]
+            else:
+                df_clean[col] = df_raw[col]
+        else:
+            # If the column doesn't exist for this week, add it as empty
+            df_clean[col] = ""
+
+    # 4. Final Cleanup
+    df_clean = df_clean.fillna("").astype(str)
     
-    # 5. Clean up data for display
-    df_display = df_display.fillna("").astype(str)
-    
-    # 6. Render the Grid
+    # 5. Render the Grid
     column_defs = [
         {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
-        for col in df_display.columns
+        for col in df_clean.columns
     ]
 
     AgGrid(
-        df_display, 
+        df_clean, 
         gridOptions={
             "columnDefs": column_defs, 
             "defaultColDef": {"resizable": True}

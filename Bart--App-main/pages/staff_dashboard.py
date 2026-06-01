@@ -318,6 +318,8 @@ if st.session_state.authenticated:
         # ADD THESE LINES TO SAVE DATA TO SESSION STATE
         st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
 
+        st.session_state.branch_list = branches
+
 
         st.subheader("📦 Daily Items Stock")
         st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)

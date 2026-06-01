@@ -93,16 +93,17 @@ def check_timeout():
 check_timeout()
 
 # ---------------- GOOGLE SHEETS ----------------
-creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+# ---------------- GOOGLE SHEETS (SINGLE CONNECTION) ----------------
+if "gs_client" not in st.session_state:
+    creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+    scope = ["https://spreadsheets.google.com/feeds", "https://spreadsheets.google.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    st.session_state.gs_client = gspread.authorize(creds)
+    # Open the master file once and keep it in session
+    st.session_state.master_sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET")
 
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
-
-creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-client = gspread.authorize(creds)
-
+# Use this alias for all your API calls in this file
+master_sheet = st.session_state.master_sheet
 # ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
 @st.cache_data(ttl=None)  # Keeps data cached for 5 minutes for instant lookups
 def load_master_branch_data():

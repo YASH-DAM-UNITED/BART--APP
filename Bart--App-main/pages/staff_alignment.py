@@ -107,26 +107,33 @@ def get_shift(cell):
     if not cell:
         return None
 
+    # 1. Clean the text: Remove anything in parentheses (like OT 0h)
     text = clean(cell)
-    matches = re.findall(r"\d{1,2}\s*(?:AM|PM)", text, re.I)
+    
+    # 2. Find all time instances (e.g., "5 AM", "12 PM")
+    # This regex looks for digits followed by optional space and AM/PM
+    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", text, re.I)
 
     if len(matches) < 2:
         return None
 
-    def convert(t):
-        t = t.upper().replace(" ", "")
-        h = int(re.findall(r"\d{1,2}", t)[0])
+    def convert(hour_str, am_pm):
+        h = int(hour_str)
+        am_pm = am_pm.upper()
 
-        if "AM" in t:
+        if am_pm == "AM":
             if h == 12:
                 h = 0
-        else:
+        else: # PM
             if h != 12:
                 h += 12
-
         return h * 60
 
-    return convert(matches[0]), convert(matches[1])
+    # matches[0] is the start time, matches[1] is the end time
+    start_min = convert(matches[0][0], matches[0][1])
+    end_min = convert(matches[1][0], matches[1][1])
+
+    return start_min, end_min
 
 def is_active(cell, now_min):
     shift = get_shift(cell)

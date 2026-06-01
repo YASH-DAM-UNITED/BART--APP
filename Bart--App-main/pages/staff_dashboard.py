@@ -9,7 +9,7 @@ import time
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(layout="wide", page_title="BART Staff Dashboard")
 
-SESSION_TIMEOUT = None
+SESSION_TIMEOUT = 30 * 60
 
 # ---------------- CLEAN UI STYLE ----------------
 st.markdown("""

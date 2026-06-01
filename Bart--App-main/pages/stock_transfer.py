@@ -69,16 +69,33 @@ if st.session_state.transfer_cart:
                 client = gspread.authorize(creds)
                 sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                 
-                for entry in st.session_state.transfer_cart:
-                    row_data = [st.session_state.selected_branch, destination, entry['item'], entry['qty'], reason]
-                    sheet.append_row(row_data)
+                # --- CONSOLIDATION LOGIC ---
+                # Create a formatted string of all items in the cart
+                # Example format: "Item A (2), Item B (5)"
+                item_details = [f"{entry['item']} ({entry['qty']})" for entry in st.session_state.transfer_cart]
+                combined_items_str = " | ".join(item_details)
                 
+                # Combine all quantities for a total if needed, or just list them
+                total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
+                
+                # Prepare one single row
+                row_data = [
+                    st.session_state.selected_branch, 
+                    destination, 
+                    combined_items_str, 
+                    total_qty, 
+                    reason
+                ]
+                
+                # Write only one row
+                sheet.append_row(row_data)
+                
+                # Clear cart and show success
                 st.session_state.transfer_cart = []
-                success_dialog(f"Successfully transferred items to {destination}!")
+                success_dialog(f"Successfully transferred {len(item_details)} types of items to {destination}!")
                 
             except Exception as e:
                 st.error(f"Error saving to Google Sheets: {e}")
-
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):
     st.switch_page("pages/staff_dashboard.py")

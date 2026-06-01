@@ -72,13 +72,18 @@ if "data_refresh_token" not in st.session_state:
 
 @st.cache_data(ttl=900)
 def load_data(refresh_token):
-    ws = sheet.worksheet(TAB_NAME)
+    # This force-fetches the sheet object and the data
+    ws = get_fresh_sheet().worksheet(TAB_NAME)
+    
+    # Use client.open_by_key again to ensure no stale internal connection
     raw = ws.get_all_values()
-    if not raw: return pd.DataFrame()
-    return pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
-
-# Call it like this
-df_full = load_data(st.session_state.data_refresh_token)
+    
+    if not raw:
+        return pd.DataFrame()
+    
+    # Process the dataframe
+    df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
+    return df
 def clean(text):
     text = str(text).replace("–", "-").replace("—", "-")
     text = re.sub(r"\(.*?\)", "", text)

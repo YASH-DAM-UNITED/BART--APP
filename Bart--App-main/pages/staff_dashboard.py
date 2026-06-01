@@ -273,7 +273,7 @@ if st.session_state.authenticated:
         st.session_state.show_stock_view = True
 
     if st.session_state.get("show_stock_view", False):
-        sheet = client.open_by_key(branch_info["SheetID"])
+        sheet = st.session_state.gs_client.open_by_key(branch_info["SheetID"])
         ws = sheet.worksheet("Stocks")
         data = ws.get_all_values()
         headers = data[0]

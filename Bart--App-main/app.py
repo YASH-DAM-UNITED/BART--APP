@@ -225,9 +225,9 @@ st.markdown("<p class='animate-text delay-4' style='text-align: center; font-siz
 grid_left, grid_right, grid_center = st.columns(3, gap="large")
 
 with grid_left:
-    st.markdown("""<div class="card-glow"><div class="card-content" style="text-align: center; font-family: 'Times New Roman', Times, serif; color: #1E293B; font-size: 20px; font-weight: 700;">Staff Control """, unsafe_allow_html=True)
+    st.markdown("""<div class="card-glow"><div class="card-content" style="text-align: center; font-family: 'Times New Roman', Times, serif; color: #1E293B; font-size: 20px; font-weight: 700;">Staff DashBoard """, unsafe_allow_html=True)
     st.markdown("<p style='font-family: sans-serif; font-size: 14px; color: #64748B; margin-bottom: 25px;'>Log daily updates, run item balance checkers, and communicate data parameters.</p>", unsafe_allow_html=True)
-    if st.button("Access Staff Control →", use_container_width=True, key="staff_btn"): st.switch_page("pages/staff_dashboard.py")
+    if st.button("Staff Access →", use_container_width=True, key="staff_btn"): st.switch_page("pages/staff_dashboard.py")
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 with grid_center:
@@ -240,13 +240,13 @@ with grid_center:
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 with grid_right:
-    st.markdown("""<div class="card-glow"><div class="card-content" style="text-align: center; font-family: 'Times New Roman', Times, serif; color: #1E293B; font-size: 20px; font-weight: 700;">HQ Administration</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="card-glow"><div class="card-content" style="text-align: center; font-family: 'Times New Roman', Times, serif; color: #1E293B; font-size: 20px; font-weight: 700;">Admin DashBoard</div>""", unsafe_allow_html=True)
     st.markdown("<p style='font-family: sans-serif; font-size: 14px; color: #64748B; margin-bottom: 25px;'>Analyze operational logs, secure administrative configurations, and edit global secrets.</p>", unsafe_allow_html=True)
     if is_mgmt_locked():
         remaining = int(st.session_state.mgmt_lock_until - time.time())
         st.button(f"Console Locked ({remaining}s) 🔒", disabled=True, use_container_width=True, key="mgmt_btn")
     else:
-        if st.button("Unlock Admin Panel →", use_container_width=True, key="mgmt_btn"):
+        if st.button("Admin Access →", use_container_width=True, key="mgmt_btn"):
             st.session_state.show_mgmt_password = True
             st.session_state.show_hr_password = False
             st.rerun()

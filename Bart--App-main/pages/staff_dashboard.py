@@ -93,23 +93,26 @@ def check_timeout():
 check_timeout()
 
 # ---------------- GOOGLE SHEETS (PERSISTENT CONNECTION) ----------------
+
+
+# 1. DEFINE INITIALIZATION FUNCTION
 @st.cache_resource
-def get_gs_client():
+def get_master_sheet_connection():
     creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
     scope = ["https://spreadsheets.google.com/feeds", "https://spreadsheets.google.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
-    return client
-
-@st.cache_resource
-def get_master_sheet(client):
     return client.open("MASTERBRANCHSHEET")
 
-# Initialize globally
-if "gs_client" not in st.session_state:
-    st.session_state.gs_client = get_gs_client()
-    st.session_state.master_sheet = get_master_sheet(st.session_state.gs_client)
+# 2. ENSURE IT EXISTS IN SESSION STATE
+if "master_sheet" not in st.session_state:
+    try:
+        st.session_state.master_sheet = get_master_sheet_connection()
+    except Exception as e:
+        st.error(f"Failed to connect to Google Sheets: {e}")
+        st.stop()
 
+# 3. NOW IT IS SAFE TO USE
 master_sheet = st.session_state.master_sheet
 # ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
 @st.cache_data(ttl=None)  # Keeps data cached for 5 minutes for instant lookups

@@ -241,7 +241,6 @@ if edit_mode:
             success_dialog()
         except Exception as e:
             st.error(f"❌ Submission Failed: {e}")
-# --- Updated Non-Edit Mode Block ---
 else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
@@ -249,21 +248,24 @@ else:
 
     df_display = df.copy()
     
-    # Ensure data is clean
+    # 1. Handle empty state
     if not df_display.empty:
         if st.session_state.deleted_staff:
             df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)]
         
-        # Ensure we have the necessary day columns even if they are empty
-        for d in DAYS:
-            if d not in df_display.columns:
-                df_display[d] = ""
+        # 2. CRITICAL: Ensure every expected column exists in the DataFrame
+        # This prevents the "KeyError" or "Grid Data Mismatch" inside AgGrid
+        required_columns = ["Name", "Role"] + DAYS + ["Over-Time"]
+        for col in required_columns:
+            if col not in df_display.columns:
+                df_display[col] = "" # Add missing columns as empty
         
         df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
         
-        # Cast to string to prevent serialization errors
+        # 3. Final cleanup: Convert all columns to string to ensure JSON serializability
         df_display = df_display.astype(str)
 
+        # 4. Define Grid Options
         column_defs = [
             {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
             {"headerName": "Role", "field": "Role", "width": 140}
@@ -272,14 +274,14 @@ else:
             column_defs.append({"headerName": day_labels[d], "field": d, "width": 135})
         column_defs.append({"headerName": "Over-Time", "field": "Over-Time", "width": 90})
 
+        # 5. Render
         AgGrid(
-            df_display, 
+            df_display[required_columns], # Ensure only these columns are passed
             gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
             height=500,
             fit_columns_on_grid_load=True
         )
     else:
         st.info("No schedule data found for this branch.")
-
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

@@ -297,19 +297,29 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
-    # 1. Fetch raw data without indexing by column names initially
+    # 1. Fetch raw data
     ws = master_sheet.worksheet("StaffSchedule")
     all_values = ws.get_all_values()
     
-    if not all_values:
+    if not all_values or len(all_values) < 2:
         st.warning("No data found.")
         st.stop()
 
     headers = all_values[0]
+    data_rows = all_values[1:]
     
-    # 2. Calculate the headers we NEED for this specific week
+    # 2. Identify indices for key columns
+    # We find where Branch, Name, and Role columns are
+    try:
+        idx_branch = headers.index("Branch")
+        idx_name = headers.index("Name")
+        idx_role = headers.index("Role")
+    except ValueError:
+        st.error("Sheet headers are missing 'Branch', 'Name', or 'Role'.")
+        st.stop()
+    
+    # 3. Calculate target columns for the selected week
     week_cols = [day_labels[d] for d in DAYS]
-    
     start_date_comparison = datetime(2026, 5, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_diff = (week_start_dt - start_date_comparison).days // 7
@@ -317,43 +327,39 @@ else:
     
     target_headers = ["Name", "Role"] + week_cols + [ot_col_name]
     
-    # 3. Find column indices that exactly match our target headers
-    # We map header names to their index position in the raw list
+    # Map headers to indices
     header_to_idx = {h: i for i, h in enumerate(headers)}
-    
-    # Identify which columns to extract based on the header text
-    # We use a dictionary to ensure we only get unique indices
-    indices_to_extract = {}
-    for h in target_headers:
-        if h in header_to_idx:
-            indices_to_extract[h] = header_to_idx[h]
+    indices_to_extract = {h: header_to_idx[h] for h in target_headers if h in header_to_idx}
             
-    # 4. Construct clean dataframe from indices
-    data_rows = all_values[1:]
+    # 4. Extract data ONLY for selected branch
     clean_data = []
     for row in data_rows:
-        new_row = {}
-        for h, idx in indices_to_extract.items():
-            # Ensure row has enough length
-            new_row[h] = row[idx] if idx < len(row) else ""
-        clean_data.append(new_row)
+        # Check if the row matches the selected branch
+        if row[idx_branch] == st.session_state.selected_branch:
+            new_row = {}
+            for h, idx in indices_to_extract.items():
+                new_row[h] = row[idx] if idx < len(row) else ""
+            clean_data.append(new_row)
         
     df_display = pd.DataFrame(clean_data)
 
     # 5. Render the Grid
-    column_defs = [
-        {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
-        for col in df_display.columns
-    ]
+    if df_display.empty:
+        st.info("No schedule data found for this branch this week.")
+    else:
+        column_defs = [
+            {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
+            for col in df_display.columns
+        ]
 
-    AgGrid(
-        df_display, 
-        gridOptions={
-            "columnDefs": column_defs, 
-            "defaultColDef": {"resizable": True}
-        }, 
-        height=500,
-        fit_columns_on_grid_load=True
-    )
+        AgGrid(
+            df_display, 
+            gridOptions={
+                "columnDefs": column_defs, 
+                "defaultColDef": {"resizable": True}
+            }, 
+            height=500,
+            fit_columns_on_grid_load=True
+        )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

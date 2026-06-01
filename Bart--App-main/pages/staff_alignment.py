@@ -175,7 +175,9 @@ with col2:
         load_data.clear()
         # Increment token to force a cache miss on the next load
         st.session_state.data_refresh_token += 1
-        st.rerun()with col3:
+        st.rerun()
+
+with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
 

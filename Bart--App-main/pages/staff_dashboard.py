@@ -274,6 +274,44 @@ if st.session_state.selected_branch != "-- Select Branch --":
             daily = []
             weekly = []
 
+
+
+
+            # --- 1. Notification Check (Run on load) ---
+def check_notifications():
+    # Only hit the API for the notifications tab
+    sheet = client.open("MASTERBRANCHSHEET").worksheet("Notifications")
+    records = sheet.get_all_records()
+    
+    my_code = st.session_state.selected_branch.split(" - ")[0]
+    
+    # Filter for unread
+    unread = [r for r in records if r['TargetBranchCode'] == my_code and r['Status'] == 'unread']
+    
+    for note in unread:
+        st.toast(f"📦 Incoming Transfer: {note['Message']}", icon="🔔")
+        # Update sheet to 'read' to prevent loop
+        # (Add logic here to find row index and update status to 'read')
+
+# Run it immediately after login
+check_notifications()
+
+# --- 2. Dashboard UI ---
+st.success(f"Logged in: {st.session_state.selected_branch}")
+
+col1, col2, col3 = st.columns(3)
+
+# The new "Internal Transfer" Button
+if col1.button("🚀 Internal Transfer"):
+    st.switch_page("pages/stock_transfer.py")
+
+if col2.button(" Notifications  "):
+    st.switch_page("pages/stock_consumption.py")
+
+# --- 3. Cached Data Access ---
+# Use the session_state.branch_info which was cached during login
+# No API calls needed here if you store the stock list in session_state!
+
             current_section = None
 
             for row in data:
@@ -335,40 +373,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 
 
 
-# --- 1. Notification Check (Run on load) ---
-def check_notifications():
-    # Only hit the API for the notifications tab
-    sheet = client.open("MASTERBRANCHSHEET").worksheet("Notifications")
-    records = sheet.get_all_records()
-    
-    my_code = st.session_state.selected_branch.split(" - ")[0]
-    
-    # Filter for unread
-    unread = [r for r in records if r['TargetBranchCode'] == my_code and r['Status'] == 'unread']
-    
-    for note in unread:
-        st.toast(f"📦 Incoming Transfer: {note['Message']}", icon="🔔")
-        # Update sheet to 'read' to prevent loop
-        # (Add logic here to find row index and update status to 'read')
 
-# Run it immediately after login
-check_notifications()
-
-# --- 2. Dashboard UI ---
-st.success(f"Logged in: {st.session_state.selected_branch}")
-
-col1, col2, col3 = st.columns(3)
-
-# The new "Internal Transfer" Button
-if col1.button("🚀 Internal Transfer"):
-    st.switch_page("pages/stock_transfer.py")
-
-if col2.button(" Notifications  "):
-    st.switch_page("pages/stock_consumption.py")
-
-# --- 3. Cached Data Access ---
-# Use the session_state.branch_info which was cached during login
-# No API calls needed here if you store the stock list in session_state!
 
 # ---------------- BACK ----------------
 if st.button("⬅ Back"):

@@ -273,7 +273,7 @@ if st.session_state.authenticated:
 
 # ---------------- STOCK VIEW SECTION ----------------
 # 1. Button to Toggle State
-if col3.button("🔍 Stock View"):
+if col3.button("🔍 Toggle Stock View"):
     st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
     refresh_activity()
     st.rerun()

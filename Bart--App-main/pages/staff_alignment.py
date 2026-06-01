@@ -79,6 +79,7 @@ def load_data(refresh_token):
 
 # Load the data using the token
 df_full = load_data(st.session_state.data_refresh_token)
+def clean(text):
     text = str(text).replace("–", "-").replace("—", "-")
     text = re.sub(r"\(.*?\)", "", text)
     text = re.sub(r"\s+", " ", text).strip()

@@ -269,7 +269,7 @@ if st.session_state.authenticated:
         st.switch_page("pages/stock_transfer.py")
 
     # CORRECTED: Indentation fixed here
-    if col3.button("🔍 Toggle Stock View"):
+    if col3.button("🔍Stock View"):
         st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
         refresh_activity()
         st.rerun()
@@ -333,13 +333,7 @@ if st.session_state.get("show_stock_view", False):
             else:
                 weekly.append(row_dict)
 
-        # UI Display
-        st.markdown("---")
-        b_col1, b_col2 = st.columns(2)
-        if b_col1.button("🚀 Internal Transfer"):
-            st.switch_page("pages/stock_transfer.py")
-        if b_col2.button("🔔 Notifications"):
-            st.switch_page("pages/notifications.py")
+
 
         st.subheader("📦 Daily Items Stock")
         st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)

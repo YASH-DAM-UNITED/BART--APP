@@ -36,26 +36,7 @@ if selected_details:
     # You can show the "Total" or other columns from your sheet here
     st.write(f"Total Available: {selected_details.get('Total', 0)}")
 
-# 5. TRANSFER FORM
-with st.form("transfer_form"):
-    qty = st.number_input("Quantity to Transfer", min_value=1, step=1)
-    destination = st.text_input("Destination Branch Code")
-    reason = st.text_area("Reason for Transfer")
-    
-    submitted = st.form_submit_button("Confirm Transfer")
-    
-    if submitted:
-        if not destination:
-            st.error("Please enter a destination branch.")
-        else:
-            # --- ADD YOUR GOOGLE SHEET UPDATE LOGIC HERE ---
-            # Example:
-            # sheet = client.open_by_key(branch_info["SheetID"]).worksheet("Transfers")
-            # sheet.append_row([selected_item, qty, destination, reason])
-            
-            st.success(f"Successfully transferred {qty} of {selected_item} to {destination}!")
-            st.balloons()
-
+st.session_state.branch_list = branches
 # ---------------- NAVIGATION ----------------
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

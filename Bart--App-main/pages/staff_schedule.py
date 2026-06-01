@@ -298,25 +298,28 @@ else:
     # 1. Start with a fresh copy
     df_display = df.copy()
     
-    # 2. CRITICAL: Force remove all duplicate columns
-    # This keeps only the first instance of every column name
-    df_display = df_display.loc[:, ~df_display.columns.duplicated()]
-    
-    # 3. Identify headers for this specific week
+    # 2. Extract only the columns for the selected week
+    # This filters the sheet down to JUST the columns that match the current date range
     week_cols = [day_labels[d] for d in DAYS]
     
-    # Dynamically find ANY column that looks like an Over-Time column
-    ot_cols = [col for col in df_display.columns if col.startswith("Over-Time")]
+    # Identify OT column for this specific week
+    start_date_comparison = datetime(2026, 5, 1)
+    week_start_dt = datetime.combine(week_start, datetime.min.time())
+    week_diff = (week_start_dt - start_date_comparison).days // 7
+    ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    # 4. Define final structure
-    # We only want Name, Role, the 7 days, and any found OT columns
-    target_columns = ["Name", "Role"] + week_cols + ot_cols
+    # 3. Create the clean list of target columns
+    # We force 'Name' and 'Role' to be first, followed by our week's columns
+    target_columns = ["Name", "Role"] + week_cols + [ot_col_name]
     
-    # 5. Filter: Only reindex if the column actually exists in our cleaned df
-    valid_columns = [col for col in target_columns if col in df_display.columns]
+    # Only keep columns that are actually present in the sheet
+    available_columns = [col for col in target_columns if col in df_display.columns]
     
-    # Now this will not crash because duplicates are gone and we check existence
-    df_display = df_display[valid_columns]
+    # 4. Perform selection (This avoids 'reindex' and the duplicate label error)
+    df_display = df_display[available_columns]
+    
+    # 5. Final safety check: drop any duplicates just in case
+    df_display = df_display.loc[:, ~df_display.columns.duplicated()]
     df_display = df_display.fillna("").astype(str)
     
     # 6. Render the Grid

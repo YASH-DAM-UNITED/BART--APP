@@ -231,24 +231,42 @@ if edit_mode:
         if not existing_week_data.empty:
             duplicate_submission_dialog()
             st.stop()
+            
         try:
             ws = master_sheet.worksheet("StaffSchedule")
+            
+            # Calculate the dynamic OT column header
+            start_date_comparison = datetime(2026, 5, 1)
+            week_start_dt = datetime.combine(week_start, datetime.min.time())
+            week_diff = (week_start_dt - start_date_comparison).days // 7
+            ot_header = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
+            
+            # Fetch current headers and data
             headers = ws.row_values(1)
             all_records = ws.get_all_records()
             updates = []
+            
             for i, row in edited_df.iterrows():
+                # 1. Locate or create Row
                 target_row_idx = None
                 for idx, record in enumerate(all_records):
                     if record.get("Branch") == st.session_state.selected_branch and record.get("Name") == row["Name"]:
                         target_row_idx = idx + 2
                         break
+                
                 if not target_row_idx:
                     target_row_idx = len(all_records) + 2
                     ws.update_cell(target_row_idx, 1, st.session_state.selected_branch)
                     ws.update_cell(target_row_idx, 2, row["Name"])
                     all_records.append({"Branch": st.session_state.selected_branch, "Name": row["Name"]})
-                for d in DAYS:
-                    day_header = day_labels[d]
+
+                # 2. Prepare columns to update: 7 Days + The dynamic OT column
+                # Map keys to the headers they need to hit
+                cols_to_map = {d: day_labels[d] for d in DAYS}
+                cols_to_map["Over-Time"] = ot_header
+                
+                for key, day_header in cols_to_map.items():
+                    # Find or Create Column
                     if day_header not in headers:
                         new_col_idx = len(headers) + 1
                         ws.update_cell(1, new_col_idx, day_header)
@@ -256,14 +274,19 @@ if edit_mode:
                         col_idx = new_col_idx
                     else:
                         col_idx = headers.index(day_header) + 1
-                    updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[d])))
+                    
+                    # Queue the cell update
+                    updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[key])))
+            
+            # 3. Batch execute all updates
             ws.update_cells(updates)
+            
             st.session_state.shift_buffer = {}
             st.session_state.deleted_staff = set()
             success_dialog()
+            
         except Exception as e:
             st.error(f"❌ Submission Failed: {e}")
-
 # =========================
 # VIEW MODE
 # =========================

@@ -310,6 +310,14 @@ if st.session_state.authenticated:
         if b_col2.button("🔔 Notifications"):
             st.switch_page("pages/notifications.py")
 
+        if current_section == "daily": 
+            daily.append(row_dict)
+        else: 
+            weekly.append(row_dict)
+
+        # ADD THESE LINES TO SAVE DATA TO SESSION STATE
+        st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+
 
         st.subheader("📦 Daily Items Stock")
         st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)

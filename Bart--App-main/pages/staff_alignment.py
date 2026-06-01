@@ -63,7 +63,7 @@ def get_client():
 client = get_client()
 sheet = client.open_by_key(SHEET_ID)
 
-# Initialize the refresh token in session state
+# Initialize the token
 if "data_refresh_token" not in st.session_state:
     st.session_state.data_refresh_token = 0
 
@@ -71,13 +71,10 @@ if "data_refresh_token" not in st.session_state:
 def load_data(refresh_token):
     ws = sheet.worksheet(TAB_NAME)
     raw = ws.get_all_values()
-    # Handle case where sheet might be empty
-    if not raw:
-        return pd.DataFrame()
-    df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
-    return df
+    if not raw: return pd.DataFrame()
+    return pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
 
-# Load the data using the token
+# Call it like this
 df_full = load_data(st.session_state.data_refresh_token)
 def clean(text):
     text = str(text).replace("–", "-").replace("—", "-")
@@ -152,11 +149,10 @@ with col1:
     )
 
 with col2:
-    # This button updates the state and triggers a rerun
     if st.button("🔄", use_container_width=True):
+        load_data.clear()  # This forces a refresh of ONLY this function
         st.session_state.data_refresh_token += 1
         st.rerun()
-
 with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")

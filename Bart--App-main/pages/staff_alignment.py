@@ -152,6 +152,9 @@ with col1:
 
 with col2:
     refresh = st.button("🔄", use_container_width=True)
+if refresh:
+    st.session_state.data_refresh_token += 1
+    st.rerun()    
 
 with col3:
     back = st.button("⬅", use_container_width=True)

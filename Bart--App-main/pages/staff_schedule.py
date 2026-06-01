@@ -246,35 +246,45 @@ else:
         st.session_state.cached_df = None
         st.rerun()
 
-    # --- NEW FILTERED LOGIC ---
+    # 1. Prepare and filter data
     df_display = df.copy()
     
-    # 1. Dynamically select the correct Over-Time column for this week
-    # Assuming start date is 01 May 2026, calculate week index
-    week_diff = (week_start - datetime(2026, 5, 1)).days // 7
+    # Safely convert date to datetime for calculation
+    start_date_comparison = datetime(2026, 5, 1)
+    week_start_dt = datetime.combine(week_start, datetime.min.time())
+    
+    # Calculate week index to find the correct Over-Time column
+    week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    # 2. Define exactly which columns to show
+    # Define columns to keep (Name, Role, 7 Days, and the specific OT column)
     target_columns = ["Name", "Role"] + list(day_labels.values()) + [ot_col_name]
     
-    # 3. Filter DataFrame so AgGrid doesn't crash on too many columns
+    # Filter the dataframe to only include these columns
     df_display = df_display.reindex(columns=target_columns)
     df_display = df_display.fillna("").astype(str)
     
-    # 4. Define Grid
+    # 2. Define Grid Configuration
     column_defs = [
         {"headerName": "Name", "field": "Name", "pinned": "left", "width": 90},
         {"headerName": "Role", "field": "Role", "width": 140}
     ]
+    # Add day columns
     for d in DAYS:
         column_defs.append({"headerName": day_labels[d], "field": day_labels[d], "width": 135})
+    # Add the specific OT column for this week
     column_defs.append({"headerName": "Over-Time", "field": ot_col_name, "width": 90})
 
+    # 3. Render the Grid
     AgGrid(
         df_display, 
-        gridOptions={"columnDefs": column_defs, "defaultColDef": {"resizable": True}}, 
+        gridOptions={
+            "columnDefs": column_defs, 
+            "defaultColDef": {"resizable": True}
+        }, 
         height=500,
         fit_columns_on_grid_load=True
+    )
     )
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

@@ -374,6 +374,8 @@ def build_df(data_dict, branch_names):
         }
         for b in branch_names:
             row[b] = v.get(b, 0)
+
+        row["Total"] = sum(row[b] for b in branch_names)
         rows.append(row)
     return pd.DataFrame(rows)
 

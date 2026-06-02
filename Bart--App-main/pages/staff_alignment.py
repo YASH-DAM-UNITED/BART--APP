@@ -5,8 +5,20 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
+st.set_page_config(
+    layout="wide",
+    page_title="Ops Control Center",
+    initial_sidebar_state="collapsed"
+)
 
+# --- CONFIGURATION & STATE ---
+if "data_refresh_token" not in st.session_state:
+    st.session_state.data_refresh_token = 0
 
+SHEET_ID = "1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0"
+TAB_NAME = "StaffSchedule"
+
+# --- HELPER FUNCTIONS ---
 @st.cache_resource
 def get_client():
     creds = Credentials.from_service_account_info(
@@ -18,142 +30,16 @@ def get_client():
     )
     return gspread.authorize(creds)
 
-
-# 1. Initialize State
-if "data_refresh_token" not in st.session_state:
-    st.session_state.data_refresh_token = 0
-
-# 2. Load Data
-df_full = load_data(st.session_state.data_refresh_token)
-df_full = df_full.loc[:, ~df_full.columns.duplicated()].copy()
-
-# 3. Define Meta Columns and Shift Columns (NOW it can see df_full)
-meta_cols = ["Branch", "Name", "Role"]
-shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
-
-# 4. Now perform the date logic using shift_cols
-today_day_month = date.today().strftime("%d %b")
-default_index = len(shift_cols) - 1
-
-for i, col in enumerate(shift_cols):
-    if extract_day_month(col) == today_day_month:
-        default_index = i
-        break
-
-# 5. Now use shift_cols in the selectbox
-shift_col = st.selectbox("Shift Column", shift_cols, index=default_index)
-
-st.set_page_config(
-    layout="wide",
-    page_title="Ops Control Center",
-    initial_sidebar_state="collapsed"
-)
-
-st.title("STAFF Schedule Control Center")
-
-st.markdown("""
-<style>
-section[data-testid="stSidebar"] {
-    display: none !important;
-}
-
-div[data-testid="collapsedControl"] {
-    display: none !important;
-}
-
-[data-testid="stAppViewContainer"] {
-    padding-left: 1rem;
-    padding-right: 1rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-div[data-testid="stHorizontalBlock"] {
-    align-items: center;
-}
-
-div[data-testid="stButton"] > button {
-    height: 38px;
-    width: 60px;
-    padding: 0px;
-    font-size: 14px;
-    border-radius: 8px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-SHEET_ID = "1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0"
-TAB_NAME = "StaffSchedule"
-
-
-
-
-
-# --- 1. DATA LOADING (Keep this cached) ---
 @st.cache_data(ttl=900)
 def load_data(refresh_token):
     client = get_client()
     sheet = client.open_by_key(SHEET_ID)
     ws = sheet.worksheet(TAB_NAME)
-    raw = ws.get_all_values()
-    if not raw: return pd.DataFrame()
-    df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
-    return df
-
-# Always get a clean copy of the data
-df_base = load_data(st.session_state.data_refresh_token).copy()
-
-# --- 2. DYNAMIC COMPUTATION (No Caching Here) ---
-# Select the shift column first
-shift_col = st.selectbox("Shift Column", shift_cols, index=default_index)
-
-# Create a clean working dataframe for calculations
-# We copy it so we don't mutate the cached df_base
-df_work = df_base.copy()
-df_work["Shift"] = df_work[shift_col]
-
-# Now, any function you call (like compute()) uses df_work
-u_act, u_inact = compute(df_work)
-
-
-client = get_client()
-# Remove 'sheet = client.open_by_key(SHEET_ID)' and use this instead
-def get_fresh_sheet():
-    return client.open_by_key(SHEET_ID)
-
-
-
-# --- 2. DATA LOADING LOGIC ---
-@st.cache_resource
-def get_client():
-    creds = Credentials.from_service_account_info(
-        st.secrets["GOOGLE_CREDS_JSON"],
-        scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    )
-    return gspread.authorize(creds)
-
-@st.cache_data(ttl=900)
-def load_data(refresh_token):
-    # This block runs ONLY when refresh_token changes or cache expires
-    client = get_client()
-    sheet = client.open_by_key(SHEET_ID)
-    ws = sheet.worksheet(TAB_NAME)
-    
-    # Fetch raw data
     raw = ws.get_all_values()
     if not raw:
         return pd.DataFrame()
+    return pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
 
-    print(f"Data reloaded at {datetime.now()}")
-    
-    df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
-    return df
-
-# Load the data - Streamlit watches 'refresh_token' to decide if it needs to re-run
-df_full = load_data(st.session_state.data_refresh_token)
-df_full = df_full.loc[:, ~df_full.columns.duplicated()].copy()
 def clean(text):
     text = str(text).replace("–", "-").replace("—", "-")
     text = re.sub(r"\(.*?\)", "", text)
@@ -161,88 +47,64 @@ def clean(text):
     return text
 
 def get_shift(cell):
-    if not cell or not isinstance(cell, str):
-        return None
-
-    # This regex looks for: Digits, optional space, AM or PM
+    if not cell or not isinstance(cell, str): return None
     matches = re.findall(r"(\d{1,2})\s*(AM|PM)", cell, re.I)
-
-    if len(matches) < 2:
-        return None
-
+    if len(matches) < 2: return None
     def to_minutes(hour_str, am_pm):
         h = int(hour_str)
         m = am_pm.upper()
-        
-        # 12 AM -> 0 (00:00)
-        # 1 AM - 11 AM -> 1 - 11
-        # 12 PM -> 12 (12:00)
-        # 1 PM - 11 PM -> 13 - 23
-        if m == "AM":
-            return (0 if h == 12 else h) * 60
-        else:
-            return (12 if h == 12 else h + 12) * 60
-
-    start_min = to_minutes(matches[0][0], matches[0][1])
-    end_min = to_minutes(matches[1][0], matches[1][1])
-
-    return start_min, end_min
+        if m == "AM": return (0 if h == 12 else h) * 60
+        else: return (12 if h == 12 else h + 12) * 60
+    return to_minutes(matches[0][0], matches[0][1]), to_minutes(matches[1][0], matches[1][1])
 
 def is_active(cell, now_min):
     shift = get_shift(cell)
-    if not shift:
-        return False
-
+    if not shift: return False
     start, end = shift
-    
-    # Debug: uncomment the line below if you still have issues
-    # st.sidebar.write(f"Cell: {cell} | Start: {start}, End: {end}, Now: {now_min}")
+    if start < end: return start <= now_min < end
+    else: return now_min >= start or now_min < end
 
-    # Standard Shift (e.g., 5 AM to 12 PM)
-    if start < end:
-        return start <= now_min < end
-    
-    # Overnight Shift (e.g., 10 PM to 6 AM)
-    else:
-        return now_min >= start or now_min < end
+def extract_day_month(col):
+    match = re.search(r"\((\d{1,2}\s\w{3})\)", col)
+    return match.group(1).strip() if match else None
 
+def safe_df(df):
+    return df.loc[:, ~df.columns.duplicated()].copy()
 
+def compute(df, now_min):
+    active, inactive = [], []
+    for _, row in df.iterrows():
+        r = row.to_dict()
+        if is_active(row["Shift"], now_min): active.append(r)
+        else: inactive.append(r)
+    cols = df.columns.tolist()
+    return pd.DataFrame(active, columns=cols), pd.DataFrame(inactive, columns=cols)
+
+# --- UI & LOGIC ---
+st.title("STAFF Schedule Control Center")
+
+df_full = load_data(st.session_state.data_refresh_token).copy()
+df_full = safe_df(df_full)
 
 meta_cols = ["Branch", "Name", "Role"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
 
-def extract_day_month(col):
-    match = re.search(r"\((\d{1,2}\s\w{3})\)", col)
-    if match:
-        return match.group(1).strip()
-    return None
-
 today_day_month = date.today().strftime("%d %b")
 default_index = len(shift_cols) - 1
-
 for i, col in enumerate(shift_cols):
     if extract_day_month(col) == today_day_month:
         default_index = i
         break
 
 st.markdown("### KINDLY SELECT THE DATE")
-
 col1, col2, col3 = st.columns([4, 1, 1], vertical_alignment="center")
 
 with col1:
-    shift_col = st.selectbox(
-        "Shift Column",
-        shift_cols,
-        index=default_index,
-        label_visibility="collapsed"
-    )
+    shift_col = st.selectbox("Shift Column", shift_cols, index=default_index, label_visibility="collapsed")
 
 with col2:
     if st.button("🔄", use_container_width=True):
-        # Clear the specific cache entry
-        
         load_data.clear()
-        # Increment token to force a cache miss on the next load
         st.session_state.data_refresh_token += 1
         st.rerun()
 
@@ -250,104 +112,48 @@ with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
 
-# Ensure the Shift column is updated based on the selection
-if "Shift" in df_full.columns:
-    df_full = df_full.drop(columns=["Shift"])
-
-df_full["Shift"] = df_full[shift_col]
-
+# Create working dataframe copy
+df_work = df_full.copy()
+df_work["Shift"] = df_work[shift_col]
 now_min = datetime.now().hour * 60 + datetime.now().minute
-branches = sorted(df_full["Branch"].dropna().unique().tolist())
+branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
-def safe_df(df):
-    df = df.copy()
-    df = df.loc[:, ~df.columns.duplicated()]
-    return df
-
-def compute(df):
-    active, inactive = [], []
-
-    for _, row in df.iterrows():
-        r = row.to_dict()
-
-        if is_active(row["Shift"], now_min):
-            active.append(r)
-        else:
-            inactive.append(r)
-
-    cols = df.columns.tolist()
-
-    return (
-        pd.DataFrame(active, columns=cols),
-        pd.DataFrame(inactive, columns=cols)
-    )
-
-u_act, u_inact = compute(df_full)
+u_act, u_inact = compute(df_work, now_min)
 
 st.subheader("STAFF Universal Overview")
-
 c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.metric("🏢 Branches", len(branches))
-with c2:
-    st.metric("👥 Staff", len(df_full))
-with c3:
-    st.metric("🟢 Active", len(u_act))
-with c4:
-    st.metric("⚪ Inactive", len(u_inact))
+c1.metric("🏢 Branches", len(branches))
+c2.metric("👥 Staff", len(df_work))
+c3.metric("🟢 Active", len(u_act))
+c4.metric("⚪ Inactive", len(u_inact))
 
 st.divider()
-
 st.subheader("👥 Branchwise Status")
-
 summary = []
 for b in branches:
-    temp = df_full[df_full["Branch"] == b]
-    a, i = compute(temp)
-
-    summary.append({
-        "Branch": b,
-        "Active": len(a),
-        "Inactive": len(i)
-    })
-
-st.dataframe(safe_df(pd.DataFrame(summary)), use_container_width=True, hide_index=True)
+    temp = df_work[df_work["Branch"] == b]
+    a, i = compute(temp, now_min)
+    summary.append({"Branch": b, "Active": len(a), "Inactive": len(i)})
+st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 
 st.divider()
-
 col1, col2 = st.columns(2)
+with col1: selected_branch = st.selectbox("🏢 Branch", branches)
+with col2: selected_date = st.date_input("📅 Date", value=date.today())
 
-with col1:
-    selected_branch = st.selectbox("🏢 Branch", branches)
-
-with col2:
-    selected_date = st.date_input("📅 Date", value=date.today())
-
-df_branch = df_full[df_full["Branch"] == selected_branch]
-b_act, b_inact = compute(df_branch)
+df_branch = df_work[df_work["Branch"] == selected_branch]
+b_act, b_inact = compute(df_branch, now_min)
 
 st.subheader("🏢 Branch Overview")
-
 c1, c2, c3, c4 = st.columns(4)
-
-with c1:
-    st.metric("Branch", selected_branch)
-with c2:
-    st.metric("Date", selected_date.strftime("%d-%m-%Y"))
-with c3:
-    st.metric("Active", len(b_act))
-with c4:
-    st.metric("Inactive", len(b_inact))
-
-st.divider()
+c1.metric("Branch", selected_branch)
+c2.metric("Date", selected_date.strftime("%d-%m-%Y"))
+c3.metric("Active", len(b_act))
+c4.metric("Inactive", len(b_inact))
 
 st.subheader("🔥 Active Staff")
-st.dataframe(safe_df(b_act), use_container_width=True, hide_index=True)
+st.dataframe(b_act, use_container_width=True, hide_index=True)
 
 st.subheader("📊 Full View")
-
 full_view = pd.concat([b_act, b_inact], ignore_index=True)
-full_view = full_view[df_branch.columns]
-
-st.dataframe(safe_df(full_view), use_container_width=True, hide_index=True)
+st.dataframe(full_view, use_container_width=True, hide_index=True)

@@ -83,6 +83,8 @@ def get_professional_report(report_data):
         
         # 2. DATA SHEETS (Your tables)
         for sheet_name, df in report_data.items():
+            if '::auto_unique_id::' in df.columns:
+                df = df.drop(columns=['::auto_unique_id::'])
             safe_name = "".join([c for c in sheet_name if c.isalnum() or c in (' ', '_')])[:31]
             df.to_excel(writer, sheet_name=safe_name, index=False)
             ws = writer.sheets[safe_name]

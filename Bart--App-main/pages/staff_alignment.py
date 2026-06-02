@@ -5,6 +5,13 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
+import pytz
+
+
+saudi_tz = pytz.timezone("Asia/Riyadh")
+now = datetime.now(saudi_tz)
+now_min = now.hour * 60 + now.minute
+
 st.set_page_config(
     layout="wide",
     page_title="Ops Control Center",

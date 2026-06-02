@@ -6,6 +6,19 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
 
+
+@st.cache_resource
+def get_client():
+    creds = Credentials.from_service_account_info(
+        st.secrets["GOOGLE_CREDS_JSON"],
+        scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+    )
+    return gspread.authorize(creds)
+
+
 # --- 1. CONFIGURATION & STATE ---
 if "data_refresh_token" not in st.session_state:
     st.session_state.data_refresh_token = 0
@@ -84,16 +97,7 @@ df_work["Shift"] = df_work[shift_col]
 
 # Now, any function you call (like compute()) uses df_work
 u_act, u_inact = compute(df_work)
-@st.cache_resource
-def get_client():
-    creds = Credentials.from_service_account_info(
-        st.secrets["GOOGLE_CREDS_JSON"],
-        scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-    )
-    return gspread.authorize(creds)
+
 
 client = get_client()
 # Remove 'sheet = client.open_by_key(SHEET_ID)' and use this instead

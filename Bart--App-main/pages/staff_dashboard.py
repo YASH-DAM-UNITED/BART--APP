@@ -112,7 +112,7 @@ def get_fresh_client():
 if "gs_client" not in st.session_state:
     st.session_state.gs_client = get_fresh_client()
 # ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
-@st.cache_data(ttl=300000)  # Use a numeric TTL (seconds) instead of None
+@st.cache_data(ttl=30)  # Use a numeric TTL (seconds) instead of None
 def load_master_branch_data():
     # Access the client from session state instead of a global 'client' variable
     client = st.session_state.gs_client 

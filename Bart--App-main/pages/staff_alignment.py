@@ -19,10 +19,29 @@ def get_client():
     return gspread.authorize(creds)
 
 
-# --- 1. CONFIGURATION & STATE ---
+# 1. Initialize State
 if "data_refresh_token" not in st.session_state:
     st.session_state.data_refresh_token = 0
 
+# 2. Load Data
+df_full = load_data(st.session_state.data_refresh_token)
+df_full = df_full.loc[:, ~df_full.columns.duplicated()].copy()
+
+# 3. Define Meta Columns and Shift Columns (NOW it can see df_full)
+meta_cols = ["Branch", "Name", "Role"]
+shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
+
+# 4. Now perform the date logic using shift_cols
+today_day_month = date.today().strftime("%d %b")
+default_index = len(shift_cols) - 1
+
+for i, col in enumerate(shift_cols):
+    if extract_day_month(col) == today_day_month:
+        default_index = i
+        break
+
+# 5. Now use shift_cols in the selectbox
+shift_col = st.selectbox("Shift Column", shift_cols, index=default_index)
 
 st.set_page_config(
     layout="wide",

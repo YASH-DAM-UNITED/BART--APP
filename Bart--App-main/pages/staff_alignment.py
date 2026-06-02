@@ -104,15 +104,26 @@ def extract_day_month(col):
 
 def safe_df(df):
     return df.loc[:, ~df.columns.duplicated()].copy()
-
 def compute(df, now_min):
     active, inactive = [], []
+    
     for _, row in df.iterrows():
-        r = row.to_dict()
-        if is_active(row["Shift"], now_min): active.append(r)
-        else: inactive.append(r)
+        # 1. Convert to string and handle possible NaNs/None
+        shift_val = str(row["Shift"]) if pd.notnull(row["Shift"]) else ""
+        
+        # 2. Check activity
+        if is_active(shift_val, now_min):
+            active.append(row.to_dict())
+        else:
+            inactive.append(row.to_dict())
+            
     cols = df.columns.tolist()
-    return pd.DataFrame(active, columns=cols), pd.DataFrame(inactive, columns=cols)
+    
+    # 3. Handle empty lists to avoid DataFrame errors
+    active_df = pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols)
+    inactive_df = pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols)
+    
+    return active_df, inactive_df
 
 # --- UI & LOGIC ---
 st.title("STAFF Schedule Control Center")

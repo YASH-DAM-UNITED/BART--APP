@@ -51,10 +51,17 @@ def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return None
 
-    # This regex looks for any two times in the string, 
-    # even if there is text like "(OT 1h)" in between.
-    # It finds the first and the last time match.
-    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", cell, re.I)
+    # This regex looks for: 
+    # 1. A number (\d{1,2}) followed by AM/PM
+    # 2. Optionally a space, dash, or more spaces
+    # 3. Another number (\d{1,2}) followed by AM/PM
+    # It ignores everything inside brackets/parentheses
+    
+    # First, remove anything in parentheses to avoid regex confusion
+    clean_cell = re.sub(r"\(.*?\)", "", cell)
+    
+    # Find all time patterns (e.g., '1 PM')
+    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", clean_cell, re.I)
 
     if len(matches) < 2:
         return None
@@ -62,17 +69,17 @@ def get_shift(cell):
     def to_minutes(hour_str, am_pm):
         h = int(hour_str)
         m = am_pm.upper()
+        # Handle 12 AM as 0, 12 PM as 12, others as is
         if m == "AM": 
             return (0 if h == 12 else h) * 60
         else: 
             return (12 if h == 12 else h + 12) * 60
 
-    # Use the first match as start, last match as end
+    # The first match is start, the second is end
     start_min = to_minutes(matches[0][0], matches[0][1])
-    end_min = to_minutes(matches[-1][0], matches[-1][1])
+    end_min = to_minutes(matches[1][0], matches[1][1])
 
     return start_min, end_min
-
 def is_active(cell, now_min):
     shift = get_shift(cell)
     if not shift: return False

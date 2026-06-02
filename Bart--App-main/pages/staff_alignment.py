@@ -59,18 +59,21 @@ def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return None
     
-    # 1. Clean invisible characters and standard spaces
-    cell = cell.replace('\xa0', ' ').strip()
+    # AGGRESSIVE CLEANING:
+    # 1. Convert to string and handle hidden bytes/non-breaking spaces
+    cell = str(cell).replace('\xa0', ' ').replace('\u202f', ' ')
+    # 2. Replace all forms of dashes with a standard hyphen
+    cell = cell.replace("–", "-").replace("—", "-")
+    # 3. Remove everything inside parentheses (OT, etc)
+    cell = re.sub(r"\(.*?\)", "", cell)
+    # 4. Strip whitespace
+    cell = cell.strip()
     
-    # 2. Extract times
-    # This regex handles cases where there might be extra spaces or different dashes
+    # Now look for the pattern
     pattern = r"(\d{1,2})\s*(AM|PM)"
     matches = re.findall(pattern, cell, re.I)
     
-    # DEBUG: See what is actually being captured
     if len(matches) < 2:
-        # Uncomment the line below to see what the code sees if it fails
-        # st.sidebar.warning(f"Failed to parse: '{cell}' | Found matches: {matches}")
         return None
 
     def to_minutes(h, m):
@@ -82,6 +85,8 @@ def get_shift(cell):
     end_min = to_minutes(matches[1][0], matches[1][1])
     
     return start_min, end_min
+
+
 def is_active(cell, now_min):
     shift = get_shift(cell)
     if not shift:

@@ -50,42 +50,46 @@ def clean(text):
 def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return None
-
-    # This regex looks for: 
-    # 1. A number (\d{1,2}) followed by AM/PM
-    # 2. Optionally a space, dash, or more spaces
-    # 3. Another number (\d{1,2}) followed by AM/PM
-    # It ignores everything inside brackets/parentheses
     
-    # First, remove anything in parentheses to avoid regex confusion
-    clean_cell = re.sub(r"\(.*?\)", "", cell)
+    # 1. Standardize: Remove parentheses and everything inside
+    # "1 PM - 11 PM (OT 1h)" -> "1 PM - 11 PM"
+    clean_text = re.sub(r"\(.*?\)", "", cell)
     
-    # Find all time patterns (e.g., '1 PM')
-    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", clean_cell, re.I)
-
+    # 2. Extract all time matches
+    # This finds '1', 'PM', '11', 'PM'
+    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", clean_text, re.I)
+    
     if len(matches) < 2:
         return None
 
-    def to_minutes(hour_str, am_pm):
-        h = int(hour_str)
-        m = am_pm.upper()
-        # Handle 12 AM as 0, 12 PM as 12, others as is
-        if m == "AM": 
+    def to_minutes(h, m):
+        h = int(h)
+        m = m.upper()
+        # Convert to 24-hour clock minutes
+        if m == "AM":
             return (0 if h == 12 else h) * 60
-        else: 
+        else:
             return (12 if h == 12 else h + 12) * 60
 
-    # The first match is start, the second is end
+    # Explicitly pick the first and second time found
     start_min = to_minutes(matches[0][0], matches[0][1])
     end_min = to_minutes(matches[1][0], matches[1][1])
-
+    
     return start_min, end_min
+
 def is_active(cell, now_min):
     shift = get_shift(cell)
-    if not shift: return False
+    if not shift:
+        return False
+    
     start, end = shift
-    if start < end: return start <= now_min < end
-    else: return now_min >= start or now_min < end
+    
+    # Logic for normal shifts (e.g., 5 AM to 5 PM)
+    if start < end:
+        return start <= now_min < end
+    # Logic for overnight shifts (e.g., 10 PM to 6 AM)
+    else:
+        return now_min >= start or now_min < end
 
 def extract_day_month(col):
     match = re.search(r"\((\d{1,2}\s\w{3})\)", col)

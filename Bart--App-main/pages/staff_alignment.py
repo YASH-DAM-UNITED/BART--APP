@@ -184,6 +184,13 @@ c3.metric("🟢 Active", len(u_act))
 c4.metric("⚪ Inactive", len(u_inact))
 
 st.divider()
+
+
+# Force Test
+test_val = "1 PM - 11 PM (OT 1h)"
+st.sidebar.write(f"Hardcoded Test: {test_val}")
+st.sidebar.write(f"Parsed Result: {get_shift(test_val)}")
+st.sidebar.write(f"Is 15:49 (949 min) Active? {is_active(test_val, 949)}")
 st.subheader("👥 Branchwise Status")
 summary = []
 for b in branches:

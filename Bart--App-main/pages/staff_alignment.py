@@ -51,30 +51,29 @@ def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return None
     
-    # 1. Standardize: Remove parentheses and everything inside
-    # "1 PM - 11 PM (OT 1h)" -> "1 PM - 11 PM"
+    # Remove everything in parentheses (like "OT 1h")
     clean_text = re.sub(r"\(.*?\)", "", cell)
     
-    # 2. Extract all time matches
-    # This finds '1', 'PM', '11', 'PM'
+    # Find all matches of 1-12 followed by AM/PM
     matches = re.findall(r"(\d{1,2})\s*(AM|PM)", clean_text, re.I)
     
     if len(matches) < 2:
         return None
 
-    def to_minutes(h, m):
-        h = int(h)
-        m = m.upper()
-        # Convert to 24-hour clock minutes
+    def to_minutes(hour_str, am_pm):
+        h = int(hour_str)
+        m = am_pm.upper().strip()
+        
+        # Correct 12-hour clock conversion to 24-hour minutes:
+        # 12 AM = 0 mins, 1 AM = 60 mins... 12 PM = 720 mins, 1 PM = 780 mins
         if m == "AM":
             return (0 if h == 12 else h) * 60
-        else:
+        else: # PM
             return (12 if h == 12 else h + 12) * 60
 
-    # Explicitly pick the first and second time found
     start_min = to_minutes(matches[0][0], matches[0][1])
     end_min = to_minutes(matches[1][0], matches[1][1])
-    
+
     return start_min, end_min
 
 def is_active(cell, now_min):

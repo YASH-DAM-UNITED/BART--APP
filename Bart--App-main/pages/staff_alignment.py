@@ -5,6 +5,12 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
+
+# --- 1. CONFIGURATION & STATE ---
+if "data_refresh_token" not in st.session_state:
+    st.session_state.data_refresh_token = 0
+
+
 st.set_page_config(
     layout="wide",
     page_title="Ops Control Center",
@@ -95,9 +101,6 @@ def get_fresh_sheet():
     return client.open_by_key(SHEET_ID)
 
 
-# --- 1. CONFIGURATION & STATE ---
-if "data_refresh_token" not in st.session_state:
-    st.session_state.data_refresh_token = 0
 
 # --- 2. DATA LOADING LOGIC ---
 @st.cache_resource

@@ -110,6 +110,8 @@ def to_excel_bytes(data_frames):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         for sheet_name, df in data_frames.items():
+            if '::auto_unique_id::' in df.columns:
+                df = df.drop(columns=['::auto_unique_id::'])
             # Ensure sheet name is valid for Excel (max 31 chars)
             safe_name = "".join([c for c in sheet_name if c.isalnum() or c in (' ', '_')])[:31]
             df.to_excel(writer, sheet_name=safe_name, index=False)

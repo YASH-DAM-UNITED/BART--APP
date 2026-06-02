@@ -143,6 +143,19 @@ branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
 u_act, u_inact = compute(df_work, now_min)
 
+
+
+# --- DEBUG SECTION ---
+with st.expander("🔍 Click to Debug Data"):
+    st.write("Current Time (Minutes from Midnight):", now_min)
+    st.write("First 5 rows of dataframe:")
+    st.dataframe(df_work.head())
+    if not df_work.empty:
+        sample_shift = df_work["Shift"].iloc[0]
+        st.write(f"Sample Shift String: '{sample_shift}'")
+        st.write("Parsed Shift Result:", get_shift(sample_shift))
+# ---------------------
+
 st.subheader("STAFF Universal Overview")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("🏢 Branches", len(branches))

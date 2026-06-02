@@ -510,6 +510,21 @@ def make_grid(df, key):
             }
         )
 
+
+
+    if "Total" in df.columns:
+        gb.configure_column(
+            "Total",
+            type=["numericColumn"],
+            pinned="right",  # Pin to the right so it's always visible
+            width=100,
+            cellStyle={
+                "textAlign": "center",
+                "fontWeight": "bold",
+                "backgroundColor": "#f8f9fa" # Optional: light gray background
+            }
+        )
+
     gb.configure_grid_options(
         headerHeight=38,
         rowHeight=32,

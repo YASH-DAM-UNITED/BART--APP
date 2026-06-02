@@ -7,7 +7,8 @@ from datetime import datetime, date
 
 import pytz
 
-
+st.sidebar.write(f"Server Time (Jeddah): {now.strftime('%H:%M')}")
+st.sidebar.write(f"Minutes Calculation: {now_min}")
 saudi_tz = pytz.timezone("Asia/Riyadh")
 now = datetime.now(saudi_tz)
 now_min = now.hour * 60 + now.minute

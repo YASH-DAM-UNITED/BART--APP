@@ -47,5 +47,5 @@ streamlit
 pandas
 gspread
 oauth2client
-
+pytz>=2024.1
 fpdf2

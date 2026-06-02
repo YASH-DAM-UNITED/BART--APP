@@ -90,6 +90,8 @@ def load_data(refresh_token):
     raw = ws.get_all_values()
     if not raw:
         return pd.DataFrame()
+
+    print(f"Data reloaded at {datetime.now()}")
     
     df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
     return df
@@ -183,6 +185,7 @@ with col1:
 with col2:
     if st.button("🔄", use_container_width=True):
         # Clear the specific cache entry
+        st.cache_data.clear()
         load_data.clear()
         # Increment token to force a cache miss on the next load
         st.session_state.data_refresh_token += 1

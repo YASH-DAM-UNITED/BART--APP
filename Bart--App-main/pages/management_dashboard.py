@@ -456,7 +456,7 @@ def make_grid(df, key):
     gb = GridOptionsBuilder.from_dataframe(df)
 
     gb.configure_default_column(
-        resizable=False,
+        resizable=True,
         sortable=True,
         filter=True,
         editable=False,

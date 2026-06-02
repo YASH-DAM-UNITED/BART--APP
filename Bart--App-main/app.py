@@ -232,7 +232,7 @@ with grid_left:
 
 with grid_center:
     st.markdown("""<div class="card-glow"><div class="card-content" style="text-align: center; font-family: 'Times New Roman', Times, serif; color: #1E293B; font-size: 20px; font-weight: 700;">HR DashBoard</div>""", unsafe_allow_html=True)
-    st.markdown("<p style='font-family: sans-serif; font-size: 14px; color: #64748B; margin-bottom: 25px;'>Manage employee records, oversee Schedule systems, and coordinate staff onboarding files.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-family: sans-serif; font-size: 14px; color: #64748B; margin-bottom: 25px;'>Manage employee records, oversee Schedule systems, and coordinate</p>", unsafe_allow_html=True)
     if st.button("HR Access→", use_container_width=True, key="hr_btn"):
         st.session_state.show_hr_password = True
         st.session_state.show_mgmt_password = False 

@@ -59,31 +59,29 @@ def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return None
     
-    # Remove everything in parentheses (like "OT 1h")
-    clean_text = re.sub(r"\(.*?\)", "", cell)
+    # 1. Clean invisible characters and standard spaces
+    cell = cell.replace('\xa0', ' ').strip()
     
-    # Find all matches of 1-12 followed by AM/PM
-    matches = re.findall(r"(\d{1,2})\s*(AM|PM)", clean_text, re.I)
+    # 2. Extract times
+    # This regex handles cases where there might be extra spaces or different dashes
+    pattern = r"(\d{1,2})\s*(AM|PM)"
+    matches = re.findall(pattern, cell, re.I)
     
+    # DEBUG: See what is actually being captured
     if len(matches) < 2:
+        # Uncomment the line below to see what the code sees if it fails
+        # st.sidebar.warning(f"Failed to parse: '{cell}' | Found matches: {matches}")
         return None
 
-    def to_minutes(hour_str, am_pm):
-        h = int(hour_str)
-        m = am_pm.upper().strip()
-        
-        # Correct 12-hour clock conversion to 24-hour minutes:
-        # 12 AM = 0 mins, 1 AM = 60 mins... 12 PM = 720 mins, 1 PM = 780 mins
-        if m == "AM":
-            return (0 if h == 12 else h) * 60
-        else: # PM
-            return (12 if h == 12 else h + 12) * 60
+    def to_minutes(h, m):
+        h, m = int(h), m.upper().strip()
+        if m == "AM": return (0 if h == 12 else h) * 60
+        return (12 if h == 12 else h + 12) * 60
 
     start_min = to_minutes(matches[0][0], matches[0][1])
     end_min = to_minutes(matches[1][0], matches[1][1])
-
+    
     return start_min, end_min
-
 def is_active(cell, now_min):
     shift = get_shift(cell)
     if not shift:

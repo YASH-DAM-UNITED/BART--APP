@@ -79,7 +79,7 @@ def get_professional_report(report_data):
         summary_ws.hide_gridlines(2)
         title_fmt = workbook.add_format({'bold': True, 'font_size': 18, 'font_color': '#2C3E50'})
         summary_ws.write('B2', 'BART Inventory Executive Report', title_fmt)
-        summary_ws.write('B4', f'Generated Date: {selected_date_str}')
+        summary_ws.write('B4', f'Generated Date: {date_str}')
         
         # 2. DATA SHEETS (Your tables)
         for sheet_name, df in report_data.items():
@@ -742,7 +742,7 @@ with col2:
     st.download_button(
         label=" 📊 Generate LIVE  Report into Excel",
         # Pass the date variable here:
-        data=get_professional_report(report_data, selected_date_str), 
+        data=get_professional_report(report_data), 
         file_name=f"BART_Report_{selected_date_str}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True

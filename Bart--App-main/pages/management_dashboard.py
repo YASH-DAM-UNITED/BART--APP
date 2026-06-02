@@ -96,7 +96,28 @@ def get_professional_report(report_data):
                 ws.write(0, i, col, header_fmt)
             ws.hide_gridlines(2)
             
-    return output.getvalue()# ========================================================
+    return output.getvalue()
+
+
+
+
+def to_excel_bytes(data_frames):
+    """
+    Converts a dictionary of {sheet_name: dataframe} into Excel bytes.
+    """
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        for sheet_name, df in data_frames.items():
+            # Ensure sheet name is valid for Excel (max 31 chars)
+            safe_name = "".join([c for c in sheet_name if c.isalnum() or c in (' ', '_')])[:31]
+            df.to_excel(writer, sheet_name=safe_name, index=False)
+            
+            # Optional: Add formatting here if you want consistency
+            worksheet = writer.sheets[safe_name]
+            worksheet.hide_gridlines(2)
+            
+    return output.getvalue()
+# ========================================================
 # LOAD BRANCHES
 # ========================================================
 
@@ -716,7 +737,8 @@ with col2:
     
     st.download_button(
         label=" 📊 Generate LIVE  Report into Excel",
-        data=get_professional_report(report_data),
+        # Pass the date variable here:
+        data=get_professional_report(report_data, selected_date_str), 
         file_name=f"BART_Report_{selected_date_str}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True

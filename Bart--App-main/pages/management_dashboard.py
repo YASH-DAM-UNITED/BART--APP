@@ -250,7 +250,7 @@ if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
 
-if col3.button("⬅ Return to  Main Page"):
+if col3.button("⬅ LOGOUT "):
     st.switch_page("app.py")
 
 

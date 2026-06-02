@@ -374,8 +374,6 @@ def build_df(data_dict, branch_names):
         }
         for b in branch_names:
             row[b] = v.get(b, 0)
-
-        row["Total"] = sum(row[b] for b in branch_names)
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -507,21 +505,6 @@ def make_grid(df, key):
                 "fontSize": "13px",
                 "paddingTop": "0px",
                 "paddingBottom": "0px"
-            }
-        )
-
-
-
-    if "Total" in df.columns:
-        gb.configure_column(
-            "Total",
-            type=["numericColumn"],
-            pinned="right",  # Pin to the right so it's always visible
-            width=100,
-            cellStyle={
-                "textAlign": "center",
-                "fontWeight": "bold",
-                "backgroundColor": "#f8f9fa" # Optional: light gray background
             }
         )
 

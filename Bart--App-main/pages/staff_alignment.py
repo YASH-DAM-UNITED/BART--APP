@@ -163,7 +163,7 @@ with col3:
 # Create working dataframe copy
 df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
-now_min = datetime.now().hour * 60 + datetime.now().minute
+
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
 u_act, u_inact = compute(df_work, now_min)

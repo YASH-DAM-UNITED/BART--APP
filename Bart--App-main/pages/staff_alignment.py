@@ -49,6 +49,35 @@ div[data-testid="stButton"] > button {
 SHEET_ID = "1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0"
 TAB_NAME = "StaffSchedule"
 
+
+
+
+
+# --- 1. DATA LOADING (Keep this cached) ---
+@st.cache_data(ttl=900)
+def load_data(refresh_token):
+    client = get_client()
+    sheet = client.open_by_key(SHEET_ID)
+    ws = sheet.worksheet(TAB_NAME)
+    raw = ws.get_all_values()
+    if not raw: return pd.DataFrame()
+    df = pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
+    return df
+
+# Always get a clean copy of the data
+df_base = load_data(st.session_state.data_refresh_token).copy()
+
+# --- 2. DYNAMIC COMPUTATION (No Caching Here) ---
+# Select the shift column first
+shift_col = st.selectbox("Shift Column", shift_cols, index=default_index)
+
+# Create a clean working dataframe for calculations
+# We copy it so we don't mutate the cached df_base
+df_work = df_base.copy()
+df_work["Shift"] = df_work[shift_col]
+
+# Now, any function you call (like compute()) uses df_work
+u_act, u_inact = compute(df_work)
 @st.cache_resource
 def get_client():
     creds = Credentials.from_service_account_info(

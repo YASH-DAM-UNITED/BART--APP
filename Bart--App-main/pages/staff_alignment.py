@@ -239,8 +239,12 @@ df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
+# Use the session state values set by your "Calculate" button
+start_m = st.session_state.get("start_min", 0)
+end_m = st.session_state.get("end_min", 1440)
+
 # Use 'sim_min' for all calculations
-u_act, u_inact = compute(df_work, sim_min)
+u_act, u_inact = compute(df_work,start_m, end_m)
 
 st.subheader("STAFF Universal Overview")
 c1, c2, c3, c4 = st.columns(4)

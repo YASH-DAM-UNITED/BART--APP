@@ -55,6 +55,11 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
+
+
+
+def toggle_view():
+    st.session_state.show_manager_view = not st.session_state.show_manager_view
 @st.cache_resource
 def get_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
@@ -725,8 +730,6 @@ st.markdown("""
 
 
 
-def toggle_view():
-    st.session_state.show_manager_view = not st.session_state.show_manager_view
 
 def render(df, title):
     st.subheader(title)

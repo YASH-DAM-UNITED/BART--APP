@@ -86,22 +86,25 @@ for k, v in defaults.items():
 
 
 # --- HELPER FUNCTIONS FOR NOTIFICATIONS ---
-@st.dialog("Incoming Transfer Notification")
+@st.dialog("📦 New Transfer Received")
 def show_transfer_dialog(transfer):
-    st.write(f"**ID:** {transfer['ID']}")
-    st.write(f"**From:** {transfer['Origin']}")
+    st.write(f"### Transfer ID: `{transfer['ID']}`")
+    st.info(f"**From:** {transfer['Origin']}")
+    
     st.markdown("---")
-    st.write("**Items:**")
-    st.text(transfer['Items']) 
-    st.write(f"**Quantities:**")
-    st.text(transfer['Quantities'])
+    with st.container(border=True):
+        st.write("**Items to be accepted:**")
+        st.text(transfer['Items']) 
+        st.write(f"**Quantities:**")
+        st.text(transfer['Quantities'])
+    
     st.write(f"**Reason:** {transfer['Reason']}")
     
     col1, col2 = st.columns(2)
-    if col1.button("✅ Accept"):
+    if col1.button("✅ Accept", use_container_width=True):
         update_transfer_status(transfer['ID'], "Accepted")
         st.rerun()
-    if col2.button("❌ Reject"):
+    if col2.button("❌ Reject", use_container_width=True):
         update_transfer_status(transfer['ID'], "Rejected")
         st.rerun()
 
@@ -109,7 +112,7 @@ def update_transfer_status(transfer_id, status):
     sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
     cell = sheet.find(transfer_id)
     if cell:
-        # Assuming Column 7 is Status (ID, Origin, Destination, Items, Qty, Reason, Status, Timestamp)
+        # Col 7 is the Status column
         sheet.update_cell(cell.row, 7, status)
         st.success(f"Transfer {transfer_id} marked as {status}")
 
@@ -118,7 +121,7 @@ def check_for_pending_transfers():
     records = sheet.get_all_records()
     my_branch = st.session_state.selected_branch
     
-    # Filter for pending transfers where the current logged-in branch is the destination
+    # Filter for pending transfers where current branch is the destination
     pending = [r for r in records if r['Destination'] == my_branch and r['Status'] == 'Pending']
     
     for transfer in pending:

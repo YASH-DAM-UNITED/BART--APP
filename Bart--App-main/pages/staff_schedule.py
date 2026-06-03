@@ -66,34 +66,32 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 
 
 
-
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Check the hours worked for **{row_name}** on **{day_name}**.")
     
-    # We use a dictionary to store if a box is checked
-    # This prevents accidental double-counting
-    if "shift_selections" not in st.session_state:
-        st.session_state.shift_selections = {}
-
     selected_hours = []
     
-    # Create the grid
     st.subheader("AM Hours")
     cols_am = st.columns(6)
     for i in range(1, 13):
-        # We use a unique key for each hour
         if cols_am[(i - 1) % 6].checkbox(f"{i} AM", key=f"am_{i}"):
             selected_hours.append(f"{i} AM")
             
     st.subheader("PM Hours")
     cols_pm = st.columns(6)
     for i in range(1, 13):
-        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
+        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"{i} PM"):
             selected_hours.append(f"{i} PM")
 
-    # STRICT CALCULATION: Total is exactly the count of items in the list
+    # AUTOMATIC MATH CORRECTION
+    has_am = any("AM" in s for s in selected_hours)
+    has_pm = any("PM" in s for s in selected_hours)
+    
     total_worked = len(selected_hours)
+    # If they cross from AM to PM, they have selected 13 slots for a 12-hour shift
+    if has_am and has_pm:
+        total_worked -= 1
     
     st.metric("Total Hours", f"{total_worked} hrs")
     
@@ -106,7 +104,6 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if total_worked < 9:
             st.error("❌ Minimum 9 hours required.")
         else:
-            # Building the record string
             times_str = ", ".join(selected_hours)
             ot = max(0, total_worked - 9)
             value = f"{times_str} ({total_worked} hrs, OT {ot}h)"

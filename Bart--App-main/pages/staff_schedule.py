@@ -65,10 +65,9 @@ SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 
-@st.dialog("⏰ Select Duty Hours (Split Shifts Supported)")
+@st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check **all** hours worked for **{row_name}** on **{day_name}**.")
-    st.caption("Note: You can select non-consecutive hours for split shifts.")
+    st.write(f"Check the specific hours worked for **{row_name}** on **{day_name}**")
     
     selected_hours_list = []
     
@@ -92,7 +91,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
     st.info(f"Total hours selected: **{total_worked} hours**")
     
     if 0 < total_worked < 9:
-        st.warning(f"⚠️ Warning: Total is {total_worked} hours. Minimum 9 hours required.")
+        st.warning(f"⚠️ Warning: {total_worked} hours is below the 9-hour minimum.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
@@ -100,7 +99,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if total_worked < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")
         else:
-            # Build the string showing all selected blocks
+            # Build the string: "9 AM, 10 AM, 1 PM (10 hrs, OT 1h)"
             times_str = ", ".join(selected_hours_list)
             if total_worked > 9:
                 ot = total_worked - 9
@@ -114,6 +113,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
             else:
                 st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
             st.rerun()
+
 
 
 
@@ -172,10 +172,8 @@ def calculate_row_ot(row):
     total_ot = 0
     for day in DAYS:
         val = str(row.get(day, ""))
-        # This regex looks for 'OT' followed by a number and 'h' anywhere in the string
-        match = re.search(r"OT\s+(\d+)\s*h", val)
-        if match:
-            total_ot += int(match.group(1))
+        match = re.search(r"\(OT\s+(\d+(?:\.\d+)?)\s*h\)", val)
+        if match: total_ot += float(match.group(1))
     return f"{total_ot} hrs" if total_ot > 0 else "0 hrs"
 
 # =========================
@@ -240,23 +238,15 @@ if edit_mode:
     for name in df_display["Name"].tolist():
         if name not in current_names: st.session_state.deleted_staff.add(name)
 
-# 3. Trigger Dialog (The fix for the Duplicate ID error)
     for i, row in edited_df.iterrows():
         for d in DAYS:
-            if row.get(d) == "➕ Custom Time":
-                st.session_state.target_row = i
-                st.session_state.target_name = row["Name"]
-                st.session_state.target_day = d
-                st.session_state.show_dialog = True
+            value = row.get(d)
+            if value == "📴 Day Off":
+                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
                 st.rerun()
+            if value == "➕ Custom Time":
+                custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
-    # 4. Show Dialog if triggered
-    if st.session_state.show_dialog:
-        custom_time_dialog(
-            st.session_state.target_row, 
-            st.session_state.target_name, 
-            st.session_state.target_day
-        )
     # 4. SUBMIT BUTTON (Strictly inside Edit Mode)
     if st.button("✅ Submit"):
         if not existing_week_data.empty:

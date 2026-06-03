@@ -244,12 +244,19 @@ if not st.session_state.cached_df.empty:
 if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)
-    if st.session_state.deleted_staff: df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
-    for d in DAYS: df_display[d] = ""
+    if st.session_state.deleted_staff: 
+        df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
+    
+    for d in DAYS:
+        if d not in df_display.columns: df_display[d] = ""
+    
+    # Fill from buffer
     for i, row in df_display.iterrows():
         for d in DAYS:
             key = f"{i}_{d}"
-            if key in st.session_state.shift_buffer: df_display.loc[i, d] = st.session_state.shift_buffer[key]
+            if key in st.session_state.shift_buffer: 
+                df_display.loc[i, d] = st.session_state.shift_buffer[key]
+    
     df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
 
     # 2. Config & Editor
@@ -261,13 +268,19 @@ if edit_mode:
     for d in DAYS:
         config[d] = st.column_config.SelectboxColumn(label=day_labels[d], options=list(set(SHIFT_OPTIONS + df_display[d].dropna().unique().tolist())), width=100)
 
+    # Capture the edited dataframe
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
     
-    # 3. Logic to handle state
-    current_names = set(edited_df["Name"].dropna().tolist())
-    for name in df_display["Name"].tolist():
-        if name not in current_names: st.session_state.deleted_staff.add(name)
+    # 3. Sync State & Handle Triggers
+    # First, save everything from the editor to the buffer (handles Copy/Paste)
+    for i, row in edited_df.iterrows():
+        for d in DAYS:
+            new_val = row.get(d)
+            # Only update buffer if value actually changed or exists
+            if new_val and new_val != df_display.loc[i, d]:
+                st.session_state.shift_buffer[f"{i}_{d}"] = new_val
 
+    # Handle logic triggers (Dialogs and Day Off)
     for i, row in edited_df.iterrows():
         for d in DAYS:
             value = row.get(d)
@@ -279,8 +292,12 @@ if edit_mode:
             elif value == "➕ Break Duty":
                 break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
+    # Sync deleted staff
+    current_names = set(edited_df["Name"].dropna().tolist())
+    for name in df_display["Name"].tolist():
+        if name not in current_names: st.session_state.deleted_staff.add(name)
 
-    # 4. SUBMIT BUTTON (Strictly inside Edit Mode)
+    # 4. SUBMIT BUTTON
     if st.button("✅ Submit"):
         if not existing_week_data.empty:
             duplicate_submission_dialog()
@@ -288,20 +305,17 @@ if edit_mode:
             
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            
-            # Calculate the dynamic OT column header
             start_date_comparison = datetime(2026, 5, 1)
             week_start_dt = datetime.combine(week_start, datetime.min.time())
             week_diff = (week_start_dt - start_date_comparison).days // 7
             ot_header = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
             
-            # Fetch current headers and data
             headers = ws.row_values(1)
             all_records = ws.get_all_records()
             updates = []
             
             for i, row in edited_df.iterrows():
-                # 1. Locate or create Row
+                # Locate Row
                 target_row_idx = None
                 for idx, record in enumerate(all_records):
                     if record.get("Branch") == st.session_state.selected_branch and record.get("Name") == row["Name"]:
@@ -314,13 +328,10 @@ if edit_mode:
                     ws.update_cell(target_row_idx, 2, row["Name"])
                     all_records.append({"Branch": st.session_state.selected_branch, "Name": row["Name"]})
 
-                # 2. Prepare columns to update: 7 Days + The dynamic OT column
-                # Map keys to the headers they need to hit
                 cols_to_map = {d: day_labels[d] for d in DAYS}
                 cols_to_map["Over-Time"] = ot_header
                 
                 for key, day_header in cols_to_map.items():
-                    # Find or Create Column
                     if day_header not in headers:
                         new_col_idx = len(headers) + 1
                         ws.update_cell(1, new_col_idx, day_header)
@@ -329,12 +340,9 @@ if edit_mode:
                     else:
                         col_idx = headers.index(day_header) + 1
                     
-                    # Queue the cell update
                     updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[key])))
             
-            # 3. Batch execute all updates
             ws.update_cells(updates)
-            
             st.session_state.shift_buffer = {}
             st.session_state.deleted_staff = set()
             success_dialog()

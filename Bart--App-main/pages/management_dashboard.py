@@ -20,6 +20,34 @@ if 'show_manager_view' not in st.session_state:
 def toggle_view():
     st.session_state.show_manager_view = not st.session_state.show_manager_view
 
+
+
+
+
+
+# ========================================================
+# VIEW CONTROLLER (THE FILTER)
+# ========================================================
+
+if st.session_state.show_manager_view:
+    # --- ONLY MANAGER VIEW IS RENDERED HERE ---
+    st.title("🔑 Area Manager Portal")
+    
+    if st.button("⬅ Return to Main Dashboard", on_click=toggle_view):
+        st.rerun() # Forces the page to reload into 'else' mode
+        
+    st.markdown("---")
+    # MANAGER UI: Add your future changes here
+    render(daily_df, "📊 Manager View: Daily Stock")
+    render(weekly_df, "📊 Manager View: Weekly Stock")
+
+
+
+
+
+
+
+else:
 # ========================================================
 # PAGE CONFIG
 # ========================================================
@@ -774,32 +802,3 @@ with col2:
         use_container_width=True
     )
 
-# ========================================================
-# VIEW CONTROLLER
-# ========================================================
-
-if st.session_state.show_manager_view:
-    # --- MANAGER VIEW (This is the ONLY thing visible when logged in) ---
-    st.title("🔑 Area Manager Portal")
-    
-    # Back button to return to Normal Page
-    if st.button("⬅ Return to Main Dashboard", on_click=toggle_view):
-        st.rerun()
-        
-    st.markdown("---")
-    # MANAGER SPECIFIC UI HERE
-    render(daily_df, "📊 Manager View: Daily Stock")
-    render(weekly_df, "📊 Manager View: Weekly Stock")
-
-else:
-    # --- NORMAL PAGE (Everything else is hidden unless this is active) ---
-    
-    # Put all your existing UI here:
-    # 1. Global Search
-    # 2. Category View
-    # 3. Main Tables
-    # 4. Export Section
-    
-    # For example:
-    render(daily_df, "📦 Daily Items Stock")
-    render(weekly_df, "📦 Weekly Items Stock")

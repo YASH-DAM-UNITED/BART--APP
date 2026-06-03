@@ -158,7 +158,7 @@ def show_duplicate_warning():
         st.rerun()
 
 # -----------------------------
-# MODE SELECT & DATE CHECK
+# MODE SELECT & DATE CHECK (FIXED)
 # -----------------------------
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -167,23 +167,29 @@ if st.session_state.page == "mode_select":
     selected_date = st.date_input("Select Date", value=yesterday)
     date_str = str(selected_date)
 
-    # 1. Define your fixed boundaries
-    DAILY_ROWS = range(2, 65)    # Rows 1 to 64
-    WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
-
     def is_submitted(mode):
         headers = sheet_data[0]
         if date_str not in headers:
             return False 
         
         col_index = headers.index(date_str)
-        target_range = DAILY_ROWS if mode == "daily" else WEEKLY_ROWS
+        
+        # Calculate ranges dynamically based on your existing indices
+        # daily_start is the row of "DAILY ITEM"
+        # weekly_start is the row of "WEEKLY ITEM"
+        if mode == "daily":
+            # Check rows between DAILY ITEM and WEEKLY ITEM
+            search_range = range(daily_start + 1, weekly_start)
+        else:
+            # Check rows from WEEKLY ITEM to the end of the data
+            search_range = range(weekly_start + 1, len(sheet_data))
             
-        for row_idx in target_range:
-            # Check if row index exists in our loaded data
-            if row_idx - 1 < len(sheet_data): 
-                # row_idx - 1 because list is 0-indexed
-                if str(sheet_data[row_idx - 1][col_index]).strip() != "":
+        for row_idx in search_range:
+            # sheet_data is 0-indexed; row_idx is the index in the list
+            row_content = sheet_data[row_idx]
+            # Ensure col_index is within bounds and check for data
+            if col_index < len(row_content):
+                if str(row_content[col_index]).strip() != "":
                     return True
         return False
 

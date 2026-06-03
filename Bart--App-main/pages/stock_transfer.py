@@ -33,19 +33,17 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     qty = st.number_input("Quantity", min_value=1, step=1)
     
     if st.button("Add to List"):
-        # --- FIX: Define the UOM before using it ---
-        # Find the specific row for the selected item to extract its UOM
         selected_row = next(row for row in target_list if row['Item'] == selected_item)
-        uom = selected_row.get('UOM', 'units')  # Ensure 'UOM' matches your data key
+        # Explicitly using 'UOM'
+        item_uom = selected_row.get('UOM', 'units') 
         
-        # Now 'uom' is defined and can be used safely
         st.session_state.transfer_cart.append({
             "item": selected_item, 
             "qty": qty, 
-            "uom": uom
+            "UOM": item_uom # Saving as 'UOM'
         })
         st.success(f"Added {selected_item} to cart!")
-# 2. CART AND DESTINATION SECTION
+    # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")
     for i, entry in enumerate(st.session_state.transfer_cart):

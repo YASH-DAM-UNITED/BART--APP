@@ -249,6 +249,13 @@ else:
         st.session_state.auth_branch = None
         st.session_state.last_activity = None
         st.rerun()
+    if st.button("🔄 Refresh "):
+        st.rerun()
+    
+
+
+
+
 
 # ---------------- BRANCH INFO ----------------
 branch_info = None

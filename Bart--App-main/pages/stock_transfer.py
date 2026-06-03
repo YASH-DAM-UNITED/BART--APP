@@ -1,5 +1,7 @@
 import streamlit as st
 import gspread
+import random
+import string
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 
@@ -61,8 +63,11 @@ if st.session_state.transfer_cart:
     
     if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # 1. Capture Jeddah time (UTC+3)
+            # 1. Capture Jeddah time and generate unique ID
             jeddah_time = datetime.now() + timedelta(hours=3)
+            date_str = jeddah_time.strftime("%Y%m%d")
+            random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+            transfer_id = f"TR-{date_str}-{random_suffix}"
             current_timestamp = jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             
             # 2. Connect to Google Sheets
@@ -73,27 +78,27 @@ if st.session_state.transfer_cart:
             sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
             
             # 3. Format strings for beautiful Google Sheet layout
-            # \n creates a new line in the cell (requires "Wrap Text" in Sheets)
             item_details = [f"• {entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
             combined_items_str = "\n".join(item_details)
             
             quantities_list = [str(entry['qty']) for entry in st.session_state.transfer_cart]
             combined_qtys_str = "\n".join(quantities_list)
             
-            # 4. Prepare row (Status column added)
+            # 4. Prepare row: ID is now the first column
             row_data = [
+                transfer_id,                                # ID Column
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 
                 str(combined_items_str), 
                 str(combined_qtys_str), 
                 str(reason),
-                "Pending",             # Status
-                str(current_timestamp) # Timestamp
+                "Pending",                                  # Status
+                str(current_timestamp)                      # Timestamp
             ]
             
             sheet.append_row(row_data)
             st.session_state.transfer_cart = []
-            success_dialog("Successfully transferred items!")
+            success_dialog(f"Transfer successful! ID: {transfer_id}")
             
         except Exception as e:
             st.error(f"Error: {e}")

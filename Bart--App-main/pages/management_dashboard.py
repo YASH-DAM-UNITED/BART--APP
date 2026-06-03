@@ -773,10 +773,6 @@ if 'show_manager_view' not in st.session_state:
 # 2. Function to toggle view
 
 
-# 3. Place the button prominently
-if st.button("🔑 Area Manager Login"):
-    toggle_view()
-
 # 4. CONDITIONAL RENDERING: 
 # If the manager view is ON, we show ONLY the manager UI.
 # If the manager view is OFF, we show the standard Main Panel.

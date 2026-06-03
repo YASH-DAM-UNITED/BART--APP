@@ -131,23 +131,27 @@ def compute(df, now_min):
 # --- UI & LOGIC: TIME CONTROL ---
 st.title("STAFF Schedule Control Center")
 
-# Initialize simulation time in session state if not present
+# --- INITIALIZATION ---
 if "sim_min" not in st.session_state:
     st.session_state.sim_min = now_min
 
-# --- MAIN PAGE TIME SELECTION ---
+# --- UI: THE SELECTOR (NO RERUN ON CHANGE) ---
 st.markdown("### 🕒 Analyze Schedule at Specific Time")
 col_time, col_btn = st.columns([4, 1], vertical_alignment="bottom")
 
 with col_time:
-    # Manager picks the time here
-    selected_time = st.time_input("Select Time to View Staff Status", value=now.time())
+    # Use a unique key for the input so it doesn't trigger a full page update automatically
+    selected_time = st.time_input("Select Time", value=datetime.strptime(f"{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}", "%H:%M"), key="temp_time")
 
 with col_btn:
-    # The action button
+    # This button triggers the logic
     if st.button("🚀 Calculate Status", use_container_width=True):
+        # Only NOW do we update the official calculation variable
         st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
-        st.rerun()
+        st.rerun() # This triggers the update for the whole page once
+
+# Use this for all your calculations downstream
+sim_min = st.session_state.sim_min
 
 # Display status feedback
 if st.session_state.sim_min != now_min:

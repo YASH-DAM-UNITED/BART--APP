@@ -32,8 +32,8 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     qty = st.number_input("Quantity", min_value=1, step=1)
     
     if st.button("Add to List"):
-        st.session_state.transfer_cart.append({"item": selected_item, "qty": qty})
-        st.success(f"Added {selected_item} to cart!")
+        st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom})
+        st.success(f"Added {selected_item} ({qty} {uom}) to cart!")
 
 # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:
@@ -41,7 +41,7 @@ if st.session_state.transfer_cart:
     for i, entry in enumerate(st.session_state.transfer_cart):
         col1, col2, col3 = st.columns([3, 1, 1])
         col1.write(f"**{entry['item']}**")
-        col2.write(f"{entry['qty']} units")
+        col2.write(f"{entry['qty']} {entry['uom']} units")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
             st.rerun()
@@ -72,7 +72,7 @@ if st.session_state.transfer_cart:
                 # --- CONSOLIDATION LOGIC ---
                 # Create a formatted string of all items in the cart
                 # Example format: "Item A (2), Item B (5)"
-                item_details = [f"{entry['item']} ({entry['qty']})" for entry in st.session_state.transfer_cart]
+                item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
                 combined_items_str = " | ".join(item_details)
                 
                 # Combine all quantities for a total if needed, or just list them

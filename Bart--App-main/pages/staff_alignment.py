@@ -155,7 +155,7 @@ sim_min = st.session_state.sim_min
 
 # Display status feedback
 if st.session_state.sim_min != now_min:
-    st.warning(f"⚠️ Viewing data for: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}** (Not Current Time)")
+    st.info(f" Viewing data for: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}** ")
 else:
     st.info(f"Viewing Live Status: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}**")
 

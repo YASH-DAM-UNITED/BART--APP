@@ -278,70 +278,76 @@ if st.session_state.authenticated:
 
 
 # ---------------- STOCK VIEW SECTION ----------------
-# 1. Button to Toggle State
-
-
-# 2. Only execute fetch and display logic if True
+# Only execute if the toggle is active AND we have a valid branch loaded
 if st.session_state.get("show_stock_view", False):
-    with st.spinner("Fetching live stock data..."):
-        # Fetching only happens when the user clicks the button
-        sheet = st.session_state.gs_client.open_by_key(branch_info["SheetID"])
-        ws = sheet.worksheet("Stocks")
-        data = ws.get_all_values()
-        
-        headers = data[0]
-        date_columns = headers[1:]
-        daily, weekly = [], []
-        current_section = None
+    if branch_info is not None:
+        with st.spinner("Fetching live stock data..."):
+            # Fetching data using the branch_info identified earlier
+            sheet = st.session_state.gs_client.open_by_key(branch_info["SheetID"])
+            ws = sheet.worksheet("Stocks")
+            data = ws.get_all_values()
+            
+            headers = data[0]
+            date_columns = headers[1:]
+            daily, weekly = [], []
+            current_section = None
 
-        # Data Parsing Logic
-        for row in data:
-            row_text = " ".join(row).strip().lower()
-            if "daily item" in row_text:
-                current_section = "daily"
-                continue
-            if "weekly item" in row_text:
-                current_section = "weekly"
-                continue
-            if current_section is None or not row or not row[0]:
-                continue
-            
-            item = row[0].strip()
-            row_values = row[1:]
-            padding_needed = len(date_columns) - len(row_values)
-            values = row_values + ([""] * max(0, padding_needed))
-            
-            cleaned, total = [], 0
-            for i, v in enumerate(values):
-                if i < 2:
-                    cleaned.append(v)
+            # Data Parsing Logic
+            for row in data:
+                row_text = " ".join(row).strip().lower()
+                if "daily item" in row_text:
+                    current_section = "daily"
                     continue
-                try:
-                    num = float(v) if v != "" else 0
-                except:
-                    num = 0
-                cleaned.append(num)
-                total += num
+                if "weekly item" in row_text:
+                    current_section = "weekly"
+                    continue
+                if current_section is None or not row or not row[0]:
+                    continue
+                
+                item = row[0].strip()
+                row_values = row[1:]
+                padding_needed = len(date_columns) - len(row_values)
+                values = row_values + ([""] * max(0, padding_needed))
+                
+                cleaned, total = [], 0
+                for i, v in enumerate(values):
+                    # Logic: Skip index 0 (Item) and 1 (Category/Secondary info)
+                    # This allows index 2 (the 3rd column) and index 3 (the 4th column) 
+                    # and onwards to be treated as numbers for the total.
+                    if i < 2:
+                        cleaned.append(v)
+                        continue
+                    
+                    try:
+                        num = float(v) if v != "" else 0
+                    except:
+                        num = 0
+                    
+                    cleaned.append(num)
+                    total += num
+                
+                row_dict = {"Item": item}
+                for i, col in enumerate(date_columns):
+                    row_dict[col] = cleaned[i]
+                row_dict["Total"] = total
+                
+                if current_section == "daily":
+                    daily.append(row_dict)
+                else:
+                    weekly.append(row_dict)
+
+            st.subheader("📦 Daily Items Stock")
+            st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
             
-            row_dict = {"Item": item}
-            for i, col in enumerate(date_columns):
-                row_dict[col] = cleaned[i]
-            row_dict["Total"] = total
+            st.subheader("📦 Weekly Items Stock")
+            st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
             
-            if current_section == "daily":
-                daily.append(row_dict)
-            else:
-                weekly.append(row_dict)
-
-
-
-        st.subheader("📦 Daily Items Stock")
-        st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-        st.subheader("📦 Weekly Items Stock")
-        st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
-        
-        # Save to session state for other pages if needed
-        st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+            # Save to session state for other pages
+            st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+    else:
+        # If user logs out while view is open, force close the view
+        st.session_state.show_stock_view = False
+        st.rerun()
 
 # --- 1. Notification Check (Run on load) ---
 def check_notifications():

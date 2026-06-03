@@ -238,7 +238,7 @@ if edit_mode:
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
     
     # 3. Logic to handle state
-current_names = set(edited_df["Name"].dropna().tolist())
+    current_names = set(edited_df["Name"].dropna().tolist())
     for name in df_display["Name"].tolist():
         if name not in current_names: st.session_state.deleted_staff.add(name)
 

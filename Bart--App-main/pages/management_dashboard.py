@@ -203,7 +203,7 @@ else:
     def make_grid(df, key):
         gb = GridOptionsBuilder.from_dataframe(df)
         gb.configure_default_column(resizable=True, sortable=True, filter=True)
-        gb.configure_column("Item Name", pinned="left", lockPinned=True, width=250)
+        gb.configure_column("Item Name", pinned="left", lockPinned=True, minWidth=250)
         for b in branch_names: 
             gb.configure_column(
                 b,

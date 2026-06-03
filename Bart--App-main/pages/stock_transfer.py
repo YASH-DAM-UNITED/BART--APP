@@ -32,15 +32,16 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     selected_item = st.selectbox("Select Item", item_names)
     qty = st.number_input("Quantity", min_value=1, step=1)
     
-    if st.button("Add to List"):
+if st.button("Add to List"):
         selected_row = next(row for row in target_list if row['Item'] == selected_item)
-        # Explicitly using 'UOM'
-        item_uom = selected_row.get('UOM', 'units') 
+        
+        # Use the exact key string: 'DATE->  UOM'
+        uom_value = selected_row.get('DATE->  UOM', 'units') 
         
         st.session_state.transfer_cart.append({
             "item": selected_item, 
             "qty": qty, 
-            "UOM": item_uom # Saving as 'UOM'
+            "uom": uom_value
         })
         st.success(f"Added {selected_item} to cart!")
     # 2. CART AND DESTINATION SECTION
@@ -49,8 +50,8 @@ if st.session_state.transfer_cart:
     for i, entry in enumerate(st.session_state.transfer_cart):
         col1, col2, col3 = st.columns([3, 1, 1])
         col1.write(f"**{entry['item']}**")
-        display_uom = entry.get('uom', entry.get('UOM', '')) 
-        col2.write(f"{entry['qty']} {display_uom}")
+         
+        col2.write(f"{entry['qty']} {entry.get('uom', '')}")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
             st.rerun()

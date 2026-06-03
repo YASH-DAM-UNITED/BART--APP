@@ -243,13 +243,15 @@ if st.session_state.selected_branch == "-- Select Branch --":
 else:
     st.success(f"Selected Branch: {st.session_state.selected_branch}")
 
-    if st.button("🔄 Logout "):
+    col1, col2= st.columns(2)
+
+    if col1.button("🔄 Logout "):
         st.session_state.selected_branch = "-- Select Branch --"
         st.session_state.authenticated = False
         st.session_state.auth_branch = None
         st.session_state.last_activity = None
         st.rerun()
-    if st.button("🔄 Refresh "):
+    if col2.button("🔄 Refresh "):
         st.rerun()
     
 

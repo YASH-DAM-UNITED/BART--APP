@@ -49,7 +49,7 @@ if st.session_state.transfer_cart:
     for i, entry in enumerate(st.session_state.transfer_cart):
         col1, col2, col3 = st.columns([3, 1, 1])
         col1.write(f"**{entry['item']}**")
-        col2.write(f"{entry['qty']} {entry['uom']} units")
+        col2.write(f"{entry['qty']} {entry['uom']} ")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
             st.rerun()

@@ -265,9 +265,21 @@ if edit_mode:
         "Role": st.column_config.SelectboxColumn("Role", options=ROLE_OPTIONS, width=90),
         "Over-Time": st.column_config.TextColumn("Over-Time", disabled=True, width=70)
     }
+    # Ensure all previous values are included in the options to prevent "vanishing"
+    all_known_shifts = set(SHIFT_OPTIONS)
     for d in DAYS:
-        config[d] = st.column_config.SelectboxColumn(label=day_labels[d], options=list(set(SHIFT_OPTIONS + df_display[d].dropna().unique().tolist())), width=100)
+        if d in df_display.columns:
+            all_known_shifts.update(df_display[d].dropna().unique().tolist())
+    
+    # Use this set to build the column options
+    shift_options_list = list(all_known_shifts)
 
+    for d in DAYS:
+        config[d] = st.column_config.SelectboxColumn(
+            label=day_labels[d], 
+            options=shift_options_list, 
+            width=100
+        )
     # Capture the edited dataframe
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
     

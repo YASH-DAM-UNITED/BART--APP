@@ -103,10 +103,10 @@ def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Configure shift for **{row_name}** on **{day_name}**")
     col1, col2 = st.columns(2)
     with col1:
-        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8)
+        sh = st.selectbox("Start Hour", list(range(1, 13)), index=4)
         sap = st.selectbox("AM/PM", ["AM", "PM"], key="sap_modal")
     with col2:
-        eh = st.selectbox("End Hour", list(range(1, 13)), index=5)
+        eh = st.selectbox("End Hour", list(range(1, 13)), index=4)
         eap = st.selectbox("AM/PM", ["AM", "PM"], key="eap_modal", index=1)
     apply_all = st.checkbox("Apply to all working days this week")
     if st.button("Apply Shift", use_container_width=True):

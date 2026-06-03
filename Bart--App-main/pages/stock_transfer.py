@@ -62,7 +62,7 @@ if st.session_state.transfer_cart:
     
     if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # Capture time, add 3 hours to match Jeddah time (UTC+3)
+            # Capture Jeddah time (UTC+3)
             jeddah_time = datetime.now() + timedelta(hours=3)
             current_timestamp = jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             
@@ -72,16 +72,19 @@ if st.session_state.transfer_cart:
             client = gspread.authorize(creds)
             sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
             
+            # Prepare formatted strings
             item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
             combined_items_str = " | ".join(item_details)
-            total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
+            
+            quantities_list = [str(entry['qty']) for entry in st.session_state.transfer_cart]
+            combined_qtys_str = " | ".join(quantities_list)
             
             # Prepare row: Timestamp as the last column
             row_data = [
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 
                 str(combined_items_str), 
-                str(total_qty), 
+                str(combined_qtys_str), 
                 str(reason),
                 str(current_timestamp) 
             ]

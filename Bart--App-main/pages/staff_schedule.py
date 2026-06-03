@@ -61,7 +61,7 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 # CONFIG
 # =========================
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-SHIFT_OPTIONS = ["➕ Straight Duty", " ➕ Break Duty", "📴 Day Off"]
+SHIFT_OPTIONS = ["➕ Straight Duty", " ➕ Break Duty", "Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 # =========================
@@ -305,7 +305,7 @@ if edit_mode:
     for i, row in edited_df.iterrows():
         for d in DAYS:
             value = row.get(d)
-            if value == "📴 Day Off":
+            if value == "Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
                 trigger_rerun = True
             elif value == "➕ Straight Duty":

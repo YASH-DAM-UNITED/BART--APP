@@ -139,26 +139,28 @@ def compute_range(df, start_min, end_min):
             
     return (pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols),
             pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols))
-def compute(df, now_min):
+# 1. UPDATE THE FUNCTION DEFINITION
+def compute(df, start_min, end_min):
     active, inactive = [], []
+    cols = df.columns.tolist()
     
     for _, row in df.iterrows():
-        # 1. Convert to string and handle possible NaNs/None
-        shift_val = str(row["Shift"]) if pd.notnull(row["Shift"]) else ""
+        shift_val = str(row["Shift"])
         
-        # 2. Check activity
-        if is_active(shift_val, now_min):
+        # 2. USE THE NEW RANGE LOGIC INSIDE
+        # We use the same is_active_in_range logic created previously
+        if is_active_in_range(shift_val, start_min, end_min):
             active.append(row.to_dict())
         else:
             inactive.append(row.to_dict())
             
-    cols = df.columns.tolist()
-    
-    # 3. Handle empty lists to avoid DataFrame errors
+    # 3. RETURN DATA
     active_df = pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols)
     inactive_df = pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols)
     
     return active_df, inactive_df
+    
+
 
 # --- UI & LOGIC: TIME CONTROL ---
 st.title("STAFF Schedule Control Center")

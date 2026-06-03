@@ -12,6 +12,8 @@ def success_dialog(message):
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚀 Internal Stock Transfer")
+# TEMPORARY: Clear the cart to fix data structure
+st.session_state.transfer_cart = []
 
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []
@@ -49,7 +51,8 @@ if st.session_state.transfer_cart:
     for i, entry in enumerate(st.session_state.transfer_cart):
         col1, col2, col3 = st.columns([3, 1, 1])
         col1.write(f"**{entry['item']}**")
-        col2.write(f"{entry['qty']} {entry['uom']} ")
+        display_uom = entry.get('uom', entry.get('UOM', '')) 
+        col2.write(f"{entry['qty']} {display_uom}")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
             st.rerun()

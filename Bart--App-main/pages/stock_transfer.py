@@ -25,22 +25,20 @@ if "current_stocks" not in st.session_state:
     st.stop()
 # 1. ADD ITEMS SECTION
 with st.expander("➕ Add Items to Transfer", expanded=True):
-    category = st.radio("Select Item Category", ["Daily Items", "Weekly Items"], horizontal=True)
+    category = st.radio("Select Item Category", ["Daily Items", "Weekly Items"], horizontal=True, key="cat_radio")
     target_list = st.session_state.current_stocks['daily'] if category == "Daily Items" else st.session_state.current_stocks['weekly']
     
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names)
     
-    # 1. Find the specific row to get the correct UOM for the selected item
+    # Get UOM for the selected item
     selected_row = next(row for row in target_list if row['Item'] == selected_item)
     uom_display = selected_row.get('DATE->  UOM', 'units') 
     
-    # 2. Put the Quantity and the UOM label in the same row
+    # Keep Input and UOM in the same row
     col1, col2 = st.columns([3, 1])
     qty = col1.number_input("Quantity", min_value=1, step=1)
-    
-    # Display the UOM on the same line as the Quantity input
-    col2.markdown("<br>", unsafe_allow_html=True) # Aligns the text with the input box
+    col2.markdown("<br>", unsafe_allow_html=True) 
     col2.write(f"**{uom_display}**")
     
     if st.button("Add to List"):
@@ -50,29 +48,28 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
             "uom": uom_display
         })
         st.success(f"Added {selected_item} to cart!")
-    # 2. CART AND DESTINATION SECTION
-if st.session_state.transfer_cart:
-    st.subheader("📋 Current Transfer List")
-    for i, entry in enumerate(st.session_state.transfer_cart):
-        col1, col2, col3 = st.columns([3, 1, 1])
-        col1.write(f"**{entry['item']}**")
-         
-        col2.write(f"{entry['qty']} {entry.get('uom', '')}")
-        if col3.button("Remove", key=f"del_{i}"):
-            st.session_state.transfer_cart.pop(i)
-            st.rerun()
 
-    st.markdown("---")
-    
-    # Receiver/Destination Selection
-    st.subheader("📦 Finalize Transfer")
-    if "branch_list" in st.session_state:
-        destination = st.selectbox("Select Destination Branch", st.session_state.branch_list)
-    else:
-        st.warning("Branch list missing.")
-        destination = None
+# 2. CART AND DESTINATION SECTION
+# Use st.container() to prevent the whole page from jumping/disappearing
+with st.container():
+    if st.session_state.transfer_cart:
+        st.subheader("📋 Current Transfer List")
+        # ... (your existing loop to display cart) ...
+
+        st.markdown("---")
+        st.subheader("📦 Finalize Transfer")
+        
+        # Ensure 'destination' is held in session state or stays persistent
+        if "branch_list" in st.session_state:
+            destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_branch")
+        else:
+            st.warning("Branch list missing.")
+            destination = None
             
-    reason = st.text_area("Reason for Transfer")
+        reason = st.text_area("Reason for Transfer")
+        
+        if st.button("Confirm and Send All"):
+            # ... (your existing save logic) ...
     
     if st.button("Confirm and Send All"):
         if not destination:

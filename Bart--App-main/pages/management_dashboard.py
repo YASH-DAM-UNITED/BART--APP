@@ -255,7 +255,7 @@ def load_all_data(branches):
 
 
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 if col1.button(" 🔄 Refresh Data"):
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -265,8 +265,11 @@ if col1.button(" 🔄 Refresh Data"):
 if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
+if col3.button("🔑 Area Manager Login"):
+    st.session_state.show_manager_view = not st.session_state.show_manager_view
 
-if col3.button("⬅ LOGOUT "):
+
+if col4.button("⬅ LOGOUT "):
     st.switch_page("app.py")
 
 
@@ -752,3 +755,33 @@ with col2:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
+
+# ========================================================
+# AREA MANAGER LOGIN BUTTON LOGIC
+# ========================================================
+
+# 1. Initialize the session state to track if the view is "unlocked"
+if 'show_manager_view' not in st.session_state:
+    st.session_state.show_manager_view = False
+
+# 2. Create the button to toggle the view
+# Use 'on_click' to flip the boolean value
+if st.button("🔑 Area Manager Login"):
+    st.session_state.show_manager_view = not st.session_state.show_manager_view
+
+# 3. Only show the UI if the session state is True
+if st.session_state.show_manager_view:
+    st.markdown("---")
+    st.subheader("🔑 Area Manager Portal")
+    st.success("Authorized: You are now viewing the restricted panel.")
+    
+    # --- PUT YOUR MANAGER-SPECIFIC UI HERE ---
+    # For example, you can render the same dataframes:
+    render(daily_df, "📊 Manager View: Daily Stock")
+    render(weekly_df, "📊 Manager View: Weekly Stock")
+    
+    # You can add the "future changes" here as you develop them
+    if st.button("Close Manager Portal"):
+        st.session_state.show_manager_view = False
+        st.rerun()
+

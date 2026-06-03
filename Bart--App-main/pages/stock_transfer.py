@@ -30,20 +30,25 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names)
-    qty = st.number_input("Quantity", min_value=1, step=1)
     
-if st.button("Add to List"):
-        selected_row = next(row for row in target_list if row['Item'] == selected_item)
-        
-        # Use the exact key string: 'DATE->  UOM'
-        uom_value = selected_row.get('DATE->  UOM', 'units') 
-        
+    # --- DYNAMIC UOM LOOKUP ---
+    # Find the row for the selected item to get its specific UOM
+    selected_row = next(row for row in target_list if row['Item'] == selected_item)
+    uom_display = selected_row.get('DATE->  UOM', 'units') 
+    
+    # --- LAYOUT WITH UOM ---
+    col_input, col_uom = st.columns([3, 1])
+    qty = col_input.number_input("Quantity", min_value=1, step=1)
+    col_uom.write("###") # Vertical alignment hack
+    col_uom.write(f"**{uom_display}**")
+    
+    if st.button("Add to List"):
         st.session_state.transfer_cart.append({
             "item": selected_item, 
             "qty": qty, 
-            "uom": uom_value
+            "uom": uom_display
         })
-        st.success(f"Added {selected_item} to cart!")
+        st.success(f"Added {selected_item} ({qty} {uom_display}) to cart!")
     # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")

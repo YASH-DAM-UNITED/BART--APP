@@ -64,57 +64,37 @@ DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
-@st.dialog("⏰ Select Duty Hours")
-def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check all hours worked for **{row_name}** on **{day_name}**.")
-    st.caption("Note: Each checked box equals 1 hour of work.")
-    
-    selected_hours = []
-    
-    # AM Section
-    st.subheader("AM Blocks")
-    cols_am = st.columns(6)
-    for i in range(1, 13):
-        if cols_am[(i - 1) % 6].checkbox(f"{i} AM", key=f"am_{i}"):
-            selected_hours.append(f"{i} AM")
-            
-    # PM Section
-    st.subheader("PM Blocks")
-    cols_pm = st.columns(6)
-    for i in range(1, 13):
-        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
-            selected_hours.append(f"{i} PM")
+# =========================
+# DIALOGS
+# =========================
+@st.dialog("✅ Submission Successful")
+def success_dialog():
+    st.success("Your schedule has been successfully submitted to the Master Schedule.")
+    if st.button("Close", use_container_width=True):
+        st.rerun()
 
-    # LOGIC: The total is strictly the number of boxes checked.
-    # 5am, 6am, 7am, 8am (4 boxes) + 1pm, 2pm, 3pm, 4pm (4 boxes) = 8 hours.
-    total_worked = len(selected_hours)
-    
-    st.metric("Total Hours Worked", f"{total_worked} hrs")
-    
-    # Requirement: Mandatory minimum is now 8 hours
-    if 0 < total_worked < 8:
-        st.warning(f"⚠️ Minimum 8 hours required. Current: {total_worked}.")
-    
+@st.dialog("⏰ Set Custom Time")
+def custom_time_dialog(row_idx, row_name, day_name):
+    st.write(f"Configure shift for **{row_name}** on **{day_name}**")
+    col1, col2 = st.columns(2)
+    with col1:
+        sh = st.selectbox("Start Hour", list(range(1, 13)), index=8)
+        sap = st.selectbox("AM/PM", ["AM", "PM"], key="sap_modal")
+    with col2:
+        eh = st.selectbox("End Hour", list(range(1, 13)), index=5)
+        eap = st.selectbox("AM/PM", ["AM", "PM"], key="eap_modal", index=1)
     apply_all = st.checkbox("Apply to all working days this week")
-    
-    if st.button("Confirm Selection", type="primary"):
-        if total_worked < 8:
-            st.error("❌ Submission blocked: Minimum 8 hours required.")
+    if st.button("Apply Shift", use_container_width=True):
+        value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
+        if value is None:
+            st.error("❌ Minimum 9 hours required")
         else:
-            times_str = ", ".join(selected_hours)
-            # OT is calculated based on hours exceeding 8
-            ot = max(0, total_worked - 8)
-            value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
-            
             if apply_all:
                 for day in DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
             else:
                 st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
-            
-            st.session_state.show_dialog = False
             st.rerun()
-
 
 @st.dialog("🚫 Submission Blocked")
 def duplicate_submission_dialog():

@@ -202,8 +202,8 @@ else:
 
     def make_grid(df, key):
         gb = GridOptionsBuilder.from_dataframe(df)
-        gb.configure_column("SKU", pinned="left", minWidth=20)
-        gb.configure_column("UOM", pinned="left", minWidth=20)
+        gb.configure_column("SKU", pinned="left", minWidth=40)
+        gb.configure_column("UOM", pinned="left", minWidth=40)
         gb.configure_default_column(resizable=True, sortable=True, filter=True)
         gb.configure_column("Item Name", pinned="left", lockPinned=True, minWidth=250)
         for b in branch_names: 

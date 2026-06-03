@@ -1,6 +1,7 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from streamlit_js_eval import streamlit_js_eval
 
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
@@ -66,31 +67,37 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
     if st.button("Confirm and Send All", key="confirm_btn"):
-        try:
-            creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
-            sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-            
-            item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
-            combined_items_str = " | ".join(item_details)
-            total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
-            
-            row_data = [
-                st.session_state.get("selected_branch", "Unknown"), 
-                destination, 
-                combined_items_str, 
-                total_qty, 
-                reason
-            ]
-            
-            sheet.append_row(row_data)
-            st.session_state.transfer_cart = []
-            success_dialog(f"Successfully transferred items to {destination}!")
-            
-        except Exception as e:
-            st.error(f"Error saving to Google Sheets: {e}")
+        # Capture local time from user's device
+        local_time = streamlit_js_eval(js_expressions='new Date().toLocaleString()', key='get_time', want_return=True)
+        
+        if local_time:
+            try:
+                creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+                scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+                client = gspread.authorize(creds)
+                sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+                
+                item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
+                combined_items_str = " | ".join(item_details)
+                total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
+                
+                # New Column 1: Local Timestamp from device
+                row_data = [
+                    local_time, 
+                    st.session_state.get("selected_branch", "Unknown"), 
+                    destination, 
+                    combined_items_str, 
+                    total_qty, 
+                    reason
+                ]
+                
+                sheet.append_row(row_data)
+                st.session_state.transfer_cart = []
+                success_dialog(f"Successfully transferred items to {destination} at {local_time}!")
+                
+            except Exception as e:
+                st.error(f"Error saving to Google Sheets: {e}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

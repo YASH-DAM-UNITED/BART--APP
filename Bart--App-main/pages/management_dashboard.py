@@ -218,8 +218,8 @@ else:
         if "Total" in df.columns:
             
             gb.configure_column("Total", pinned="right", minWidth=100)
-            gb.configure_column("SKU", pinned="left", minWidth=10)
-            gb.configure_column("UOM", pinned="left", minWidth=10)
+            gb.configure_column("SKU", pinned="left", minWidth=20)
+            gb.configure_column("UOM", pinned="left", minWidth=20)
         AgGrid(df, gridOptions=gb.build(), theme="streamlit", key=key, allow_unsafe_jscode=True)
 
     # ========================================================

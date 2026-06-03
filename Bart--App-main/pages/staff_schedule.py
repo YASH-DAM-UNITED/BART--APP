@@ -65,30 +65,30 @@ SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 
-@st.dialog("⏰ Select Duty Hours (AM/PM)")
+@st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check the hours worked for **{row_name}** on **{day_name}**")
+    st.write(f"Check the specific hours worked for **{row_name}** on **{day_name}**")
     
-    selected_hours = []
+    selected_hours_list = []
     
-    # AM Hours: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    # --- AM Section ---
     st.subheader("AM Hours")
     cols_am = st.columns(6)
     for i in range(1, 13):
         with cols_am[(i - 1) % 6]:
             if st.checkbox(f"{i} AM", key=f"am_{i}"):
-                selected_hours.append(i)
+                selected_hours_list.append(f"{i} AM")
                 
-    # PM Hours: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    # --- PM Section ---
     st.subheader("PM Hours")
     cols_pm = st.columns(6)
     for i in range(1, 13):
         with cols_pm[(i - 1) % 6]:
             if st.checkbox(f"{i} PM", key=f"pm_{i}"):
-                selected_hours.append(i)
+                selected_hours_list.append(f"{i} PM")
     
-    total_worked = len(selected_hours)
-    st.info(f"Total duration selected: **{total_worked} hours**")
+    total_worked = len(selected_hours_list)
+    st.info(f"Total hours selected: **{total_worked} hours**")
     
     if 0 < total_worked < 9:
         st.warning(f"⚠️ Warning: {total_worked} hours is below the 9-hour minimum.")
@@ -99,18 +99,20 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if total_worked < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")
         else:
-            value = f"{total_worked} hrs"
+            # Build the string: "9 AM, 10 AM, 1 PM (10 hrs, OT 1h)"
+            times_str = ", ".join(selected_hours_list)
             if total_worked > 9:
                 ot = total_worked - 9
-                value = f"{total_worked} hrs (OT {ot}h)"
-            
+                value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
+            else:
+                value = f"{times_str} ({total_worked} hrs)"
+                
             if apply_all:
                 for day in DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
             else:
                 st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
             st.rerun()
-
 
 
 

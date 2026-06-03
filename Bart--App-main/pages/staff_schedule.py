@@ -64,14 +64,17 @@ DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
-
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check the specific hours worked for **{row_name}** on **{day_name}**")
+    st.write(f"Check the **start** and **end** hours for **{row_name}** on **{day_name}**")
     
+    # We will use a session state list to track selections
+    if "temp_selected" not in st.session_state:
+        st.session_state.temp_selected = []
+
+    # UI for checkboxes
     selected_hours_list = []
     
-    # --- AM Section ---
     st.subheader("AM Hours")
     cols_am = st.columns(6)
     for i in range(1, 13):
@@ -79,7 +82,6 @@ def custom_time_dialog(row_idx, row_name, day_name):
             if st.checkbox(f"{i} AM", key=f"am_{i}"):
                 selected_hours_list.append(f"{i} AM")
                 
-    # --- PM Section ---
     st.subheader("PM Hours")
     cols_pm = st.columns(6)
     for i in range(1, 13):
@@ -87,11 +89,13 @@ def custom_time_dialog(row_idx, row_name, day_name):
             if st.checkbox(f"{i} PM", key=f"pm_{i}"):
                 selected_hours_list.append(f"{i} PM")
     
+    # MATH FIX: Total hours = count of selected boxes
     total_worked = len(selected_hours_list)
-    st.info(f"Total hours selected: **{total_worked} hours**")
+    
+    st.info(f"Total hours calculated: **{total_worked} hours**")
     
     if 0 < total_worked < 9:
-        st.warning(f"⚠️ Warning: {total_worked} hours is below the 9-hour minimum.")
+        st.warning(f"⚠️ Warning: Total is {total_worked} hours. Minimum 9 hours required.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
@@ -99,8 +103,10 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if total_worked < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")
         else:
-            # Build the string: "9 AM, 10 AM, 1 PM (10 hrs, OT 1h)"
+            # String representation
             times_str = ", ".join(selected_hours_list)
+            
+            # OT Logic: Only hours above 9 count as OT
             if total_worked > 9:
                 ot = total_worked - 9
                 value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
@@ -112,8 +118,9 @@ def custom_time_dialog(row_idx, row_name, day_name):
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
             else:
                 st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+            
+            st.session_state.show_dialog = False
             st.rerun()
-
 
 
 

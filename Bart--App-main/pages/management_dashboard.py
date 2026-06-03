@@ -9,6 +9,17 @@ import hashlib
 import io
 import plotly.express as px
 
+
+
+
+# 1. Initialize session state
+if 'show_manager_view' not in st.session_state:
+    st.session_state.show_manager_view = False
+
+# 2. Define the toggle function
+def toggle_view():
+    st.session_state.show_manager_view = not st.session_state.show_manager_view
+
 # ========================================================
 # PAGE CONFIG
 # ========================================================
@@ -57,9 +68,6 @@ scope = [
 
 
 
-
-def toggle_view():
-    st.session_state.show_manager_view = not st.session_state.show_manager_view
 @st.cache_resource
 def get_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(
@@ -270,8 +278,9 @@ if col1.button(" 🔄 Refresh Data"):
 if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
-if col3.button("🔑 Area Manager Login"):
-    toggle_view()
+# Use on_click=toggle_view so it safely flips the state
+if col3.button("🔑 Area Manager Login", on_click=toggle_view):
+    pass
 
 
 if col4.button("⬅ LOGOUT "):
@@ -766,47 +775,31 @@ with col2:
     )
 
 # ========================================================
-# AREA MANAGER TOGGLE LOGIC
+# VIEW CONTROLLER
 # ========================================================
 
-# 1. Initialize the state
-if 'show_manager_view' not in st.session_state:
-    st.session_state.show_manager_view = False
-
-# 2. Function to toggle view
-
-
-# 4. CONDITIONAL RENDERING: 
-# If the manager view is ON, we show ONLY the manager UI.
-# If the manager view is OFF, we show the standard Main Panel.
-
 if st.session_state.show_manager_view:
-    # --- AREA MANAGER VIEW (Everything else is hidden because it's not in this block) ---
-    st.subheader("🔑 Area Manager Portal")
+    # --- MANAGER VIEW (This is the ONLY thing visible when logged in) ---
+    st.title("🔑 Area Manager Portal")
     
-    if st.button("⬅ Back to Main Panel"):
-        toggle_view()
+    # Back button to return to Normal Page
+    if st.button("⬅ Return to Main Dashboard", on_click=toggle_view):
         st.rerun()
         
     st.markdown("---")
-    # Add your manager-specific dataframes here
+    # MANAGER SPECIFIC UI HERE
     render(daily_df, "📊 Manager View: Daily Stock")
     render(weekly_df, "📊 Manager View: Weekly Stock")
-    
-    # You can now add your "future changes" here safely
-    
+
 else:
-    # --- STANDARD VIEW (The default interface) ---
-    # Put all your existing code (Search, Categories, Tables) inside this 'else' block
+    # --- NORMAL PAGE (Everything else is hidden unless this is active) ---
     
-    # Global Inventory Search
-    st.subheader("🔍 Global Inventory Search")
-    # ... (Your search code)
+    # Put all your existing UI here:
+    # 1. Global Search
+    # 2. Category View
+    # 3. Main Tables
+    # 4. Export Section
     
-    # Category View
-    st.subheader("📊 Category Wise Stock Overview")
-    # ... (Your category code)
-    
-    # Main Tables
+    # For example:
     render(daily_df, "📦 Daily Items Stock")
     render(weekly_df, "📦 Weekly Items Stock")

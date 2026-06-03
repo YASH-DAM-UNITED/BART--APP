@@ -12,9 +12,7 @@ import plotly.express as px
 
 
 
-# 1. Initialize session state
-if 'show_manager_view' not in st.session_state:
-    st.session_state.show_manager_view = False
+
 
 # 2. Define the toggle function
 def toggle_view():

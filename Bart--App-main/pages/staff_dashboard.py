@@ -199,7 +199,7 @@ if st.session_state.selected_branch == "-- Select Branch --":
 else:
     st.success(f"Selected Branch: {st.session_state.selected_branch}")
 
-    if st.button("🔄 REFRESH OR CHANGE BRANCH"):
+    if st.button("🔄 Logout "):
         st.session_state.selected_branch = "-- Select Branch --"
         st.session_state.authenticated = False
         st.session_state.auth_branch = None

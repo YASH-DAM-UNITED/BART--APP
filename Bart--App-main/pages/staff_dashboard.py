@@ -313,7 +313,7 @@ if st.session_state.get("show_stock_view", False):
             
             cleaned, total = [], 0
             for i, v in enumerate(values):
-                if i < 3:
+                if i < 2:
                     cleaned.append(v)
                     continue
                 try:

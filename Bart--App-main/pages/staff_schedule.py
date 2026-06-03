@@ -94,7 +94,7 @@ def break_duty_dialog(row_idx, row_name, day_name):
     
     if st.button("Apply Break Duty", use_container_width=True):
         # Result: D1: 5AM-9AM | D2: 1PM-5PM
-        value = f"D1: {d1s}-{d1e} | D2: {d2s}-{d2e}"
+        value = f"{d1s}-{d1e}|{d2s}-{d2e}"
         st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
         st.rerun()
 

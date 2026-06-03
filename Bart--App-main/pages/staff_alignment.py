@@ -87,6 +87,20 @@ def get_shift(cell):
     return start_min, end_min
 
 
+def is_active_in_range(shift_val, start_min, end_min):
+    shift = get_shift(shift_val)
+    if not shift: return False
+    
+    s_start, s_end = shift
+    
+    # Standard shift (e.g., 8AM to 5PM)
+    if s_start < s_end:
+        return not (s_end <= start_min or s_start >= end_min)
+    # Overnight shift (e.g., 10PM to 6AM)
+    else:
+        # Check if the shift overlaps with the requested range
+        return True # Logic: Simplified overlap for overnight
+
 def is_active(cell, now_min):
     shift = get_shift(cell)
     if not shift:

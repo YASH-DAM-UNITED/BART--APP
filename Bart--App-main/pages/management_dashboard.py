@@ -620,6 +620,11 @@ if st.session_state.get("show_manager", False):
     mapping_df = load_manager_mapping()
     unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
+
+
+    if st.button("⬅ Back to Main Dashboard"):
+        st.session_state.show_manager = False
+        st.rerun()
     
     if selected_manager != "Select...":
         # 1. Get the list of Branch Names assigned to this manager
@@ -648,9 +653,6 @@ if st.session_state.get("show_manager", False):
             st.write("### 📦 Manager Weekly Items")
             make_grid(m_weekly_df, "mgr_weekly_grid")
 
-    if st.button("⬅ Back to Main Dashboard"):
-        st.session_state.show_manager = False
-        st.rerun()
     
     st.stop()
 

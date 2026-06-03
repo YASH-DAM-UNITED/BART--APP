@@ -766,8 +766,6 @@ if 'show_manager_view' not in st.session_state:
 
 # 2. Create the button to toggle the view
 # Use 'on_click' to flip the boolean value
-if st.button("🔑 Area Manager Login"):
-    st.session_state.show_manager_view = not st.session_state.show_manager_view
 
 # 3. Only show the UI if the session state is True
 if st.session_state.show_manager_view:

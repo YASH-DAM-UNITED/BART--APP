@@ -65,29 +65,36 @@ SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 
-@st.dialog("⏰ Select Duty Hours")
+@st.dialog("⏰ Select Duty Hours (AM/PM)")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check the specific hours worked for **{row_name}** on **{day_name}**")
+    st.write(f"Check the hours worked for **{row_name}** on **{day_name}**")
     
-    # 1. Create the checkbox grid
     selected_hours = []
-    cols = st.columns(6) # 6 columns to fit 24 checkboxes neatly
-    for i in range(1, 25):
-        with cols[(i - 1) % 6]:
-            if st.checkbox(f"{i}", key=f"chk_{i}"):
+    
+    # AM Hours: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    st.subheader("AM Hours")
+    cols_am = st.columns(6)
+    for i in range(1, 13):
+        with cols_am[(i - 1) % 6]:
+            if st.checkbox(f"{i} AM", key=f"am_{i}"):
+                selected_hours.append(i)
+                
+    # PM Hours: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+    st.subheader("PM Hours")
+    cols_pm = st.columns(6)
+    for i in range(1, 13):
+        with cols_pm[(i - 1) % 6]:
+            if st.checkbox(f"{i} PM", key=f"pm_{i}"):
                 selected_hours.append(i)
     
-    # 2. Calculate Total
     total_worked = len(selected_hours)
-    st.info(f"Total hours selected: **{total_worked} hours**")
+    st.info(f"Total duration selected: **{total_worked} hours**")
     
-    # 3. Validation
     if 0 < total_worked < 9:
         st.warning(f"⚠️ Warning: {total_worked} hours is below the 9-hour minimum.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
-    # 4. Save Logic
     if st.button("Confirm Selection", type="primary"):
         if total_worked < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")

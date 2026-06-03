@@ -245,16 +245,17 @@ if not st.session_state.cached_df.empty:
 # Refresh/Sync Button
 if st.button("🔄 Refresh Grid"):
     st.rerun()
-# Clear Grid Button
-    if st.button("🧹 Clear All Shifts"):
-        # We only want to clear the shifts for the CURRENT branch
-        # We identify the indices currently in the display
-        for i in range(len(df_display)):
-            for d in DAYS:
-                key = f"{i}_{d}"
-                if key in st.session_state.shift_buffer:
-                    del st.session_state.shift_buffer[key]
-        st.rerun()
+if st.button("🧹 Clear All Shifts"):
+    for i in range(len(df_display)):
+        for d in DAYS:
+            key = f"{i}_{d}"
+            if key in st.session_state.shift_buffer:
+                del st.session_state.shift_buffer[key]
+    st.rerun()
+
+
+
+
 if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)

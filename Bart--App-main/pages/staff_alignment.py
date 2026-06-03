@@ -148,6 +148,7 @@ with col_btn:
     if st.button("🚀 Calculate Status", use_container_width=True):
         # Only NOW do we update the official calculation variable
         st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
+        st.rerun()
         
 # Use this for all your calculations downstream
 sim_min = st.session_state.sim_min

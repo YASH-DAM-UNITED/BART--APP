@@ -63,39 +63,36 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
-
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check the **start** and **end** hours for **{row_name}** on **{day_name}**")
+    st.write(f"Select the **1-hour blocks** worked for **{row_name}** on **{day_name}**")
+    st.caption("Example: To work 5 AM to 5 PM (12 hours), check 12 boxes (5 AM through 4 PM).")
     
-    # We will use a session state list to track selections
-    if "temp_selected" not in st.session_state:
-        st.session_state.temp_selected = []
+    # Use a container to reset selections if needed
+    if st.button("Reset All Selections"):
+        st.session_state.temp_selections = []
+        st.rerun()
 
-    # UI for checkboxes
     selected_hours_list = []
     
-    st.subheader("AM Hours")
+    st.subheader("AM Blocks")
     cols_am = st.columns(6)
     for i in range(1, 13):
-        with cols_am[(i - 1) % 6]:
-            if st.checkbox(f"{i} AM", key=f"am_{i}"):
-                selected_hours_list.append(f"{i} AM")
+        # Using a key based on the hour and period ensures unique selection
+        if cols_am[(i - 1) % 6].checkbox(f"{i} AM", key=f"am_{i}"):
+            selected_hours_list.append(f"{i} AM")
                 
-    st.subheader("PM Hours")
+    st.subheader("PM Blocks")
     cols_pm = st.columns(6)
     for i in range(1, 13):
-        with cols_pm[(i - 1) % 6]:
-            if st.checkbox(f"{i} PM", key=f"pm_{i}"):
-                selected_hours_list.append(f"{i} PM")
+        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
+            selected_hours_list.append(f"{i} PM")
     
-    # MATH FIX: Total hours = count of selected boxes
     total_worked = len(selected_hours_list)
-    
-    st.info(f"Total hours calculated: **{total_worked} hours**")
+    st.metric("Total Hours Calculated", f"{total_worked} hrs")
     
     if 0 < total_worked < 9:
-        st.warning(f"⚠️ Warning: Total is {total_worked} hours. Minimum 9 hours required.")
+        st.warning(f"⚠️ Minimum 9 hours required. Currently selected: {total_worked}.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
@@ -103,16 +100,12 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if total_worked < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")
         else:
-            # String representation
+            # Logic: If they worked 5 AM to 5 PM, they select 12 boxes. 
+            # The code now strictly counts exactly what is checked.
             times_str = ", ".join(selected_hours_list)
+            ot = max(0, total_worked - 9)
+            value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
             
-            # OT Logic: Only hours above 9 count as OT
-            if total_worked > 9:
-                ot = total_worked - 9
-                value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
-            else:
-                value = f"{times_str} ({total_worked} hrs)"
-                
             if apply_all:
                 for day in DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value

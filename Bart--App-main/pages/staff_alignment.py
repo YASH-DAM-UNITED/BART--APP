@@ -4,7 +4,9 @@ import gspread
 import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date
+from datetime import time
 
+import re
 import pytz
 
 
@@ -203,40 +205,48 @@ with col3:
         st.switch_page("pages/management_dashboard.py")
 
 
-from datetime import time
+
 
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 
-# Initialize session state for the range if it doesn't exist
-if "start_min" not in st.session_state:
-    st.session_state.start_min = 0
-if "end_min" not in st.session_state:
-    st.session_state.end_min = 1439
+# Initialize session state if missing
+if "start_time_str" not in st.session_state:
+    st.session_state.start_time_str = "00:00"
+if "end_time_str" not in st.session_state:
+    st.session_state.end_time_str = "23:59"
 
 col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 
 with col1:
-    # Set default to 00:00
-    range_start = st.time_input("From", value=time(0, 0), key="start_time_key")
+    # Allows user to type freely
+    start_input = st.text_input("From (HH:MM)", value=st.session_state.start_time_str)
 with col2:
-    # Set default to 00:00 or 23:59 as preferred
-    range_end = st.time_input("To", value=time(23, 59), key="end_time_key")
+    # Allows user to type freely
+    end_input = st.text_input("To (HH:MM)", value=st.session_state.end_time_str)
 
 with col3:
     if st.button("🚀 Calculate Range", use_container_width=True):
-        st.session_state.start_min = range_start.hour * 60 + range_start.minute
-        st.session_state.end_min = range_end.hour * 60 + range_end.minute
-        st.rerun()
+        # Regex to validate HH:MM format
+        time_pattern = r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$"
+        
+        if re.match(time_pattern, start_input) and re.match(time_pattern, end_input):
+            st.session_state.start_time_str = start_input
+            st.session_state.end_time_str = end_input
+            
+            # Convert to minutes for logic
+            h1, m1 = map(int, start_input.split(":"))
+            h2, m2 = map(int, end_input.split(":"))
+            
+            st.session_state.start_min = h1 * 60 + m1
+            st.session_state.end_min = h2 * 60 + m2
+            st.rerun()
+        else:
+            st.error("Invalid format! Use HH:MM (e.g., 08:30)")
 
-# --- DATA PROCESSING ---
-df_work = df_full.copy()
-df_work["Shift"] = df_work[shift_col]
-branches = sorted(df_work["Branch"].dropna().unique().tolist())
-
-# Use the session state values
-start_m = st.session_state.start_min
-end_m = st.session_state.end_min
+# Ensure logic has valid default mins
+start_m = st.session_state.get("start_min", 0)
+end_m = st.session_state.get("end_min", 1439)
 
 # Calculate Universal Stats based on the custom range
 u_act, u_inact = compute(df_work, start_m, end_m)

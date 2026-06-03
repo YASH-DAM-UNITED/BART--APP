@@ -31,7 +31,6 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names, key="item_sel")
     
-    # Retrieve UOM
     selected_row = next(row for row in target_list if row['Item'] == selected_item)
     uom_display = selected_row.get('DATE->  UOM', 'units') 
     
@@ -62,24 +61,26 @@ if st.session_state.transfer_cart:
     
     if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # Capture Jeddah time (UTC+3)
+            # 1. Capture Jeddah time (UTC+3)
             jeddah_time = datetime.now() + timedelta(hours=3)
             current_timestamp = jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             
+            # 2. Connect to Google Sheets
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
             sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
             
-            # Prepare formatted strings
-            item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
-            combined_items_str = " | ".join(item_details)
+            # 3. Format strings for beautiful Google Sheet layout
+            # Using \n creates vertical stacking when "Wrap Text" is enabled in Sheet
+            item_details = [f"• {entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
+            combined_items_str = "\n".join(item_details)
             
             quantities_list = [str(entry['qty']) for entry in st.session_state.transfer_cart]
-            combined_qtys_str = " | ".join(quantities_list)
+            combined_qtys_str = "\n".join(quantities_list)
             
-            # Prepare row: Timestamp as the last column
+            # 4. Prepare row (Timestamp last)
             row_data = [
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 

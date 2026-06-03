@@ -1,7 +1,7 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from streamlit_js_eval import streamlit_js_eval
+from datetime import datetime
 
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
@@ -31,6 +31,7 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names, key="item_sel")
     
+    # Retrieve UOM
     selected_row = next(row for row in target_list if row['Item'] == selected_item)
     uom_display = selected_row.get('DATE->  UOM', 'units') 
     
@@ -60,14 +61,10 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
     if st.button("Confirm and Send All", key="confirm_btn"):
-        # Attempt to capture local device time
-        local_time = streamlit_js_eval(js_expressions='new Date().toLocaleString()', key='get_time', want_return=True)
-        
-        if not local_time:
-            st.warning("⏳ Syncing with device... Please click 'Confirm and Send All' again to finish.")
-            st.stop()
-        
         try:
+            # Capture standard system time
+            current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -78,14 +75,14 @@ if st.session_state.transfer_cart:
             combined_items_str = " | ".join(item_details)
             total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
             
-            # Prepare row: Everything is cast to string to prevent gspread formatting errors
+            # Prepare row: Timestamp is now at the END
             row_data = [
-                str(local_time), 
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 
                 str(combined_items_str), 
                 str(total_qty), 
-                str(reason)
+                str(reason),
+                str(current_timestamp) # Timestamp added to the last column
             ]
             
             sheet.append_row(row_data)

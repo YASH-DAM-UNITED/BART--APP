@@ -9,6 +9,17 @@ import hashlib
 import io
 import plotly.express as px
 
+
+
+
+# Initialize the state if it doesn't exist
+if "show_manager" not in st.session_state:
+    st.session_state.show_manager = False
+
+# The "Toggle" function to change the state
+def toggle_manager():
+    st.session_state.show_manager = not st.session_state.show_manager
+
 # ========================================================
 # PAGE CONFIG
 # ========================================================
@@ -249,10 +260,8 @@ def load_all_data(branches):
     ]
 
 # ========================================================
-# REFRESH
+# REFRESH / NAVIGATION
 # ========================================================
-
-# Update to 4 columns to accommodate the new button
 col1, col2, col3, col4 = st.columns(4)
 
 if col1.button(" 🔄 Refresh Data"):
@@ -264,14 +273,27 @@ if col1.button(" 🔄 Refresh Data"):
 if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
-# Add the new button here
+# This button triggers the toggle and forces a rerun
 if col3.button("🔑 Area Manager Login"):
-    st.switch_page("pages/area_manager.py") # Ensure this file path exists in your 'pages/' folder
+    toggle_manager()
+    st.rerun()
 
-# Move Logout to the 4th column
 if col4.button("⬅ LOGOUT "):
-    st.switch_page("app.py")       
+    st.switch_page("app.py")
 
+# ========================================================
+# THE "EXIT" GATE
+# ========================================================
+if st.session_state.show_manager:
+    st.divider()
+    st.subheader("🔑 Area Manager Portal")
+    st.write("This is your new blank UI. You can add any components here.")
+    # Add whatever you want for the manager here
+    st.stop() # <--- THIS IS THE MAGIC LINE
+# ========================================================
+# Your 1000 lines of code start here...
+# No indentation changes needed!
+# ========================================================
         
 # ========================================================
 # DATE

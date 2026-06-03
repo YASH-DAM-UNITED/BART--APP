@@ -49,3 +49,7 @@ gspread
 oauth2client
 pytz>=2024.1
 fpdf2
+streamlit
+gspread
+oauth2client
+streamlit-js-eval

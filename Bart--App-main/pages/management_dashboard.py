@@ -218,6 +218,8 @@ else:
         if "Total" in df.columns:
             
             gb.configure_column("Total", pinned="right", minWidth=100)
+            gb.configure_column("SKU", pinned="left", minWidth=100)
+            gb.configure_column("UMO", pinned="left", minWidth=100)
         AgGrid(df, gridOptions=gb.build(), theme="streamlit", key=key, allow_unsafe_jscode=True)
 
     # ========================================================

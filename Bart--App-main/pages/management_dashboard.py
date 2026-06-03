@@ -299,55 +299,47 @@ if col4.button("⬅ LOGOUT "):
 # THE "EXIT" GATE
 # ========================================================
 # ========================================================
-# AREA MANAGER PORTAL BLOCK
+# AREA MANAGER PORTAL (USING PRE-FETCHED DATA)
 # ========================================================
 if st.session_state.get("show_manager", False):
     st.divider()
     st.subheader("🔑 Area Manager Portal")
     
-    # 1. Load the manager mapping sheet
-    try:
-        mapping_df = load_manager_mapping()
-        unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+    mapping_df = load_manager_mapping()
+    unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+    selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
+    
+    if selected_manager != "Select...":
+        # 1. Get the list of Branch Names assigned to this manager
+        # (This uses the mapping sheet we already loaded)
+        assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
         
-        # 2. Manager Selector
-        selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
+        # 2. Filter the ALREADY LOADED 'all_data' variable
+        # 'all_data' is a list of tuples: (BranchName, raw_data)
+        manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
         
-        if selected_manager != "Select...":
-            # 3. Get filtered branches based on selection
-            m_filtered_branches = get_filtered_branches(selected_manager, branches, mapping_df)
-            m_branch_names = [b["BranchName"] for b in m_filtered_branches]
+        if not manager_all_data:
+            st.warning(f"No data found for branches managed by {selected_manager}.")
+        else:
+            st.info(f"Viewing {len(manager_all_data)} branches managed by: {selected_manager}")
             
-            if not m_filtered_branches:
-                st.warning(f"No branches found for {selected_manager}.")
-            else:
-                st.info(f"Viewing {len(m_filtered_branches)} branches managed by: {selected_manager}")
-                
-                # 4. Load & Process specific data for the manager
-                # Uses your existing helper functions to keep logic consistent
-                with st.spinner("Fetching data for manager's branches..."):
-                    m_all_data = load_all_data(m_filtered_branches)
-                    m_daily, m_weekly = process_stock(m_all_data, selected_date_str, m_branch_names)
-                    
-                    m_daily_df = build_df(m_daily, m_branch_names)
-                    m_weekly_df = build_df(m_weekly, m_branch_names)
-                
-                # 5. Display Grids
-                st.write("### 📦 Manager Daily Items")
-                make_grid(m_daily_df, "mgr_daily_grid")
-                
-                st.write("### 📦 Manager Weekly Items")
-                make_grid(m_weekly_df, "mgr_weekly_grid")
-                
-    except Exception as e:
-        st.error(f"Error loading manager data: {e}")
+            # 3. Process the filtered data (Instant, no re-fetch)
+            m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
+            
+            m_daily_df = build_df(m_daily, assigned_branch_names)
+            m_weekly_df = build_df(m_weekly, assigned_branch_names)
+            
+            # 4. Display
+            st.write("### 📦 Manager Daily Items")
+            make_grid(m_daily_df, "mgr_daily_grid")
+            
+            st.write("### 📦 Manager Weekly Items")
+            make_grid(m_weekly_df, "mgr_weekly_grid")
 
-    # Back to Dashboard Button
     if st.button("⬅ Back to Main Dashboard"):
         st.session_state.show_manager = False
         st.rerun()
     
-    # CRITICAL: This stops the main code from running
     st.stop()
 # ========================================================
 # Your 1000 lines of code start here...

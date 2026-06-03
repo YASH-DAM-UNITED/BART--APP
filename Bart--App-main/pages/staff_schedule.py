@@ -61,7 +61,7 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 # CONFIG
 # =========================
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
+SHIFT_OPTIONS = ["➕ Straight Duty", " ➕ Break Duty", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
 # =========================
@@ -71,6 +71,31 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 def success_dialog():
     st.success("Your schedule has been successfully submitted to the Master Schedule.")
     if st.button("Close", use_container_width=True):
+        st.rerun()
+
+
+
+
+@st.dialog(" Set Break Duty")
+def break_duty_dialog(row_idx, row_name, day_name):
+    st.write(f"Configure Break Duty for **{row_name}** on **{day_name}**")
+    
+    st.subheader("Duty 1")
+    col1, col2 = st.columns(2)
+    with col1:
+        d1h = st.selectbox("Duty 1 Hour", list(range(1, 13)), index=8, key="d1h")
+        d1ap = st.selectbox("Duty 1 AM/PM", ["AM", "PM"], key="d1ap")
+    
+    st.subheader("Duty 2")
+    col3, col4 = st.columns(2)
+    with col3:
+        d2h = st.selectbox("Duty 2 Hour", list(range(1, 13)), index=1, key="d2h")
+        d2ap = st.selectbox("Duty 2 AM/PM", ["AM", "PM"], key="d2ap", index=1)
+    
+    if st.button("Apply Break Duty", use_container_width=True):
+        # Format the string as you need it for your Sheet
+        value = f"Break Duty: {d1h}{d1ap} & {d2h}{d2ap}"
+        st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
         st.rerun()
 
 @st.dialog("⏰ Set Custom Time")
@@ -213,7 +238,7 @@ if edit_mode:
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
     
     # 3. Logic to handle state
-    current_names = set(edited_df["Name"].dropna().tolist())
+current_names = set(edited_df["Name"].dropna().tolist())
     for name in df_display["Name"].tolist():
         if name not in current_names: st.session_state.deleted_staff.add(name)
 
@@ -223,8 +248,11 @@ if edit_mode:
             if value == "📴 Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
                 st.rerun()
-            if value == "➕ Custom Time":
+            elif value == "➕ Custom Time":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+            elif value == "☕ Break Duty":
+                break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+
 
     # 4. SUBMIT BUTTON (Strictly inside Edit Mode)
     if st.button("✅ Submit"):

@@ -153,8 +153,21 @@ def load_data(force_reload=False):
     return st.session_state.cached_df
 
 def parse_hour(val):
-    hour, ap = val.split()
+    # If there's a space, split normally. 
+    # If not, use regex to separate numbers from letters.
+    if " " in val:
+        hour, ap = val.split()
+    else:
+        # Matches digits followed by non-digits
+        match = re.match(r"(\d+)([a-zA-Z]+)", val)
+        if match:
+            hour, ap = match.groups()
+        else:
+            return 0 # Fallback
+            
     hour = int(hour)
+    ap = ap.upper() # Ensure case consistency
+    
     if ap == "PM" and hour != 12: hour += 12
     if ap == "AM" and hour == 12: hour = 0
     return hour

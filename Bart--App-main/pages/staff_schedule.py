@@ -92,10 +92,19 @@ def break_duty_dialog(row_idx, row_name, day_name):
         d2s = st.selectbox("D2 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=8, key=f"d2s_{row_idx}_{day_name}")
         d2e = st.selectbox("D2 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=11, key=f"d2e_{row_idx}_{day_name}")
     
+    # ADDED CHECKBOX
+    apply_all = st.checkbox("Apply to all working days this week")
+    
     if st.button("Apply Break Duty", use_container_width=True):
-        # Result: D1: 5AM-9AM | D2: 1PM-5PM
         value = f"{d1s}-{d1e}|{d2s}-{d2e}"
-        st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+        
+        # LOGIC TO APPLY TO ALL OR SINGLE DAY
+        if apply_all:
+            for day in DAYS:
+                st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
+        else:
+            st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+            
         st.rerun()
 
 @st.dialog("⏰ Set Custom Time")

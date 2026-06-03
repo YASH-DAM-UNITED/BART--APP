@@ -64,49 +64,13 @@ DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Satur
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
 
-# =========================
-# DIALOGS
-# =========================
-@st.dialog("✅ Submission Successful")
-def success_dialog():
-    st.success("Your schedule has been successfully submitted to the Master Schedule.")
-    if st.button("Close", use_container_width=True):
-        st.rerun()
 
-@st.dialog("⏰ Select Duty Hours")
-def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Select total duty hours for **{row_name}** on **{day_name}**")
-    
-    # Allows selection of exactly one duty duration from 1 to 24
-    duty_hours = st.radio(
-        "Choose shift duration:",
-        options=range(1, 25),
-        index=8, # Defaults to 9
-        horizontal=False
-    )
-    
-    st.info(f"Selected: **{duty_hours} hours**")
-    
-    if duty_hours < 9:
-        st.warning(f"⚠️ Warning: {duty_hours} hours is below the 9-hour minimum requirement.")
-    
-    apply_all = st.checkbox("Apply to all working days this week")
-    
-    if st.button("Confirm Selection", type="primary"):
-        if duty_hours < 9:
-            st.error("❌ Submission blocked: Minimum 9 hours required.")
-        else:
-            value = f"{duty_hours} hrs"
-            if duty_hours > 9:
-                ot = duty_hours - 9
-                value = f"{duty_hours} hrs (OT {ot}h)"
-            
-            if apply_all:
-                for day in DAYS:
-                    st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
-            else:
-                st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
-            st.rerun()
+
+
+
+
+
+
 @st.dialog("🚫 Submission Blocked")
 def duplicate_submission_dialog():
     st.error("This week's schedule has already been submitted for this branch.")

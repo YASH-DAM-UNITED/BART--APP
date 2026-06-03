@@ -75,32 +75,36 @@ def success_dialog():
 
 @st.dialog("⏰ Select Shift Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Select the shift hours for **{row_name}** on **{day_name}**")
+    st.write(f"Check the boxes to build the shift for **{row_name}** on **{day_name}**")
     
-    # Using a radio button acts like a single-select checkbox list
-    selected_hours = st.radio(
-        "Choose total hours:",
-        options=range(1, 25),
-        horizontal=False,
-        index=8 # Defaults to 9
-    )
+    # Create checkboxes for 1 to 24 hours
+    # We use a container to keep it organized
+    selected_hours_list = []
     
-    st.info(f"You have selected: **{selected_hours} hours**")
+    # Display in 4 columns to keep it tidy
+    cols = st.columns(4)
+    for i in range(1, 25):
+        with cols[(i - 1) % 4]:
+            if st.checkbox(f"{i} hr", key=f"chk_{i}"):
+                selected_hours_list.append(i)
     
-    if selected_hours < 9:
-        st.warning(f"⚠️ Warning: {selected_hours} hours is below the 9-hour minimum requirement.")
+    total_hours = sum(selected_hours_list)
+    st.info(f"Total Selected: **{total_hours} hours**")
+    
+    if total_hours > 0 and total_hours < 9:
+        st.warning(f"⚠️ Warning: Total is {total_hours} hours. Minimum 9 hours required.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
     if st.button("Confirm Selection", type="primary"):
-        if selected_hours < 9:
+        if total_hours < 9:
             st.error("❌ Submission blocked: Minimum 9 hours required.")
         else:
-            value = f"{selected_hours} hrs"
-            if selected_hours > 9:
-                ot = selected_hours - 9
-                value = f"{selected_hours} hrs (OT {ot}h)"
-                
+            value = f"{total_hours} hrs"
+            if total_hours > 9:
+                ot = total_hours - 9
+                value = f"{total_hours} hrs (OT {ot}h)"
+            
             if apply_all:
                 for day in DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value

@@ -240,15 +240,23 @@ if edit_mode:
     for name in df_display["Name"].tolist():
         if name not in current_names: st.session_state.deleted_staff.add(name)
 
+# 3. Trigger Dialog (The fix for the Duplicate ID error)
     for i, row in edited_df.iterrows():
         for d in DAYS:
-            value = row.get(d)
-            if value == "📴 Day Off":
-                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
+            if row.get(d) == "➕ Custom Time":
+                st.session_state.target_row = i
+                st.session_state.target_name = row["Name"]
+                st.session_state.target_day = d
+                st.session_state.show_dialog = True
                 st.rerun()
-            if value == "➕ Custom Time":
-                custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
+    # 4. Show Dialog if triggered
+    if st.session_state.show_dialog:
+        custom_time_dialog(
+            st.session_state.target_row, 
+            st.session_state.target_name, 
+            st.session_state.target_day
+        )
     # 4. SUBMIT BUTTON (Strictly inside Edit Mode)
     if st.button("✅ Submit"):
         if not existing_week_data.empty:

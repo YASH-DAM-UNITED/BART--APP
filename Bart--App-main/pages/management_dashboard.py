@@ -205,7 +205,15 @@ else:
         gb.configure_default_column(resizable=True, sortable=True, filter=True)
         gb.configure_column("Item Name", pinned="left", lockPinned=True, width=250)
         for b in branch_names: 
-            gb.configure_column(b, type=["numericColumn"], width=120)
+            gb.configure_column(
+                b,
+                type=["numericColumn"],
+                width=120) 
+                minWidth=100,
+                flex=1,  
+                cellStyle={"textAlign": "center", "display": "flex", "alignItems": "center", "justifyContent": "center"}
+            )
+            
         if "Total" in df.columns: 
             gb.configure_column("Total", pinned="right", width=100)
         AgGrid(df, gridOptions=gb.build(), theme="streamlit", key=key, allow_unsafe_jscode=True)

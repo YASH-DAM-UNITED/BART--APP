@@ -252,10 +252,9 @@ def load_all_data(branches):
 # REFRESH
 # ========================================================
 
+# Update to 4 columns to accommodate the new button
+col1, col2, col3, col4 = st.columns(4)
 
-
-
-col1, col2, col3 = st.columns(3)
 if col1.button(" 🔄 Refresh Data"):
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -265,15 +264,13 @@ if col1.button(" 🔄 Refresh Data"):
 if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
+# Add the new button here
+if col3.button("🔑 Area Manager Login"):
+    st.switch_page("pages/area_manager.py") # Ensure this file path exists in your 'pages/' folder
 
-if col3.button("⬅ LOGOUT "):
-    st.switch_page("app.py")
-
-
-            
-            
-            
-            
+# Move Logout to the 4th column
+if col4.button("⬅ LOGOUT "):
+    st.switch_page("app.py")       
 
         
 # ========================================================

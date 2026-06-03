@@ -184,23 +184,27 @@ with col3:
 
 
 
+# --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 
 with col1:
-    range_start = st.time_input("From", value=datetime.now().time())
+    # 1. ADD A KEY here. This prevents the auto-rerun.
+    range_start = st.time_input("From", value=datetime.now(saudi_tz).time(), key="start_time_key")
 with col2:
-    range_end = st.time_input("To", value=datetime.now().time())
+    # 2. ADD A KEY here.
+    range_end = st.time_input("To", value=datetime.now(saudi_tz).time(), key="end_time_key")
 with col3:
+    # 3. ONLY THIS BUTTON triggers the logic
     if st.button("🚀 Calculate Range", use_container_width=True):
         st.session_state.start_min = range_start.hour * 60 + range_start.minute
         st.session_state.end_min = range_end.hour * 60 + range_end.minute
-        st.rerun()
+        st.rerun() # This forces the ONE refresh you want
 
-# Default session states if not set
+# Ensure these exist in session state
 if "start_min" not in st.session_state:
     st.session_state.start_min = 0
-    st.session_state.end_min = 1440 # Full day
+    st.session_state.end_min = 1440
 
 # Display status feedback
 if st.session_state.sim_min != now_min:

@@ -299,49 +299,6 @@ if col4.button("⬅ LOGOUT "):
 # THE "EXIT" GATE
 # ========================================================
 # ========================================================
-# AREA MANAGER PORTAL (USING PRE-FETCHED DATA)
-# ========================================================
-if st.session_state.get("show_manager", False):
-    st.divider()
-    st.subheader("🔑 Area Manager Portal")
-    
-    mapping_df = load_manager_mapping()
-    unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
-    selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
-    
-    if selected_manager != "Select...":
-        # 1. Get the list of Branch Names assigned to this manager
-        # (This uses the mapping sheet we already loaded)
-        assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
-        
-        # 2. Filter the ALREADY LOADED 'all_data' variable
-        # 'all_data' is a list of tuples: (BranchName, raw_data)
-        manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
-        
-        if not manager_all_data:
-            st.warning(f"No data found for branches managed by {selected_manager}.")
-        else:
-            st.info(f"Viewing {len(manager_all_data)} branches managed by: {selected_manager}")
-            
-            # 3. Process the filtered data (Instant, no re-fetch)
-            m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
-            
-            m_daily_df = build_df(m_daily, assigned_branch_names)
-            m_weekly_df = build_df(m_weekly, assigned_branch_names)
-            
-            # 4. Display
-            st.write("### 📦 Manager Daily Items")
-            make_grid(m_daily_df, "mgr_daily_grid")
-            
-            st.write("### 📦 Manager Weekly Items")
-            make_grid(m_weekly_df, "mgr_weekly_grid")
-
-    if st.button("⬅ Back to Main Dashboard"):
-        st.session_state.show_manager = False
-        st.rerun()
-    
-    st.stop()
-# ========================================================
 # Your 1000 lines of code start here...
 # No indentation changes needed!
 # ========================================================
@@ -825,3 +782,51 @@ with col2:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True
     )
+
+
+
+
+
+# ========================================================
+# AREA MANAGER PORTAL (USING PRE-FETCHED DATA)
+# ========================================================
+if st.session_state.get("show_manager", False):
+    st.divider()
+    st.subheader("🔑 Area Manager Portal")
+    
+    mapping_df = load_manager_mapping()
+    unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+    selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
+    
+    if selected_manager != "Select...":
+        # 1. Get the list of Branch Names assigned to this manager
+        # (This uses the mapping sheet we already loaded)
+        assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
+        
+        # 2. Filter the ALREADY LOADED 'all_data' variable
+        # 'all_data' is a list of tuples: (BranchName, raw_data)
+        manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
+        
+        if not manager_all_data:
+            st.warning(f"No data found for branches managed by {selected_manager}.")
+        else:
+            st.info(f"Viewing {len(manager_all_data)} branches managed by: {selected_manager}")
+            
+            # 3. Process the filtered data (Instant, no re-fetch)
+            m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
+            
+            m_daily_df = build_df(m_daily, assigned_branch_names)
+            m_weekly_df = build_df(m_weekly, assigned_branch_names)
+            
+            # 4. Display
+            st.write("### 📦 Manager Daily Items")
+            make_grid(m_daily_df, "mgr_daily_grid")
+            
+            st.write("### 📦 Manager Weekly Items")
+            make_grid(m_weekly_df, "mgr_weekly_grid")
+
+    if st.button("⬅ Back to Main Dashboard"):
+        st.session_state.show_manager = False
+        st.rerun()
+    
+    st.stop()

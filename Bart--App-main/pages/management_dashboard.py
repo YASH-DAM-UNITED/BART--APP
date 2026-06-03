@@ -248,6 +248,11 @@ def load_all_data(branches):
         for b in branches
     ]
 
+
+
+
+if "show_manager_login" not in st.session_state:
+    st.session_state.show_manager_login = False
 # ========================================================
 # REFRESH
 # ========================================================
@@ -275,7 +280,17 @@ if col3.button("🔑 Area Manager Login"):
 if col4.button("⬅ LOGOUT "):
     st.switch_page("app.py")
 
-
+if st.session_state.show_manager_login:
+    # BLANK UI AREA
+    st.write("Manager Login Screen")
+    if st.button("← Back to Dashboard"):
+        st.session_state.show_manager_login = False
+        st.rerun()
+        
+        
+        
+else:    # MAIN DASHBOARD UI
+    pass  # The rest of your dashboard code continues here 
             
             
             

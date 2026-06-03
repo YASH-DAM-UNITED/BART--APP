@@ -73,43 +73,40 @@ def success_dialog():
     if st.button("Close", use_container_width=True):
         st.rerun()
 
-@st.dialog("⏰ Select Shift Duration")
+@st.dialog("⏰ Select Shift Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Select hours for **{row_name}** on **{day_name}**")
+    st.write(f"Select the shift hours for **{row_name}** on **{day_name}**")
     
-    # Create a grid for selection (1-24 hours)
-    cols = st.columns(6) # 6 columns to create a clean grid
-    selected_hours = None
+    # Using a radio button acts like a single-select checkbox list
+    selected_hours = st.radio(
+        "Choose total hours:",
+        options=range(1, 25),
+        horizontal=False,
+        index=8 # Defaults to 9
+    )
     
-    for i in range(1, 25):
-        with cols[(i - 1) % 6]:
-            if st.button(f"{i}", key=f"btn_{i}"):
-                selected_hours = i
+    st.info(f"You have selected: **{selected_hours} hours**")
     
-    # Display selection status
-    if selected_hours:
-        st.info(f"Selected: **{selected_hours} hours**")
-        
+    if selected_hours < 9:
+        st.warning(f"⚠️ Warning: {selected_hours} hours is below the 9-hour minimum requirement.")
+    
+    apply_all = st.checkbox("Apply to all working days this week")
+    
+    if st.button("Confirm Selection", type="primary"):
         if selected_hours < 9:
-            st.warning(f"⚠️ Warning: {selected_hours} hours is below the 9-hour minimum requirement.")
-        
-        apply_all = st.checkbox("Apply to all working days this week")
-        
-        if st.button("Confirm Selection", type="primary"):
-            if selected_hours < 9:
-                st.error("❌ Submission blocked: Minimum 9 hours required.")
-            else:
-                value = f"{selected_hours} hrs"
-                if selected_hours > 9:
-                    ot = selected_hours - 9
-                    value = f"{selected_hours} hrs (OT {ot}h)"
+            st.error("❌ Submission blocked: Minimum 9 hours required.")
+        else:
+            value = f"{selected_hours} hrs"
+            if selected_hours > 9:
+                ot = selected_hours - 9
+                value = f"{selected_hours} hrs (OT {ot}h)"
                 
-                if apply_all:
-                    for day in DAYS:
-                        st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
-                else:
-                    st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
-                st.rerun()
+            if apply_all:
+                for day in DAYS:
+                    st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
+            else:
+                st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+            st.rerun()
 @st.dialog("🚫 Submission Blocked")
 def duplicate_submission_dialog():
     st.error("This week's schedule has already been submitted for this branch.")

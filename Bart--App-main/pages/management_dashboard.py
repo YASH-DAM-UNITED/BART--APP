@@ -275,8 +275,8 @@ if col2.button("👥 Staff Alignment"):
 
 # Add the new button here
 if col3.button("🔑 Area Manager Login"):
-    st.switch_page("pages/manager_login.py") # Ensure this file path is correct
-
+    st.session_state.show_manager_login = True
+    st.rerun()
 if col4.button("⬅ LOGOUT "):
     st.switch_page("app.py")
 

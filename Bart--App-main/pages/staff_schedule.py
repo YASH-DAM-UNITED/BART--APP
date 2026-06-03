@@ -63,46 +63,51 @@ master_sheet = st.session_state.gspread_client.open_by_key(
 DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 SHIFT_OPTIONS = ["➕ Custom Time", "📴 Day Off"]
 ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supervisor", "Supervisor", "Branch_Manager"]
+
+
+
+
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Select the **1-hour blocks** worked for **{row_name}** on **{day_name}**")
-    st.caption("Example: To work 5 AM to 5 PM (12 hours), check 12 boxes (5 AM through 4 PM).")
+    st.write(f"Check the hours worked for **{row_name}** on **{day_name}**.")
     
-    # Use a container to reset selections if needed
-    if st.button("Reset All Selections"):
-        st.session_state.temp_selections = []
-        st.rerun()
+    # We use a dictionary to store if a box is checked
+    # This prevents accidental double-counting
+    if "shift_selections" not in st.session_state:
+        st.session_state.shift_selections = {}
 
-    selected_hours_list = []
+    selected_hours = []
     
-    st.subheader("AM Blocks")
+    # Create the grid
+    st.subheader("AM Hours")
     cols_am = st.columns(6)
     for i in range(1, 13):
-        # Using a key based on the hour and period ensures unique selection
+        # We use a unique key for each hour
         if cols_am[(i - 1) % 6].checkbox(f"{i} AM", key=f"am_{i}"):
-            selected_hours_list.append(f"{i} AM")
-                
-    st.subheader("PM Blocks")
+            selected_hours.append(f"{i} AM")
+            
+    st.subheader("PM Hours")
     cols_pm = st.columns(6)
     for i in range(1, 13):
         if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
-            selected_hours_list.append(f"{i} PM")
+            selected_hours.append(f"{i} PM")
+
+    # STRICT CALCULATION: Total is exactly the count of items in the list
+    total_worked = len(selected_hours)
     
-    total_worked = len(selected_hours_list)
-    st.metric("Total Hours Calculated", f"{total_worked} hrs")
+    st.metric("Total Hours", f"{total_worked} hrs")
     
     if 0 < total_worked < 9:
-        st.warning(f"⚠️ Minimum 9 hours required. Currently selected: {total_worked}.")
+        st.warning(f"⚠️ Minimum 9 hours required. Current: {total_worked}.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
     if st.button("Confirm Selection", type="primary"):
         if total_worked < 9:
-            st.error("❌ Submission blocked: Minimum 9 hours required.")
+            st.error("❌ Minimum 9 hours required.")
         else:
-            # Logic: If they worked 5 AM to 5 PM, they select 12 boxes. 
-            # The code now strictly counts exactly what is checked.
-            times_str = ", ".join(selected_hours_list)
+            # Building the record string
+            times_str = ", ".join(selected_hours)
             ot = max(0, total_worked - 9)
             value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
             

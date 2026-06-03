@@ -184,22 +184,23 @@ with col3:
 
 
 
+st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
+col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 
-col_time, col_btn = st.columns([4, 1], vertical_alignment="bottom")
-
-with col_time:
-    # Use a unique key for the input so it doesn't trigger a full page update automatically
-    selected_time = st.time_input("Select Time", value=datetime.strptime(f"{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}", "%H:%M"), key="temp_time")
-
-with col_btn:
-    # This button triggers the logic
-    if st.button("🚀 Calculate Status", use_container_width=True):
-        # Only NOW do we update the official calculation variable
-        st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
+with col1:
+    range_start = st.time_input("From", value=datetime.now().time())
+with col2:
+    range_end = st.time_input("To", value=datetime.now().time())
+with col3:
+    if st.button("🚀 Calculate Range", use_container_width=True):
+        st.session_state.start_min = range_start.hour * 60 + range_start.minute
+        st.session_state.end_min = range_end.hour * 60 + range_end.minute
         st.rerun()
-        
-# Use this for all your calculations downstream
-sim_min = st.session_state.sim_min
+
+# Default session states if not set
+if "start_min" not in st.session_state:
+    st.session_state.start_min = 0
+    st.session_state.end_min = 1440 # Full day
 
 # Display status feedback
 if st.session_state.sim_min != now_min:

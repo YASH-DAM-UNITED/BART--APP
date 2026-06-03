@@ -203,48 +203,45 @@ with col3:
         st.switch_page("pages/management_dashboard.py")
 
 
+from datetime import time
 
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
+
+# Initialize session state for the range if it doesn't exist
+if "start_min" not in st.session_state:
+    st.session_state.start_min = 0
+if "end_min" not in st.session_state:
+    st.session_state.end_min = 1439
+
 col1, col2, col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 
 with col1:
-    # 1. ADD A KEY here. This prevents the auto-rerun.
-    range_start = st.time_input("From", value=datetime.now(saudi_tz).time(), key="start_time_key")
+    # Set default to 00:00
+    range_start = st.time_input("From", value=time(0, 0), key="start_time_key")
 with col2:
-    # 2. ADD A KEY here.
-    range_end = st.time_input("To", value=datetime.now(saudi_tz).time(), key="end_time_key")
+    # Set default to 00:00 or 23:59 as preferred
+    range_end = st.time_input("To", value=time(23, 59), key="end_time_key")
+
 with col3:
-    # 3. ONLY THIS BUTTON triggers the logic
     if st.button("🚀 Calculate Range", use_container_width=True):
         st.session_state.start_min = range_start.hour * 60 + range_start.minute
         st.session_state.end_min = range_end.hour * 60 + range_end.minute
-        st.rerun() # This forces the ONE refresh you want
+        st.rerun()
 
-# Ensure these exist in session state
-if "start_min" not in st.session_state:
-    st.session_state.start_min = 0
-    st.session_state.end_min = 1440
-
-
-
-# Set the active 'sim_min' for all calculations
-sim_min = st.session_state.sim_min
-
-
-# Create working dataframe copy
+# --- DATA PROCESSING ---
 df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
-# Use the session state values set by your "Calculate" button
-start_m = st.session_state.get("start_min", 0)
-end_m = st.session_state.get("end_min", 1440)
+# Use the session state values
+start_m = st.session_state.start_min
+end_m = st.session_state.end_min
 
-# Use 'sim_min' for all calculations
-u_act, u_inact = compute(df_work,start_m, end_m)
+# Calculate Universal Stats based on the custom range
+u_act, u_inact = compute(df_work, start_m, end_m)
 
-st.subheader("STAFF Universal Overview")
+st.subheader(f"STAFF Universal Overview ({range_start.strftime('%H:%M')} to {range_end.strftime('%H:%M')})")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("🏢 Branches", len(branches))
 c2.metric("👥 Staff", len(df_work))

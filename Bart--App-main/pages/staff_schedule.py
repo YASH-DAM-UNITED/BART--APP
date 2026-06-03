@@ -76,25 +76,25 @@ def success_dialog():
 
 
 
-@st.dialog(" Set Break Duty")
+@st.dialog("☕ Set Break Duty")
 def break_duty_dialog(row_idx, row_name, day_name):
     st.write(f"Configure Break Duty for **{row_name}** on **{day_name}**")
     
-    st.subheader("Duty 1")
+    st.markdown("### Duty 1")
     col1, col2 = st.columns(2)
     with col1:
-        d1h = st.selectbox("Duty 1 Hour", list(range(1, 13)), index=8, key="d1h")
-        d1ap = st.selectbox("Duty 1 AM/PM", ["AM", "PM"], key="d1ap")
+        d1s = st.selectbox("D1 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], key=f"d1s_{row_idx}_{day_name}")
+        d1e = st.selectbox("D1 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=3, key=f"d1e_{row_idx}_{day_name}")
     
-    st.subheader("Duty 2")
+    st.markdown("### Duty 2")
     col3, col4 = st.columns(2)
     with col3:
-        d2h = st.selectbox("Duty 2 Hour", list(range(1, 13)), index=1, key="d2h")
-        d2ap = st.selectbox("Duty 2 AM/PM", ["AM", "PM"], key="d2ap", index=1)
+        d2s = st.selectbox("D2 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=8, key=f"d2s_{row_idx}_{day_name}")
+        d2e = st.selectbox("D2 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=11, key=f"d2e_{row_idx}_{day_name}")
     
     if st.button("Apply Break Duty", use_container_width=True):
-        # Format the string as you need it for your Sheet
-        value = f"Break Duty: {d1h}{d1ap} & {d2h}{d2ap}"
+        # Result: D1: 5AM-9AM | D2: 1PM-5PM
+        value = f"D1: {d1s}-{d1e} | D2: {d2s}-{d2e}"
         st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
         st.rerun()
 

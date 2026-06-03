@@ -283,33 +283,25 @@ if edit_mode:
     # Capture the edited dataframe
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
 # 3. Sync State & Handle Triggers
+    # We DO NOT loop and rerun here. Instead, we use the callback/trigger pattern.
     
-    # STEP 1: Sync everything from editor to buffer immediately
-    for i, row in edited_df.iterrows():
-        for d in DAYS:
-            new_val = row.get(d)
-            if new_val and str(new_val).strip() != "":
-                st.session_state.shift_buffer[f"{i}_{d}"] = new_val
-
-    # STEP 2: Logic triggers (Only trigger RERUN if absolutely necessary)
-    # We store the trigger in a temp variable to avoid mid-loop restarts
-    trigger_rerun = False
-    
-    for i, row in edited_df.iterrows():
-        for d in DAYS:
-            value = row.get(d)
-            if value == "📴 Day Off":
-                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
-                trigger_rerun = True
-            elif value == "➕ Straight Duty":
-                custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
-                # Note: dialogs pause execution, so this is safe
-            elif value == "➕ Break Duty":
-                break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
-
-    # STEP 3: Single point of entry for RERUN
-    if trigger_rerun:
-        st.rerun()
+    # Check if anything was edited in the grid
+    if "editor" in st.session_state and st.session_state.editor["edited_rows"]:
+        for i, changes in st.session_state.editor["edited_rows"].items():
+            for col, val in changes.items():
+                if col in DAYS:
+                    # Update buffer only when something changes
+                    st.session_state.shift_buffer[f"{i}_{col}"] = val
+                    
+                    # If the user selects a dialog option, we trigger it 
+                    # but ensure we don't clear the buffer
+                    if val == "➕ Straight Duty":
+                        custom_time_dialog(row_idx=i, row_name=edited_df.loc[i, "Name"], day_name=col)
+                    elif val == "➕ Break Duty":
+                        break_duty_dialog(row_idx=i, row_name=edited_df.loc[i, "Name"], day_name=col)
+                    elif val == "📴 Day Off":
+                        st.session_state.shift_buffer[f"{i}_{col}"] = "OFF"
+                        st.rerun() # Only rerun if we strictly need to clear/update UI
 
     # Sync deleted staff
     current_names = set(edited_df["Name"].dropna().tolist())

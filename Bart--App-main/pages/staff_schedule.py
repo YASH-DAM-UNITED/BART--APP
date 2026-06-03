@@ -243,8 +243,7 @@ if not st.session_state.cached_df.empty:
 # =========================
 
 
-if st.button("🔄 Refresh Grid"):
-    st.rerun()
+
 if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)
@@ -284,6 +283,11 @@ if edit_mode:
             for d in DAYS:
                 st.session_state.shift_buffer[f"{i}_{d}"] = ""
         st.rerun()
+
+    if st.button("🔄 Refresh Grid"):
+        st.rerun()
+        
+    
 
     # Render Editor
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")

@@ -67,7 +67,7 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Check all hours worked for **{row_name}** on **{day_name}**.")
-    st.caption("Note: Select all hours you are physically present. The total will be calculated automatically.")
+    st.caption("Note: Each checked box equals 1 hour of work.")
     
     selected_hours = []
     
@@ -85,13 +85,13 @@ def custom_time_dialog(row_idx, row_name, day_name):
         if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
             selected_hours.append(f"{i} PM")
 
-    # DIRECT COUNT: 1 box checked = 1 hour worked. 
-    # No auto-subtraction, so split shifts are counted accurately.
+    # LOGIC: The total is strictly the number of boxes checked.
+    # 5am, 6am, 7am, 8am (4 boxes) + 1pm, 2pm, 3pm, 4pm (4 boxes) = 8 hours.
     total_worked = len(selected_hours)
     
     st.metric("Total Hours Worked", f"{total_worked} hrs")
     
-    # UPDATED: Mandatory minimum is now 8
+    # Requirement: Mandatory minimum is now 8 hours
     if 0 < total_worked < 8:
         st.warning(f"⚠️ Minimum 8 hours required. Current: {total_worked}.")
     
@@ -102,7 +102,7 @@ def custom_time_dialog(row_idx, row_name, day_name):
             st.error("❌ Submission blocked: Minimum 8 hours required.")
         else:
             times_str = ", ".join(selected_hours)
-            # OT is now calculated based on 8 hours
+            # OT is calculated based on hours exceeding 8
             ot = max(0, total_worked - 8)
             value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
             

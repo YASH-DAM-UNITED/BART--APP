@@ -62,8 +62,8 @@ if st.session_state.transfer_cart:
     
     if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # Capture standard system time
-            current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Capture time in 12-hour AM/PM format
+            current_timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
             
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -75,14 +75,14 @@ if st.session_state.transfer_cart:
             combined_items_str = " | ".join(item_details)
             total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
             
-            # Prepare row: Timestamp is now at the END
+            # Prepare row: Timestamp as the last column
             row_data = [
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 
                 str(combined_items_str), 
                 str(total_qty), 
                 str(reason),
-                str(current_timestamp) # Timestamp added to the last column
+                str(current_timestamp) 
             ]
             
             sheet.append_row(row_data)

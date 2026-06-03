@@ -164,12 +164,12 @@ if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
     
     yesterday = datetime.now().date() - timedelta(days=1)
-    selected_date = st.date_input("Select Date", value=yesterday, key="mode_date_select")
+    selected_date = st.date_input("Select Date", value=yesterday)
     date_str = str(selected_date)
 
-    # Define strict boundaries
-    DAILY_ROWS = range(daily_start + 1, weekly_start) # From just after header to start of weekly
-    WEEKLY_ROWS = range(weekly_start + 1, len(sheet_data)) # From just after weekly header to end
+    # 1. Define your fixed boundaries
+    DAILY_ROWS = range(2, 65)    # Rows 1 to 64
+    WEEKLY_ROWS = range(65, 101) # Rows 65 onwards (adjust 101 to your max sheet rows)
 
     def is_submitted(mode):
         headers = sheet_data[0]
@@ -177,56 +177,77 @@ if st.session_state.page == "mode_select":
             return False 
         
         col_index = headers.index(date_str)
-        # Use the specific range based on the mode selected
         target_range = DAILY_ROWS if mode == "daily" else WEEKLY_ROWS
             
         for row_idx in target_range:
-            # Check if at least one cell in this mode's range is filled for the given date
-            if row_idx < len(sheet_data): 
-                cell_value = str(sheet_data[row_idx][col_index]).strip()
-                if cell_value != "":
+            # Check if row index exists in our loaded data
+            if row_idx - 1 < len(sheet_data): 
+                # row_idx - 1 because list is 0-indexed
+                if str(sheet_data[row_idx - 1][col_index]).strip() != "":
                     return True
         return False
+
+    c1, c2 = st.columns(2)
+
+    if c1.button("📦 Daily Stock"):
+        if is_submitted("daily"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "daily"
+            st.session_state.page = "stock_entry"
+            st.rerun()
+
+    if c2.button("📊 Weekly Stock"):
+        if is_submitted("weekly"):
+            show_duplicate_warning()
+        else:
+            st.session_state.mode = "weekly"
+            st.session_state.page = "stock_entry"
+            st.rerun()
+
+    if st.button("⬅ Back to Staff"):
+        st.switch_page("pages/staff_dashboard.py")
+
+    st.stop()
 # -----------------------------
 # FILTER ITEMS & PRESERVE ROW DATA
 # -----------------------------
 mode = st.session_state.mode
 
-# Only execute this block if a mode has been selected
-if mode:
-    processed_items = []
-    start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
-    # Ensure end_idx is handled safely
-    end_idx = weekly_start if mode == "daily" else len(sheet_data)
+# We build a list of dicts that hold item name, its UMO, and its original spreadsheet row index
+processed_items = []
+start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
+end_idx = weekly_start if mode == "daily" else len(sheet_data)
 
-    for idx in range(start_idx, end_idx):
-        if idx < len(sheet_data):
-            row = sheet_data[idx]
-            item_name = row[0].strip() if row and row[0].strip() else ""
+for idx in range(start_idx, end_idx):
+    if idx < len(sheet_data):
+        row = sheet_data[idx]
+        item_name = row[0].strip() if row and row[0].strip() else ""
+        
+        # Skip section headers or empty cells accidentally left in the list
+        if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
+            continue
             
-            if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
-                continue
-                
-            umo = row[2].strip() if len(row) >= 3 and row[2] else ""
-            processed_items.append({
-                "name": item_name,
-                "umo": umo,
-                "row_idx": idx + 1
-            })
+        umo = row[2].strip() if len(row) >= 3 and row[2] else ""
+        processed_items.append({
+            "name": item_name,
+            "umo": umo,
+            "row_idx": idx + 1 # 1-based indexing for gspread
+        })
 
-    st.info(f"Mode: {mode.upper()} | Items: {len(processed_items)}")
+st.info(f"Mode: {mode.upper()} | Items: {len(processed_items)}")
 
-    if st.button("⬅ Back"):
-        st.session_state.page = "mode_select"
-        st.session_state.mode = None
-        st.rerun()
+if st.button("⬅ Back"):
+    st.session_state.page = "mode_select"
+    st.session_state.mode = None
+    st.rerun()
 
 # -----------------------------
 # DATE
 # -----------------------------
 
 yesterday = datetime.now().date() - timedelta(days=1)
-date = st.date_input("Select Date", value=yesterday, key="entry_date_select")
+date = st.date_input("Select Date", value=yesterday)
 date_str = str(date)
 
 

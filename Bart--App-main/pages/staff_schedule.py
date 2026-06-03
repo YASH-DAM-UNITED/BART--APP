@@ -80,31 +80,22 @@ def success_dialog():
 def break_duty_dialog(row_idx, row_name, day_name):
     st.write(f"Configure Break Duty for **{row_name}** on **{day_name}**")
     
-    st.markdown("### Duty 1")
-    col1, col2 = st.columns(2)
-    with col1:
-        d1s = st.selectbox("D1 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], key=f"d1s_{row_idx}_{day_name}")
-        d1e = st.selectbox("D1 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=3, key=f"d1e_{row_idx}_{day_name}")
+    # ... (Keep your selectboxes as they are) ...
+    d1s = st.selectbox("D1 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], key=f"d1s_{row_idx}_{day_name}")
+    d1e = st.selectbox("D1 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=3, key=f"d1e_{row_idx}_{day_name}")
+    d2s = st.selectbox("D2 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=8, key=f"d2s_{row_idx}_{day_name}")
+    d2e = st.selectbox("D2 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=11, key=f"d2e_{row_idx}_{day_name}")
     
-    st.markdown("### Duty 2")
-    col3, col4 = st.columns(2)
-    with col3:
-        d2s = st.selectbox("D2 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=8, key=f"d2s_{row_idx}_{day_name}")
-        d2e = st.selectbox("D2 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=11, key=f"d2e_{row_idx}_{day_name}")
-    
-    # ADDED CHECKBOX
     apply_all = st.checkbox("Apply to all working days this week")
     
     if st.button("Apply Break Duty", use_container_width=True):
-        value = f"{d1s}-{d1e}|{d2s}-{d2e}"
+        value = format_break_duty(d1s, d1e, d2s, d2e)
         
-        # LOGIC TO APPLY TO ALL OR SINGLE DAY
         if apply_all:
             for day in DAYS:
                 st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
         else:
             st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
-            
         st.rerun()
 
 @st.dialog("⏰ Set Custom Time")
@@ -176,10 +167,23 @@ def calculate_hours(start, end):
 
 def format_shift(start, end):
     hrs = calculate_hours(start, end)
-    if hrs < 9: return None, hrs
     ot = max(0, hrs - 9)
-    if ot > 0: return (f"{start} - {end} (OT {ot}h)", hrs)
+    if ot > 0:
+        return (f"{start} - {end} (OT {ot}h)", hrs)
     return (f"{start} - {end}", hrs)
+
+def format_break_duty(d1s, d1e, d2s, d2e):
+    # Calculate total hours from both duties
+    hrs1 = calculate_hours(d1s, d1e)
+    hrs2 = calculate_hours(d2s, d2e)
+    total_hrs = hrs1 + hrs2
+    
+    ot = max(0, total_hrs - 9)
+    # The saved string format
+    value = f"{d1s}-{d1e}|{d2s}-{d2e}"
+    if ot > 0:
+        value = f"{value} (OT {ot}h)"
+    return value
 
 def calculate_row_ot(row):
     total_ot = 0

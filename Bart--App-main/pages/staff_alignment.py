@@ -229,7 +229,7 @@ for b in branches:
 st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 
 st.divider()
-col1= st.columns()
+col1, col2= st.columns(2)
 with col1: selected_branch = st.selectbox("🏢 Branch", branches)
 
 df_branch = df_work[df_work["Branch"] == selected_branch]

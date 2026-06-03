@@ -164,7 +164,7 @@ if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
     
     yesterday = datetime.now().date() - timedelta(days=1)
-    selected_date = st.date_input("Select Date", value=yesterday)
+    selected_date = st.date_input("Select Date", value=yesterday, key="mode_date_select")
     date_str = str(selected_date)
 
     # Define strict boundaries
@@ -226,7 +226,7 @@ if mode:
 # -----------------------------
 
 yesterday = datetime.now().date() - timedelta(days=1)
-date = st.date_input("Select Date", value=yesterday)
+date = st.date_input("Select Date", value=yesterday, key="entry_date_select")
 date_str = str(date)
 
 

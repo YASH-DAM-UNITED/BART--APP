@@ -248,9 +248,9 @@ if edit_mode:
             if value == "📴 Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
                 st.rerun()
-            elif value == "➕ Custom Time":
+            elif value == "➕ Straight Duty":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
-            elif value == "☕ Break Duty":
+            elif value == "➕ Break Duty":
                 break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
 
 

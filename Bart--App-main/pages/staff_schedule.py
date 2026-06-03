@@ -241,6 +241,10 @@ if not st.session_state.cached_df.empty:
 # =========================
 # EDIT MODE
 # =========================
+
+
+if st.button("🔄 Refresh Grid"):
+    st.rerun()
 if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)

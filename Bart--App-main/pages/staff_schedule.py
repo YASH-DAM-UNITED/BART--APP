@@ -241,31 +241,17 @@ if not st.session_state.cached_df.empty:
 # =========================
 # EDIT MODE
 # =========================
-
-# Refresh/Sync Button
-if st.button("🔄 Refresh Grid"):
-    st.rerun()
-if st.button("🧹 Clear All Shifts"):
-    for i in range(len(df_display)):
-        for d in DAYS:
-            key = f"{i}_{d}"
-            if key in st.session_state.shift_buffer:
-                del st.session_state.shift_buffer[key]
-    st.rerun()
-
-
-
-
 if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)
     if st.session_state.deleted_staff: 
         df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
     
+    # Ensure all days are columns
     for d in DAYS:
         if d not in df_display.columns: df_display[d] = ""
     
-    # Fill from buffer
+    # Populate display from shift_buffer (Source of Truth)
     for i, row in df_display.iterrows():
         for d in DAYS:
             key = f"{i}_{d}"
@@ -275,48 +261,52 @@ if edit_mode:
     df_display["Over-Time"] = df_display.apply(calculate_row_ot, axis=1)
 
     # 2. Config & Editor
+    all_known_shifts = set(SHIFT_OPTIONS)
+    for d in DAYS:
+        if d in df_display.columns:
+            all_known_shifts.update(df_display[d].dropna().astype(str).unique().tolist())
+    
     config = {
         "Name": st.column_config.SelectboxColumn("Name", options=(df["Name"].dropna().unique().tolist() if not df.empty else []), width=90, required=True),
         "Role": st.column_config.SelectboxColumn("Role", options=ROLE_OPTIONS, width=90),
         "Over-Time": st.column_config.TextColumn("Over-Time", disabled=True, width=70)
     }
-    # Ensure all previous values are included in the options to prevent "vanishing"
-    all_known_shifts = set(SHIFT_OPTIONS)
     for d in DAYS:
-        if d in df_display.columns:
-            all_known_shifts.update(df_display[d].dropna().unique().tolist())
-    
-    # Use this set to build the column options
-    shift_options_list = list(all_known_shifts)
+        config[d] = st.column_config.SelectboxColumn(label=day_labels[d], options=list(all_known_shifts), width=100)
 
-    for d in DAYS:
-        config[d] = st.column_config.SelectboxColumn(
-            label=day_labels[d], 
-            options=shift_options_list, 
-            width=100
-        )
-    # Capture the edited dataframe
+    # Clear Button
+    if st.button("🧹 Clear All Shifts"):
+        for i in range(len(df_display)):
+            for d in DAYS:
+                st.session_state.shift_buffer[f"{i}_{d}"] = ""
+        st.rerun()
+
+    # Render Editor
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
-# 3. Sync State & Handle Triggers
-    # We DO NOT loop and rerun here. Instead, we use the callback/trigger pattern.
     
-    # Check if anything was edited in the grid
-    if "editor" in st.session_state and st.session_state.editor["edited_rows"]:
-        for i, changes in st.session_state.editor["edited_rows"].items():
-            for col, val in changes.items():
-                if col in DAYS:
-                    # Update buffer only when something changes
-                    st.session_state.shift_buffer[f"{i}_{col}"] = val
-                    
-                    # If the user selects a dialog option, we trigger it 
-                    # but ensure we don't clear the buffer
-                    if val == "➕ Straight Duty":
-                        custom_time_dialog(row_idx=i, row_name=edited_df.loc[i, "Name"], day_name=col)
-                    elif val == "➕ Break Duty":
-                        break_duty_dialog(row_idx=i, row_name=edited_df.loc[i, "Name"], day_name=col)
-                    elif val == "📴 Day Off":
-                        st.session_state.shift_buffer[f"{i}_{col}"] = "OFF"
-                        st.rerun() # Only rerun if we strictly need to clear/update UI
+    # 3. Sync State & Handle Triggers
+    # Sync edited data to buffer (handles copy-paste)
+    for i, row in edited_df.iterrows():
+        for d in DAYS:
+            new_val = row.get(d)
+            if new_val is not None and str(new_val).strip() != "":
+                st.session_state.shift_buffer[f"{i}_{d}"] = new_val
+
+    # Handle logic triggers
+    trigger_rerun = False
+    for i, row in edited_df.iterrows():
+        for d in DAYS:
+            value = row.get(d)
+            if value == "📴 Day Off":
+                st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
+                trigger_rerun = True
+            elif value == "➕ Straight Duty":
+                custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+            elif value == "➕ Break Duty":
+                break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+
+    if trigger_rerun:
+        st.rerun()
 
     # Sync deleted staff
     current_names = set(edited_df["Name"].dropna().tolist())

@@ -136,31 +136,7 @@ if "sim_min" not in st.session_state:
     st.session_state.sim_min = now_min
 
 # --- UI: THE SELECTOR (NO RERUN ON CHANGE) ---
-st.markdown("### Select The Specific Time")
-col_time, col_btn = st.columns([4, 1], vertical_alignment="bottom")
 
-with col_time:
-    # Use a unique key for the input so it doesn't trigger a full page update automatically
-    selected_time = st.time_input("Select Time", value=datetime.strptime(f"{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}", "%H:%M"), key="temp_time")
-
-with col_btn:
-    # This button triggers the logic
-    if st.button("🚀 Calculate Status", use_container_width=True):
-        # Only NOW do we update the official calculation variable
-        st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
-        st.rerun()
-        
-# Use this for all your calculations downstream
-sim_min = st.session_state.sim_min
-
-# Display status feedback
-if st.session_state.sim_min != now_min:
-    st.info(f" Viewing data for: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}** ")
-else:
-    st.info(f"Viewing Live Status: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}**")
-
-# Set the active 'sim_min' for all calculations
-sim_min = st.session_state.sim_min
 
 # --- DATA PROCESSING ---
 df_full = load_data(st.session_state.data_refresh_token).copy()
@@ -191,6 +167,35 @@ with col2:
 with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
+
+
+
+
+col_time, col_btn = st.columns([4, 1], vertical_alignment="bottom")
+
+with col_time:
+    # Use a unique key for the input so it doesn't trigger a full page update automatically
+    selected_time = st.time_input("Select Time", value=datetime.strptime(f"{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}", "%H:%M"), key="temp_time")
+
+with col_btn:
+    # This button triggers the logic
+    if st.button("🚀 Calculate Status", use_container_width=True):
+        # Only NOW do we update the official calculation variable
+        st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
+        st.rerun()
+        
+# Use this for all your calculations downstream
+sim_min = st.session_state.sim_min
+
+# Display status feedback
+if st.session_state.sim_min != now_min:
+    st.info(f" Viewing data for: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}** ")
+else:
+    st.info(f"Viewing Live Status: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}**")
+
+# Set the active 'sim_min' for all calculations
+sim_min = st.session_state.sim_min
+
 
 # Create working dataframe copy
 df_work = df_full.copy()

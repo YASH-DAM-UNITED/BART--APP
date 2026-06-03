@@ -215,8 +215,9 @@ else:
             )
             
             
-        if "Total" in df.columns: 
-            gb.configure_column("Total", pinned="right", width=100)
+        if "Total" in df.columns:
+            
+            gb.configure_column("Total", pinned="right", minWidth=100)
         AgGrid(df, gridOptions=gb.build(), theme="streamlit", key=key, allow_unsafe_jscode=True)
 
     # ========================================================

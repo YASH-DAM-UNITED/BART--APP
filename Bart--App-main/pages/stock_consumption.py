@@ -192,33 +192,34 @@ if st.session_state.page == "mode_select":
 # -----------------------------
 mode = st.session_state.mode
 
-# We build a list of dicts that hold item name, its UMO, and its original spreadsheet row index
-processed_items = []
-start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
-end_idx = weekly_start if mode == "daily" else len(sheet_data)
+# Only execute this block if a mode has been selected
+if mode:
+    processed_items = []
+    start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
+    # Ensure end_idx is handled safely
+    end_idx = weekly_start if mode == "daily" else len(sheet_data)
 
-for idx in range(start_idx, end_idx):
-    if idx < len(sheet_data):
-        row = sheet_data[idx]
-        item_name = row[0].strip() if row and row[0].strip() else ""
-        
-        # Skip section headers or empty cells accidentally left in the list
-        if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
-            continue
+    for idx in range(start_idx, end_idx):
+        if idx < len(sheet_data):
+            row = sheet_data[idx]
+            item_name = row[0].strip() if row and row[0].strip() else ""
             
-        umo = row[2].strip() if len(row) >= 3 and row[2] else ""
-        processed_items.append({
-            "name": item_name,
-            "umo": umo,
-            "row_idx": idx + 1 # 1-based indexing for gspread
-        })
+            if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
+                continue
+                
+            umo = row[2].strip() if len(row) >= 3 and row[2] else ""
+            processed_items.append({
+                "name": item_name,
+                "umo": umo,
+                "row_idx": idx + 1
+            })
 
-st.info(f"Mode: {mode.upper()} | Items: {len(processed_items)}")
+    st.info(f"Mode: {mode.upper()} | Items: {len(processed_items)}")
 
-if st.button("⬅ Back"):
-    st.session_state.page = "mode_select"
-    st.session_state.mode = None
-    st.rerun()
+    if st.button("⬅ Back"):
+        st.session_state.page = "mode_select"
+        st.session_state.mode = None
+        st.rerun()
 
 # -----------------------------
 # DATE

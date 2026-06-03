@@ -1,7 +1,7 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
@@ -62,8 +62,9 @@ if st.session_state.transfer_cart:
     
     if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # Capture time in 12-hour AM/PM format
-            current_timestamp = datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+            # Capture time, add 3 hours to match Jeddah time (UTC+3)
+            jeddah_time = datetime.now() + timedelta(hours=3)
+            current_timestamp = jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
             scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]

@@ -298,12 +298,57 @@ if col4.button("⬅ LOGOUT "):
 # ========================================================
 # THE "EXIT" GATE
 # ========================================================
-if st.session_state.show_manager:
+# ========================================================
+# AREA MANAGER PORTAL BLOCK
+# ========================================================
+if st.session_state.get("show_manager", False):
     st.divider()
     st.subheader("🔑 Area Manager Portal")
-    st.write("This is your new blank UI. You can add any components here.")
-    # Add whatever you want for the manager here
-    st.stop() # <--- THIS IS THE MAGIC LINE
+    
+    # 1. Load the manager mapping sheet
+    try:
+        mapping_df = load_manager_mapping()
+        unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+        
+        # 2. Manager Selector
+        selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
+        
+        if selected_manager != "Select...":
+            # 3. Get filtered branches based on selection
+            m_filtered_branches = get_filtered_branches(selected_manager, branches, mapping_df)
+            m_branch_names = [b["BranchName"] for b in m_filtered_branches]
+            
+            if not m_filtered_branches:
+                st.warning(f"No branches found for {selected_manager}.")
+            else:
+                st.info(f"Viewing {len(m_filtered_branches)} branches managed by: {selected_manager}")
+                
+                # 4. Load & Process specific data for the manager
+                # Uses your existing helper functions to keep logic consistent
+                with st.spinner("Fetching data for manager's branches..."):
+                    m_all_data = load_all_data(m_filtered_branches)
+                    m_daily, m_weekly = process_stock(m_all_data, selected_date_str, m_branch_names)
+                    
+                    m_daily_df = build_df(m_daily, m_branch_names)
+                    m_weekly_df = build_df(m_weekly, m_branch_names)
+                
+                # 5. Display Grids
+                st.write("### 📦 Manager Daily Items")
+                make_grid(m_daily_df, "mgr_daily_grid")
+                
+                st.write("### 📦 Manager Weekly Items")
+                make_grid(m_weekly_df, "mgr_weekly_grid")
+                
+    except Exception as e:
+        st.error(f"Error loading manager data: {e}")
+
+    # Back to Dashboard Button
+    if st.button("⬅ Back to Main Dashboard"):
+        st.session_state.show_manager = False
+        st.rerun()
+    
+    # CRITICAL: This stops the main code from running
+    st.stop()
 # ========================================================
 # Your 1000 lines of code start here...
 # No indentation changes needed!
@@ -599,26 +644,7 @@ def make_grid(df, key):
 
 
 
-# 1. Load the manager mapping
-mapping_df = load_manager_mapping()
-unique_managers = sorted(mapping_df['AreaManager'].unique().tolist())
 
-# 2. Add the Manager Selector
-selected_manager = st.selectbox("👤 Select Area Manager", options=["All"] + unique_managers, index=0)
-
-# 3. Dynamic Filter Logic
-if selected_manager != "All":
-    filtered_branches = get_filtered_branches(selected_manager, branches, mapping_df)
-    st.info(f"Showing branches for: {selected_manager}")
-else:
-    filtered_branches = branches # Default to all branches
-
-# 4. Now use filtered_branches instead of the original 'branches' variable
-# Replace your current all_data call:
-all_data = load_all_data(filtered_branches)
-
-# Update the branch_names list so your table columns match
-branch_names = [b["BranchName"] for b in filtered_branches]
 # ========================================================
 # PIPELINE RUN
 # ========================================================

@@ -68,44 +68,44 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 
 @st.dialog("⏰ Select Duty Hours")
 def custom_time_dialog(row_idx, row_name, day_name):
-    st.write(f"Check the hours worked for **{row_name}** on **{day_name}**.")
+    st.write(f"Check all hours worked for **{row_name}** on **{day_name}**.")
+    st.caption("Note: Select all hours you are physically present. The total will be calculated automatically.")
     
     selected_hours = []
     
-    st.subheader("AM Hours")
+    # AM Section
+    st.subheader("AM Blocks")
     cols_am = st.columns(6)
     for i in range(1, 13):
         if cols_am[(i - 1) % 6].checkbox(f"{i} AM", key=f"am_{i}"):
             selected_hours.append(f"{i} AM")
             
-    st.subheader("PM Hours")
+    # PM Section
+    st.subheader("PM Blocks")
     cols_pm = st.columns(6)
     for i in range(1, 13):
-        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"{i} PM"):
+        if cols_pm[(i - 1) % 6].checkbox(f"{i} PM", key=f"pm_{i}"):
             selected_hours.append(f"{i} PM")
 
-    # AUTOMATIC MATH CORRECTION
-    has_am = any("AM" in s for s in selected_hours)
-    has_pm = any("PM" in s for s in selected_hours)
-    
+    # DIRECT COUNT: 1 box checked = 1 hour worked. 
+    # No auto-subtraction, so split shifts are counted accurately.
     total_worked = len(selected_hours)
-    # If they cross from AM to PM, they have selected 13 slots for a 12-hour shift
-    if has_am and has_pm:
-        total_worked -= 1
     
-    st.metric("Total Hours", f"{total_worked} hrs")
+    st.metric("Total Hours Worked", f"{total_worked} hrs")
     
-    if 0 < total_worked < 9:
-        st.warning(f"⚠️ Minimum 9 hours required. Current: {total_worked}.")
+    # UPDATED: Mandatory minimum is now 8
+    if 0 < total_worked < 8:
+        st.warning(f"⚠️ Minimum 8 hours required. Current: {total_worked}.")
     
     apply_all = st.checkbox("Apply to all working days this week")
     
     if st.button("Confirm Selection", type="primary"):
-        if total_worked < 9:
-            st.error("❌ Minimum 9 hours required.")
+        if total_worked < 8:
+            st.error("❌ Submission blocked: Minimum 8 hours required.")
         else:
             times_str = ", ".join(selected_hours)
-            ot = max(0, total_worked - 9)
+            # OT is now calculated based on 8 hours
+            ot = max(0, total_worked - 8)
             value = f"{times_str} ({total_worked} hrs, OT {ot}h)"
             
             if apply_all:
@@ -116,7 +116,6 @@ def custom_time_dialog(row_idx, row_name, day_name):
             
             st.session_state.show_dialog = False
             st.rerun()
-
 
 
 @st.dialog("🚫 Submission Blocked")

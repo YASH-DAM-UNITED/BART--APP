@@ -47,24 +47,51 @@ def load_data(refresh_token):
     return pd.DataFrame(raw[1:], columns=raw[0]).fillna("")
 
 def get_shift(cell):
-    if not cell or not isinstance(cell, str): return None
+    if not cell or not isinstance(cell, str): 
+        return []
+    
+    # 1. Clean the string
     cell = str(cell).replace('\xa0', ' ').replace('\u202f', ' ').replace("–", "-").replace("—", "-")
     cell = re.sub(r"\(.*?\)", "", cell).strip()
-    pattern = r"(\d{1,2})\s*(AM|PM)"
-    matches = re.findall(pattern, cell, re.I)
-    if len(matches) < 2: return None
-    def to_minutes(h, m):
-        h, m = int(h), m.upper().strip()
-        if m == "AM": return (0 if h == 12 else h) * 60
-        return (12 if h == 12 else h + 12) * 60
-    return to_minutes(matches[0][0], matches[0][1]), to_minutes(matches[1][0], matches[1][1])
+    
+    # 2. Split by | for split shifts
+    # If there is no |, parts will just be a list with the original string (Old logic compatibility)
+    parts = cell.split('|')
+    shift_intervals = []
+    
+    for part in parts:
+        pattern = r"(\d{1,2})\s*(AM|PM)"
+        matches = re.findall(pattern, part, re.I)
+        
+        if len(matches) >= 2:
+            def to_minutes(h, m):
+                h, m = int(h), m.upper().strip()
+                if m == "AM": return (0 if h == 12 else h) * 60
+                return (12 if h == 12 else h + 12) * 60
+            
+            start = to_minutes(matches[0][0], matches[0][1])
+            end = to_minutes(matches[1][0], matches[1][1])
+            shift_intervals.append((start, end))
+            
+    return shift_intervals
 
 def is_active_in_range(shift_val, start_min, end_min):
-    shift = get_shift(shift_val)
-    if not shift: return False
-    s_start, s_end = shift
-    if s_start < s_end: return not (s_end <= start_min or s_start >= end_min)
-    else: return not (s_end <= start_min and s_start >= end_min)
+    intervals = get_shift(shift_val)
+    if not intervals: 
+        return False
+    
+    # Loop through all blocks (handles old logic as a list of one)
+    for s_start, s_end in intervals:
+        if s_start < s_end:
+            # Standard shift: overlaps if it doesn't end before start OR start after end
+            if not (s_end <= start_min or s_start >= end_min):
+                return True
+        else:
+            # Overnight shift: overlaps if it is NOT (ends before start AND starts after end)
+            if not (s_end <= start_min and s_start >= end_min):
+                return True
+                
+    return False
 
 def compute(df, start_min, end_min):
     active, inactive = [], []

@@ -282,23 +282,22 @@ if edit_mode:
         )
     # Capture the edited dataframe
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
-    
     # 3. Sync State & Handle Triggers
-    # First, save everything from the editor to the buffer (handles Copy/Paste)
     for i, row in edited_df.iterrows():
         for d in DAYS:
             new_val = row.get(d)
-            # Only update buffer if value actually changed or exists
-            if new_val and new_val != df_display.loc[i, d]:
+            # Only save if it's not None and not an empty string
+            if new_val is not None and str(new_val).strip() != "":
                 st.session_state.shift_buffer[f"{i}_{d}"] = new_val
-
-    # Handle logic triggers (Dialogs and Day Off)
+    
+    # Handle logic triggers (after sync)
     for i, row in edited_df.iterrows():
         for d in DAYS:
             value = row.get(d)
             if value == "📴 Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
                 st.rerun()
+            # We don't trigger dialogs if the value is a shift string (the result of a paste)
             elif value == "➕ Straight Duty":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
             elif value == "➕ Break Duty":

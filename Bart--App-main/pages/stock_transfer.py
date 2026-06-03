@@ -21,7 +21,6 @@ if "current_stocks" not in st.session_state:
     if st.button("⬅ Go Back to Dashboard"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
-
 # 1. ADD ITEMS SECTION
 with st.expander("➕ Add Items to Transfer", expanded=True):
     category = st.radio("Select Item Category", ["Daily Items", "Weekly Items"], horizontal=True)
@@ -32,9 +31,18 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     qty = st.number_input("Quantity", min_value=1, step=1)
     
     if st.button("Add to List"):
-        st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom})
-        st.success(f"Added {selected_item} ({qty} {uom}) to cart!")
-
+        # --- FIX: Define the UOM before using it ---
+        # Find the specific row for the selected item to extract its UOM
+        selected_row = next(row for row in target_list if row['Item'] == selected_item)
+        uom = selected_row.get('UOM', 'units')  # Ensure 'UOM' matches your data key
+        
+        # Now 'uom' is defined and can be used safely
+        st.session_state.transfer_cart.append({
+            "item": selected_item, 
+            "qty": qty, 
+            "uom": uom
+        })
+        st.success(f"Added {selected_item} to cart!")
 # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")

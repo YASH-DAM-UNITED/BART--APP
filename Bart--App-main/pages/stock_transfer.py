@@ -73,21 +73,22 @@ if st.session_state.transfer_cart:
             sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
             
             # 3. Format strings for beautiful Google Sheet layout
-            # Using \n creates vertical stacking when "Wrap Text" is enabled in Sheet
+            # \n creates a new line in the cell (requires "Wrap Text" in Sheets)
             item_details = [f"• {entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
             combined_items_str = "\n".join(item_details)
             
             quantities_list = [str(entry['qty']) for entry in st.session_state.transfer_cart]
             combined_qtys_str = "\n".join(quantities_list)
             
-            # 4. Prepare row (Timestamp last)
+            # 4. Prepare row (Status column added)
             row_data = [
                 str(st.session_state.get("selected_branch", "Unknown")), 
                 str(destination), 
                 str(combined_items_str), 
                 str(combined_qtys_str), 
                 str(reason),
-                str(current_timestamp) 
+                "Pending",             # Status
+                str(current_timestamp) # Timestamp
             ]
             
             sheet.append_row(row_data)

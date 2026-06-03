@@ -282,26 +282,34 @@ if edit_mode:
         )
     # Capture the edited dataframe
     edited_df = st.data_editor(df_display[["Name", "Role"] + DAYS + ["Over-Time"]], column_config=config, num_rows="dynamic", use_container_width=True, key="editor")
-    # 3. Sync State & Handle Triggers
+# 3. Sync State & Handle Triggers
+    
+    # STEP 1: Sync everything from editor to buffer immediately
     for i, row in edited_df.iterrows():
         for d in DAYS:
             new_val = row.get(d)
-            # Only save if it's not None and not an empty string
-            if new_val is not None and str(new_val).strip() != "":
+            if new_val and str(new_val).strip() != "":
                 st.session_state.shift_buffer[f"{i}_{d}"] = new_val
+
+    # STEP 2: Logic triggers (Only trigger RERUN if absolutely necessary)
+    # We store the trigger in a temp variable to avoid mid-loop restarts
+    trigger_rerun = False
     
-    # Handle logic triggers (after sync)
     for i, row in edited_df.iterrows():
         for d in DAYS:
             value = row.get(d)
             if value == "📴 Day Off":
                 st.session_state.shift_buffer[f"{i}_{d}"] = "OFF"
-                st.rerun()
-            # We don't trigger dialogs if the value is a shift string (the result of a paste)
+                trigger_rerun = True
             elif value == "➕ Straight Duty":
                 custom_time_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+                # Note: dialogs pause execution, so this is safe
             elif value == "➕ Break Duty":
                 break_duty_dialog(row_idx=i, row_name=row["Name"], day_name=d)
+
+    # STEP 3: Single point of entry for RERUN
+    if trigger_rerun:
+        st.rerun()
 
     # Sync deleted staff
     current_names = set(edited_df["Name"].dropna().tolist())

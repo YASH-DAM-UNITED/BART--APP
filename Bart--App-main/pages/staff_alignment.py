@@ -93,13 +93,16 @@ def is_active_in_range(shift_val, start_min, end_min):
     
     s_start, s_end = shift
     
-    # Standard shift (e.g., 8AM to 5PM)
+    # Logic: Does the shift intersect with the selected [start_min, end_min] range?
+    # We check if there is any overlap between (s_start, s_end) and (start_min, end_min)
     if s_start < s_end:
+        # Standard shift: e.g., 8am-5pm (480-1020)
         return not (s_end <= start_min or s_start >= end_min)
-    # Overnight shift (e.g., 10PM to 6AM)
     else:
-        # Check if the shift overlaps with the requested range
-        return True # Logic: Simplified overlap for overnight
+        # Overnight shift: e.g., 10pm-6am (1320-360)
+        # It is active if it's NOT (ending before start_min AND starting after end_min)
+        # This covers all overlaps for overnight shifts
+        return not (s_end <= start_min and s_start >= end_min)
 
 def is_active(cell, now_min):
     shift = get_shift(cell)
@@ -121,6 +124,21 @@ def extract_day_month(col):
 
 def safe_df(df):
     return df.loc[:, ~df.columns.duplicated()].copy()
+
+
+def compute_range(df, start_min, end_min):
+    active, inactive = [], []
+    cols = df.columns.tolist()
+    
+    for _, row in df.iterrows():
+        shift_val = str(row["Shift"])
+        if is_active_in_range(shift_val, start_min, end_min):
+            active.append(row.to_dict())
+        else:
+            inactive.append(row.to_dict())
+            
+    return (pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols),
+            pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols))
 def compute(df, now_min):
     active, inactive = [], []
     

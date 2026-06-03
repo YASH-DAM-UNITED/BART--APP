@@ -14,6 +14,7 @@ def success_dialog(message):
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚀 Internal Stock Transfer")
 
+# Initialize Session States
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []
 
@@ -31,11 +32,10 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names, key="item_sel")
     
-    # Retrieve UOM based on the selected item
+    # Retrieve UOM
     selected_row = next(row for row in target_list if row['Item'] == selected_item)
     uom_display = selected_row.get('DATE->  UOM', 'units') 
     
-    # Quantity and UOM on the same line
     col1, col2 = st.columns([3, 1])
     qty = col1.number_input("Quantity", min_value=1, step=1, key="qty_input")
     col2.markdown("<br>", unsafe_allow_html=True) 
@@ -67,22 +67,25 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
     if st.button("Confirm and Send All", key="confirm_btn"):
-        # Capture local time from user's device
+        # Fetch timestamp from client device
         local_time = streamlit_js_eval(js_expressions='new Date().toLocaleString()', key='get_time', want_return=True)
         
-        if local_time:
+        if not local_time:
+            st.warning("Syncing time... Please click again.")
+        else:
             try:
                 creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
                 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
                 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
                 client = gspread.authorize(creds)
+                
+                # Verify worksheet name
                 sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                 
                 item_details = [f"{entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
                 combined_items_str = " | ".join(item_details)
                 total_qty = sum(entry['qty'] for entry in st.session_state.transfer_cart)
                 
-                # New Column 1: Local Timestamp from device
                 row_data = [
                     local_time, 
                     st.session_state.get("selected_branch", "Unknown"), 
@@ -94,10 +97,11 @@ if st.session_state.transfer_cart:
                 
                 sheet.append_row(row_data)
                 st.session_state.transfer_cart = []
-                success_dialog(f"Successfully transferred items to {destination} at {local_time}!")
+                success_dialog(f"Successfully transferred to {destination}!")
                 
             except Exception as e:
-                st.error(f"Error saving to Google Sheets: {e}")
+                st.error(f"Error: {e}")
+                st.write("Ensure your Google Sheet is named 'MASTERBRANCHSHEET' and the tab is 'Transfers'. Also, verify the service account has access.")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

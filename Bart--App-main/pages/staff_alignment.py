@@ -239,8 +239,8 @@ b_act, b_inact = compute(df_branch, now_min)
 st.subheader("🏢 Branch Overview")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Branch", selected_branch)
-if c2.metric("Date", selected_date.strftime("%d-%m-%Y")):
-    st.rerun()
+c2.metric("Date", selected_date.strftime("%d-%m-%Y"))
+    
 
 c3.metric("Active", len(b_act))
 c4.metric("Inactive", len(b_inact))

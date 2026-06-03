@@ -128,9 +128,37 @@ def compute(df, now_min):
     
     return active_df, inactive_df
 
-# --- UI & LOGIC ---
+# --- UI & LOGIC: TIME CONTROL ---
 st.title("STAFF Schedule Control Center")
 
+# Initialize simulation time in session state if not present
+if "sim_min" not in st.session_state:
+    st.session_state.sim_min = now_min
+
+# --- MAIN PAGE TIME SELECTION ---
+st.markdown("### 🕒 Analyze Schedule at Specific Time")
+col_time, col_btn = st.columns([4, 1], vertical_alignment="bottom")
+
+with col_time:
+    # Manager picks the time here
+    selected_time = st.time_input("Select Time to View Staff Status", value=now.time())
+
+with col_btn:
+    # The action button
+    if st.button("🚀 Calculate Status", use_container_width=True):
+        st.session_state.sim_min = selected_time.hour * 60 + selected_time.minute
+        st.rerun()
+
+# Display status feedback
+if st.session_state.sim_min != now_min:
+    st.warning(f"⚠️ Viewing data for: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}** (Not Current Time)")
+else:
+    st.info(f"Viewing Live Status: **{st.session_state.sim_min // 60:02d}:{st.session_state.sim_min % 60:02d}**")
+
+# Set the active 'sim_min' for all calculations
+sim_min = st.session_state.sim_min
+
+# --- DATA PROCESSING ---
 df_full = load_data(st.session_state.data_refresh_token).copy()
 df_full = safe_df(df_full)
 
@@ -163,23 +191,10 @@ with col3:
 # Create working dataframe copy
 df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
-
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
 
-u_act, u_inact = compute(df_work, now_min)
-
-
-
-# --- DEBUG SECTION ---
-with st.expander("🔍 Click to Debug Data"):
-    st.write("Current Time (Minutes from Midnight):", now_min)
-    st.write("First 5 rows of dataframe:")
-    st.dataframe(df_work.head())
-    if not df_work.empty:
-        sample_shift = df_work["Shift"].iloc[0]
-        st.write(f"Sample Shift String: '{sample_shift}'")
-        st.write("Parsed Shift Result:", get_shift(sample_shift))
-# ---------------------
+# Use 'sim_min' for all calculations
+u_act, u_inact = compute(df_work, sim_min)
 
 st.subheader("STAFF Universal Overview")
 c1, c2, c3, c4 = st.columns(4)

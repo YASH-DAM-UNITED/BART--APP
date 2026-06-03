@@ -266,7 +266,7 @@ if col2.button("👥 Staff Alignment"):
     st.switch_page("pages/staff_alignment.py")
 
 if col3.button("🔑 Area Manager Login"):
-    st.session_state.show_manager_view = not st.session_state.show_manager_view
+    toggle_view()
 
 
 if col4.button("⬅ LOGOUT "):
@@ -722,6 +722,12 @@ st.markdown("""
 # MAIN TABLES
 # ========================================================
 
+
+
+
+def toggle_view():
+    st.session_state.show_manager_view = not st.session_state.show_manager_view
+
 def render(df, title):
     st.subheader(title)
     if df.empty:
@@ -757,29 +763,51 @@ with col2:
     )
 
 # ========================================================
-# AREA MANAGER LOGIN BUTTON LOGIC
+# AREA MANAGER TOGGLE LOGIC
 # ========================================================
 
-# 1. Initialize the session state to track if the view is "unlocked"
+# 1. Initialize the state
 if 'show_manager_view' not in st.session_state:
     st.session_state.show_manager_view = False
 
-# 2. Create the button to toggle the view
-# Use 'on_click' to flip the boolean value
+# 2. Function to toggle view
 
-# 3. Only show the UI if the session state is True
+
+# 3. Place the button prominently
+if st.button("🔑 Area Manager Login"):
+    toggle_view()
+
+# 4. CONDITIONAL RENDERING: 
+# If the manager view is ON, we show ONLY the manager UI.
+# If the manager view is OFF, we show the standard Main Panel.
+
 if st.session_state.show_manager_view:
-    st.markdown("---")
+    # --- AREA MANAGER VIEW (Everything else is hidden because it's not in this block) ---
     st.subheader("🔑 Area Manager Portal")
-    st.success("Authorized: You are now viewing the restricted panel.")
     
-    # --- PUT YOUR MANAGER-SPECIFIC UI HERE ---
-    # For example, you can render the same dataframes:
+    if st.button("⬅ Back to Main Panel"):
+        toggle_view()
+        st.rerun()
+        
+    st.markdown("---")
+    # Add your manager-specific dataframes here
     render(daily_df, "📊 Manager View: Daily Stock")
     render(weekly_df, "📊 Manager View: Weekly Stock")
     
-    # You can add the "future changes" here as you develop them
-    if st.button("Close Manager Portal"):
-        st.session_state.show_manager_view = False
-        st.rerun()
-
+    # You can now add your "future changes" here safely
+    
+else:
+    # --- STANDARD VIEW (The default interface) ---
+    # Put all your existing code (Search, Categories, Tables) inside this 'else' block
+    
+    # Global Inventory Search
+    st.subheader("🔍 Global Inventory Search")
+    # ... (Your search code)
+    
+    # Category View
+    st.subheader("📊 Category Wise Stock Overview")
+    # ... (Your category code)
+    
+    # Main Tables
+    render(daily_df, "📦 Daily Items Stock")
+    render(weekly_df, "📦 Weekly Items Stock")

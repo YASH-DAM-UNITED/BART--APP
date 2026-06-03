@@ -31,16 +31,17 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     item_names = [row['Item'] for row in target_list]
     selected_item = st.selectbox("Select Item", item_names)
     
-    # --- DYNAMIC UOM LOOKUP ---
-    # Find the row for the selected item to get its specific UOM
+    # 1. Find the specific row to get the correct UOM for the selected item
     selected_row = next(row for row in target_list if row['Item'] == selected_item)
     uom_display = selected_row.get('DATE->  UOM', 'units') 
     
-    # --- LAYOUT WITH UOM ---
-    col_input, col_uom = st.columns([3, 1])
-    qty = col_input.number_input("Quantity", min_value=1, step=1)
-    col_uom.write("###") # Vertical alignment hack
-    col_uom.write(f"**{uom_display}**")
+    # 2. Put the Quantity and the UOM label in the same row
+    col1, col2 = st.columns([3, 1])
+    qty = col1.number_input("Quantity", min_value=1, step=1)
+    
+    # Display the UOM on the same line as the Quantity input
+    col2.markdown("<br>", unsafe_allow_html=True) # Aligns the text with the input box
+    col2.write(f"**{uom_display}**")
     
     if st.button("Add to List"):
         st.session_state.transfer_cart.append({
@@ -48,7 +49,7 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
             "qty": qty, 
             "uom": uom_display
         })
-        st.success(f"Added {selected_item} ({qty} {uom_display}) to cart!")
+        st.success(f"Added {selected_item} to cart!")
     # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")

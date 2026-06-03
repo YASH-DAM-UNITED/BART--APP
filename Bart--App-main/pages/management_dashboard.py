@@ -544,7 +544,7 @@ def make_grid(df, key):
             "Total",
             type=["numericColumn"],
             pinned="right",  # Pin to the right so it's always visible
-            width=100,
+            minWidth=100,
             cellStyle={
                 "textAlign": "center",
                 "fontWeight": "bold",

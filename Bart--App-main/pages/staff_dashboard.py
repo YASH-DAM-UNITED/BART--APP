@@ -82,6 +82,47 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+
+
+
+# --- HELPER FUNCTIONS FOR NOTIFICATIONS ---
+@st.dialog("Incoming Transfer Notification")
+def show_transfer_dialog(transfer):
+    st.write(f"**ID:** {transfer['ID']}")
+    st.write(f"**From:** {transfer['Origin']}")
+    st.markdown("---")
+    st.write("**Items:**")
+    st.text(transfer['Items']) 
+    st.write(f"**Quantities:**")
+    st.text(transfer['Quantities'])
+    st.write(f"**Reason:** {transfer['Reason']}")
+    
+    col1, col2 = st.columns(2)
+    if col1.button("✅ Accept"):
+        update_transfer_status(transfer['ID'], "Accepted")
+        st.rerun()
+    if col2.button("❌ Reject"):
+        update_transfer_status(transfer['ID'], "Rejected")
+        st.rerun()
+
+def update_transfer_status(transfer_id, status):
+    sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+    cell = sheet.find(transfer_id)
+    if cell:
+        # Assuming Column 7 is Status (ID, Origin, Destination, Items, Qty, Reason, Status, Timestamp)
+        sheet.update_cell(cell.row, 7, status)
+        st.success(f"Transfer {transfer_id} marked as {status}")
+
+def check_for_pending_transfers():
+    sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+    records = sheet.get_all_records()
+    my_branch = st.session_state.selected_branch
+    
+    # Filter for pending transfers where the current logged-in branch is the destination
+    pending = [r for r in records if r['Destination'] == my_branch and r['Status'] == 'Pending']
+    
+    for transfer in pending:
+        show_transfer_dialog(transfer)
 # ---------------- ACTIVITY ----------------
 def refresh_activity():
     st.session_state.last_activity = time.time()
@@ -255,6 +296,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 # ---------------- AFTER LOGIN ----------------
 if st.session_state.authenticated:
     st.success(f"Logged in: {st.session_state.selected_branch}")
+    check_for_pending_transfers()
     col1, col2, col3, col4 = st.columns(4)
 
     if col1.button("📦 Stock Record"):

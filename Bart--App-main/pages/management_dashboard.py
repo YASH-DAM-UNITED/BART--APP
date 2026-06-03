@@ -16,6 +16,20 @@ import plotly.express as px
 if "show_manager" not in st.session_state:
     st.session_state.show_manager = False
 
+
+
+@st.cache_data(ttl=3600)
+def load_manager_mapping():
+    # Connect to your new sheet
+    sheet = client.open_by_key("1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0").worksheet("Sheet1")
+    data = sheet.get_all_records()
+    return pd.DataFrame(data)
+
+def get_filtered_branches(manager_name, full_branch_list, mapping_df):
+    # Filter the mapping sheet for the selected manager
+    managed_branches = mapping_df[mapping_df['AreaManager'] == manager_name]['BranchName'].tolist()
+    # Filter your actual branch list by these names
+    return [b for b in full_branch_list if b['BranchName'] in managed_branches]
 # The "Toggle" function to change the state
 def toggle_manager():
     st.session_state.show_manager = not st.session_state.show_manager
@@ -583,6 +597,28 @@ def make_grid(df, key):
         key=key
     )
 
+
+
+# 1. Load the manager mapping
+mapping_df = load_manager_mapping()
+unique_managers = sorted(mapping_df['AreaManager'].unique().tolist())
+
+# 2. Add the Manager Selector
+selected_manager = st.selectbox("👤 Select Area Manager", options=["All"] + unique_managers, index=0)
+
+# 3. Dynamic Filter Logic
+if selected_manager != "All":
+    filtered_branches = get_filtered_branches(selected_manager, branches, mapping_df)
+    st.info(f"Showing branches for: {selected_manager}")
+else:
+    filtered_branches = branches # Default to all branches
+
+# 4. Now use filtered_branches instead of the original 'branches' variable
+# Replace your current all_data call:
+all_data = load_all_data(filtered_branches)
+
+# Update the branch_names list so your table columns match
+branch_names = [b["BranchName"] for b in filtered_branches]
 # ========================================================
 # PIPELINE RUN
 # ========================================================

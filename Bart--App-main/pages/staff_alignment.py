@@ -229,9 +229,8 @@ for b in branches:
 st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 
 st.divider()
-col1, col2 = st.columns(2)
+col1= st.columns()
 with col1: selected_branch = st.selectbox("🏢 Branch", branches)
-with col2: selected_date = st.date_input("📅 Date", value=date.today())
 
 df_branch = df_work[df_work["Branch"] == selected_branch]
 b_act, b_inact = compute(df_branch, now_min)

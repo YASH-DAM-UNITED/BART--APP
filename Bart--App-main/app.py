@@ -371,29 +371,19 @@ if st.session_state.show_mgmt_password:
             with action_col1:
                 if st.form_submit_button("Verify & Open", use_container_width=True):
                     if password_input == st.secrets["MANAGER_PASSWORD"]:
+                        st.session_state.user_role = "admin"
                         st.session_state.show_mgmt_password = False
                         st.switch_page("pages/management_dashboard.py")
+                    elif password_input == st.secrets["AREA_MANAGER_PASSWORD"]:
+                        st.session_state.user_role = "admin"
+                        st.session_state.show_mgmt_password = False
+                        st.switch_page("pages/management_dashboard.py")
+
+                    
                     else:
-                        st.error("Access Refused: Invalid token signature.")
+                        st.error("Access Refused: Invalid credentials or system configuration error.")
+                        
 
 
 
 
-
-# Use .get() on the secrets object itself to be safe
-secrets_dict = st.secrets
-area_mgr_pass = secrets_dict.get("AREA_MANAGER_PASSWORD", "NOT_SET")
-admin_pass = secrets_dict.get("MANAGER_PASSWORD", "NOT_SET")
-
-if password_input == area_mgr_pass and area_mgr_pass != "NOT_SET":
-    st.session_state.user_role = "area_manager"
-    st.session_state.show_mgmt_password = False
-    st.switch_page("pages/management_dashboard.py")
-
-elif password_input == admin_pass and admin_pass != "NOT_SET":
-    st.session_state.user_role = "admin"
-    st.session_state.show_mgmt_password = False
-    st.switch_page("pages/management_dashboard.py")
-    
-else:
-    st.error("Access Refused: Invalid credentials or system configuration error.")

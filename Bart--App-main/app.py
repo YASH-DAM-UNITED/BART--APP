@@ -242,7 +242,7 @@ st.markdown("""
 st.markdown("<div class='animate-text delay-1' style='text-align: center;'><span style='background: rgba(59, 33, 230, 0.08); color: #3B21E6; padding: 6px 16px; border-radius: 100px; font-size: 12px; font-weight: 700; letter-spacing: 1px;'>INTERNAL STAFF NETWORK</span></div>", unsafe_allow_html=True)
 
 # Wrapped classes here to target font alterations safely across viewports
-st.markdown("""f
+st.markdown(f"""
 <h1 class='animate-text delay-2 main-title-text' style='text-align: center; font-size: 88px; font-weight: 800; color: #111; margin-top: 5px; margin-bottom: -15px; letter-spacing: -2.5px;'>
     <span class='bart-logo'>{_('title')}</span><!--
  --><span style="position: relative; display: inline-block;">

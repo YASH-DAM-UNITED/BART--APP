@@ -3,11 +3,6 @@ import time
 
 
 
-if st.button("🌐 Switch Language / تغيير اللغة"):
-    st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
-    st.rerun()
-
-
 
 
 # 1. Define your Translations
@@ -44,6 +39,14 @@ with lang_col2:
 # 4. Helper function to get text
 def _(key):
     return translations[st.session_state.lang].get(key, key)
+
+
+
+if st.button("🌐 Switch Language / تغيير اللغة"):
+    st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
+    st.rerun()
+
+
 # =========================================================
 # SYSTEM CONFIG
 # =========================================================

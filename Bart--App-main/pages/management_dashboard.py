@@ -642,11 +642,12 @@ if st.session_state.user_role == "area_manager":
     st.subheader("🔑 Area Manager Restricted Access")
     
     mapping_df = load_manager_mapping()
-    unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+    # Normalize manager names to a list
+    unique_managers = sorted([str(m).strip() for m in mapping_df['AreaManager'].unique() if m])
     
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
 
-    # 1. Reset Auth if user switches Manager
+    # Reset Auth if user switches Manager
     if "last_mgr" not in st.session_state:
         st.session_state.last_mgr = None
     
@@ -654,22 +655,26 @@ if st.session_state.user_role == "area_manager":
         st.session_state.mgr_authenticated = False
         st.session_state.last_mgr = selected_manager
 
-    # 2. Password Validation
+    # Password Validation Block
     if selected_manager != "Select...":
         if not st.session_state.get("mgr_authenticated", False):
             password = st.text_input(f"Enter password for {selected_manager}", type="password")
             if st.button("🔓 Login"):
-                # Hash the input and compare
-                input_hash = hashlib.sha256(password.encode()).hexdigest()
-                stored_hash = st.secrets["MANAGER_PASSWORDS"].get(selected_manager)
+                # Normalize keys: lowercase everything to avoid case-mismatch
+                manager_secrets = {k.lower(): v for k, v in st.secrets.get("MANAGER_PASSWORDS", {}).items()}
+                
+                mgr_key_normalized = selected_manager.lower().strip()
+                stored_hash = manager_secrets.get(mgr_key_normalized)
+                
+                input_hash = hashlib.sha256(password.strip().encode()).hexdigest()
                 
                 if stored_hash and input_hash == stored_hash:
                     st.session_state.mgr_authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid password.")
+                    st.error("Invalid password. Please check your credentials.")
         
-        # 3. Render Data ONLY if Authenticated
+        # Render Data ONLY if Authenticated
         if st.session_state.get("mgr_authenticated", False):
             assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
             manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
@@ -686,7 +691,7 @@ if st.session_state.user_role == "area_manager":
                 st.write("### 📦 Manager Weekly Items")
                 make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
 
-    st.stop()
+    st.stop() # This prevents the rest of the app from showing
 
 
 

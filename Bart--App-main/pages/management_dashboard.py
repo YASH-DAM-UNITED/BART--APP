@@ -631,47 +631,40 @@ daily_df = build_df(daily_items, branch_names)
 weekly_df = build_df(weekly_items, branch_names)
 
 
-
-# --- GATEKEEPER ---
+# 2. GATEKEEPER LOGIC
 if "user_role" not in st.session_state:
     st.switch_page("app.py")
 
-# This will now ONLY run if the role is 'area_manager'
+# --- CASE: AREA MANAGER ---
 if st.session_state.user_role == "area_manager":
     st.subheader("🔑 Area Manager Restricted View")
     
     mapping_df = load_manager_mapping()
     unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
+    
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
 
     if selected_manager != "Select...":
         assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
         
-        # We need all_data loaded for both. Define load_all_data above this or keep it global.
-        all_data = load_all_data(branches) 
+        # Filter the ALREADY LOADED 'all_data'
         manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
         
         if not manager_all_data:
             st.warning(f"No data found for branches managed by {selected_manager}.")
         else:
             m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
+            
+            st.write("### 📦 Manager Daily Items")
             make_grid(build_df(m_daily, assigned_branch_names), "mgr_daily_grid")
+            st.write("### 📦 Manager Weekly Items")
             make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
 
-    # The Logout/Back button for the Manager
     if st.button("⬅ LOGOUT"):
         st.session_state.clear()
         st.switch_page("app.py")
         
-    st.stop() # CRITICAL: This kills the script for managers here.
-
-
-
-
-
-
-
-
+    st.stop()
 
 
 

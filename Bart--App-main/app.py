@@ -375,3 +375,20 @@ if st.session_state.show_mgmt_password:
                         st.switch_page("pages/management_dashboard.py")
                     else:
                         st.error("Access Refused: Invalid token signature.")
+
+
+
+
+
+
+
+# Inside your app.py, where you verify the password:
+if password_input == st.secrets.get("AREA_MANAGER_PASSWORD", "INVALID_PASSWORD_KEY"):
+    st.session_state.user_role = "area_manager" # Add this
+    st.session_state.show_mgmt_password = False
+    st.switch_page("pages/management_dashboard.py")
+
+elif password_input == st.secrets["MANAGER_PASSWORD"]:
+    st.session_state.user_role = "admin"        # Add this
+    st.session_state.show_mgmt_password = False
+    st.switch_page("pages/management_dashboard.py")

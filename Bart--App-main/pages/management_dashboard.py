@@ -642,9 +642,7 @@ if st.session_state.user_role == "area_manager":
             st.write("### 📦 Manager Weekly Items")
             make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
 
-    if st.button("⬅ LOGOUT"):
-        st.session_state.clear()
-        st.switch_page("app.py")
+    
         
     st.stop()
 

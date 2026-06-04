@@ -5,25 +5,27 @@ import time
 
 
 
-# 1. Define your Translations
-translations = {
+# Set up state
+if "lang" not in st.session_state: st.session_state.lang = "en"
+
+# Define your texts
+texts = {
     "en": {
         "title": "B A R T",
-        "subtitle": "Operations management <br>just got easier.",
-        "desc": "Welcome to the central command unit for BART. Seamlessly organize branch metrics, manage shift requirements, and deploy localized branch parameters.",
-        "staff": "Staff Access →",
-        "hr": "HR Access→",
-        "admin": "Admin Access →"
+        "sub": "Operations management <br>just got easier.",
+        "desc": "Welcome to the central command unit for BART...",
+        "btn_staff": "Staff Access →"
     },
     "ar": {
         "title": "بـارت",
-        "subtitle": "إدارة العمليات <br>أصبحت أسهل.",
-        "desc": "أهلاً بك في وحدة التحكم المركزية لـ BART. قم بتنظيم مقاييس الفروع بسلاسة، وإدارة متطلبات الورديات، وتوزيع معايير الفروع المحلية.",
-        "staff": "وصول الموظفين ←",
-        "hr": "وصول الموارد البشرية ←",
-        "admin": "وصول الإدارة ←"
+        "sub": "إدارة العمليات <br>أصبحت أسهل.",
+        "desc": "أهلاً بك في وحدة التحكم المركزية لـ BART...",
+        "btn_staff": "وصول الموظفين ←"
     }
 }
+
+# Select the language
+T = texts[st.session_state.lang]
 
 # 2. Initialize Language State
 if "lang" not in st.session_state:
@@ -241,7 +243,7 @@ st.markdown("<div class='animate-text delay-1' style='text-align: center;'><span
 # Wrapped classes here to target font alterations safely across viewports
 st.markdown(f"""
 <h1 class='animate-text delay-2 main-title-text' style='text-align: center; font-size: 88px; font-weight: 800; color: #111; margin-top: 5px; margin-bottom: -15px; letter-spacing: -2.5px;'>
-    <span class='bart-logo'>{_('title')}</span><!--
+    <span class='bart-logo'>{T['title']}</span><!--
  --><span style="position: relative; display: inline-block;">
         <span style="
             position: absolute;

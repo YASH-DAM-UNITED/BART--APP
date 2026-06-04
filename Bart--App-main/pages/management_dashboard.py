@@ -282,7 +282,7 @@ def load_all_data(branches):
 # ========================================================
 # REFRESH / NAVIGATION
 # ========================================================
-col1, col2,  col4 = st.columns(4)
+col1, col2,  col3 = st.columns(3)
 
 if col1.button(" 🔄 Refresh Data"):
     st.cache_data.clear()
@@ -295,7 +295,7 @@ if col2.button("👥 Staff Alignment"):
 
 
 
-if col4.button("⬅ LOGOUT "):
+if col3.button("⬅ LOGOUT "):
     st.switch_page("app.py")
 
 # ========================================================

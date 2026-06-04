@@ -1,6 +1,49 @@
 import streamlit as st
 import time
 
+
+
+if st.button("🌐 Switch Language / تغيير اللغة"):
+    st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
+    st.rerun()
+
+
+
+
+# 1. Define your Translations
+translations = {
+    "en": {
+        "title": "B A R T",
+        "subtitle": "Operations management <br>just got easier.",
+        "desc": "Welcome to the central command unit for BART. Seamlessly organize branch metrics, manage shift requirements, and deploy localized branch parameters.",
+        "staff": "Staff Access →",
+        "hr": "HR Access→",
+        "admin": "Admin Access →"
+    },
+    "ar": {
+        "title": "بـارت",
+        "subtitle": "إدارة العمليات <br>أصبحت أسهل.",
+        "desc": "أهلاً بك في وحدة التحكم المركزية لـ BART. قم بتنظيم مقاييس الفروع بسلاسة، وإدارة متطلبات الورديات، وتوزيع معايير الفروع المحلية.",
+        "staff": "وصول الموظفين ←",
+        "hr": "وصول الموارد البشرية ←",
+        "admin": "وصول الإدارة ←"
+    }
+}
+
+# 2. Initialize Language State
+if "lang" not in st.session_state:
+    st.session_state.lang = "en"
+
+# 3. Simple Toggle in the Sidebar (or top of page)
+lang_col1, lang_col2 = st.columns([10, 1])
+with lang_col2:
+    if st.button("🌐"):
+        st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
+        st.rerun()
+
+# 4. Helper function to get text
+def _(key):
+    return translations[st.session_state.lang].get(key, key)
 # =========================================================
 # SYSTEM CONFIG
 # =========================================================
@@ -196,9 +239,9 @@ st.markdown("""
 st.markdown("<div class='animate-text delay-1' style='text-align: center;'><span style='background: rgba(59, 33, 230, 0.08); color: #3B21E6; padding: 6px 16px; border-radius: 100px; font-size: 12px; font-weight: 700; letter-spacing: 1px;'>INTERNAL STAFF NETWORK</span></div>", unsafe_allow_html=True)
 
 # Wrapped classes here to target font alterations safely across viewports
-st.markdown("""
+st.markdown("""f
 <h1 class='animate-text delay-2 main-title-text' style='text-align: center; font-size: 88px; font-weight: 800; color: #111; margin-top: 5px; margin-bottom: -15px; letter-spacing: -2.5px;'>
-    <span class='bart-logo'>B A R T</span><!--
+    <span class='bart-logo'>{_('title')}</span><!--
  --><span style="position: relative; display: inline-block;">
         <span style="
             position: absolute;

@@ -637,10 +637,14 @@ if "user_role" not in st.session_state:
 # ========================================================
 # AREA MANAGER RESTRICTED VIEW (AUTHENTICATED)
 # ========================================================
+# ========================================================
+# AREA MANAGER RESTRICTED VIEW (AUTHENTICATED)
+# ========================================================
 if st.session_state.user_role == "area_manager":
     st.subheader("🔑 Area Manager Restricted Access")
     
     mapping_df = load_manager_mapping()
+    # Normalize names: strip whitespace, handle irregular spacing
     unique_managers = sorted([str(m).strip() for m in mapping_df['AreaManager'].unique() if m])
     
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
@@ -658,17 +662,21 @@ if st.session_state.user_role == "area_manager":
         if not st.session_state.get("mgr_authenticated", False):
             password = st.text_input(f"Enter password for {selected_manager}", type="password")
             if st.button("🔓 Login"):
-                # Dynamically build the secret key (e.g., MANAGER_ALICE)
-                # Ensure the name in your secrets matches the format below
-                secret_key = f"MANAGER_{selected_manager.upper().strip()}"
+                # Clean the name: Remove hidden chars/extra spaces, force uppercase
+                clean_name = " ".join(selected_manager.upper().split())
+                # Format into the expected secret key: e.g., MANAGER_HARRY_CAMPANO
+                secret_key = f"MANAGER_{clean_name.replace(' ', '_')}"
+                
                 stored_password = st.secrets.get(secret_key)
                 
-                # Check if password matches (Plain-text comparison as per your format)
+                # Check for password match
                 if stored_password and password.strip() == stored_password:
                     st.session_state.mgr_authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid password or manager not configured.")
+                    st.error(f"Invalid password for {selected_manager}.")
+                    # Use this for debugging if it still fails:
+                    # st.info(f"System is checking secret key: {secret_key}")
         
         # 3. Render Data ONLY if Authenticated
         if st.session_state.get("mgr_authenticated", False):

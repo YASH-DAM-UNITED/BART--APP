@@ -361,11 +361,11 @@ if st.session_state.show_mgmt_password:
             with action_col1:
                 if st.form_submit_button("Verify & Open", use_container_width=True):
                     if password_input == st.secrets["MANAGER_PASSWORD"]:
-                        st.session_state.user_role = "area_manager"
+                        st.session_state.user_role = "admin"
                         st.session_state.show_mgmt_password = False
                         st.switch_page("pages/management_dashboard.py")
                     elif password_input == st.secrets["AREA_MANAGER_PASSWORD"]:
-                        st.session_state.user_role = "admin"
+                        st.session_state.user_role = "area_manager"
                         st.session_state.show_mgmt_password = False
                         st.switch_page("pages/management_dashboard.py")
 

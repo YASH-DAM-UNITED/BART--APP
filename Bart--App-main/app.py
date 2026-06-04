@@ -307,7 +307,7 @@ with grid_right:
 
 
 # Inside your app.py, where you verify the password:
-if password_input == st.secrets["AREA_MANAGER_PASSWORD"]:
+if password_input == st.secrets.get("AREA_MANAGER_PASSWORD", "INVALID_PASSWORD_KEY"):
     st.session_state.user_role = "area_manager" # Add this
     st.session_state.show_mgmt_password = False
     st.switch_page("pages/management_dashboard.py")

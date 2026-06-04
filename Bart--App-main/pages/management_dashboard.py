@@ -39,21 +39,6 @@ def toggle_manager():
 
 
 
-# ========================================================
-# GATEKEEPER
-# ========================================================
-if "user_role" not in st.session_state:
-    st.switch_page("app.py") # Kick back to login if they bypassed it
-
-# If they are an Area Manager, show ONLY their restricted portal
-if st.session_state.user_role == "area_manager":
-    st.subheader("🔑 Area Manager Restricted View")
-    
-    # --- Put your specific Manager Code here ---
-    mapping_df = load_manager_mapping()
-    # ... (Your existing manager logic from the bottom of your code)
-    
-    st.stop()
 
 # ========================================================
 # PAGE CONFIG

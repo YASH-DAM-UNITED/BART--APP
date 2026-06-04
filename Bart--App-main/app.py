@@ -299,6 +299,29 @@ with grid_right:
     st.markdown('</div></div>', unsafe_allow_html=True)
 
 
+
+
+
+
+
+
+
+# Inside your Admin Verification block in app.py:
+if st.form_submit_button("Verify & Open", use_container_width=True):
+    # Check for Area Manager password specifically
+    if password_input == st.secrets["AREA_MANAGER_PASSWORD"]:
+        st.session_state.user_role = "area_manager"
+        st.session_state.show_mgmt_password = False
+        st.switch_page("pages/management_dashboard.py")
+    
+    # Check for full Admin password
+    elif password_input == st.secrets["ADMIN_PASSWORD"]:
+        st.session_state.user_role = "admin"
+        st.session_state.show_mgmt_password = False
+        st.switch_page("pages/management_dashboard.py")
+        
+    else:
+        st.error("Access Refused: Invalid token signature.")
 # =========================================================
 # PASSWORD VERIFICATION SHEETS
 # =========================================================

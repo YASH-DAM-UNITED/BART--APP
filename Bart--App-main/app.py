@@ -380,15 +380,20 @@ if st.session_state.show_mgmt_password:
 
 
 
+# Use .get() on the secrets object itself to be safe
+secrets_dict = st.secrets
+area_mgr_pass = secrets_dict.get("AREA_MANAGER_PASSWORD", "NOT_SET")
+admin_pass = secrets_dict.get("MANAGER_PASSWORD", "NOT_SET")
 
-
-# Inside your app.py, where you verify the password:
-if password_input == st.secrets.get("AREA_MANAGER_PASSWORD", "INVALID_PASSWORD_KEY"):
-    st.session_state.user_role = "area_manager" # Add this
+if password_input == area_mgr_pass and area_mgr_pass != "NOT_SET":
+    st.session_state.user_role = "area_manager"
     st.session_state.show_mgmt_password = False
     st.switch_page("pages/management_dashboard.py")
 
-elif password_input == st.secrets["MANAGER_PASSWORD"]:
-    st.session_state.user_role = "admin"        # Add this
+elif password_input == admin_pass and admin_pass != "NOT_SET":
+    st.session_state.user_role = "admin"
     st.session_state.show_mgmt_password = False
     st.switch_page("pages/management_dashboard.py")
+    
+else:
+    st.error("Access Refused: Invalid credentials or system configuration error.")

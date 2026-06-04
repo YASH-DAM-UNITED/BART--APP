@@ -42,9 +42,6 @@ def _(key):
 
 
 
-if st.button("🌐 Switch Language / تغيير اللغة"):
-    st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
-    st.rerun()
 
 
 # =========================================================

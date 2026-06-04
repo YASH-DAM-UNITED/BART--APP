@@ -634,7 +634,6 @@ weekly_df = build_df(weekly_items, branch_names)
 # 2. GATEKEEPER LOGIC
 if "user_role" not in st.session_state:
     st.switch_page("app.py")
-
 # ========================================================
 # AREA MANAGER RESTRICTED VIEW (AUTHENTICATED)
 # ========================================================
@@ -642,12 +641,11 @@ if st.session_state.user_role == "area_manager":
     st.subheader("🔑 Area Manager Restricted Access")
     
     mapping_df = load_manager_mapping()
-    # Normalize manager names to a list
     unique_managers = sorted([str(m).strip() for m in mapping_df['AreaManager'].unique() if m])
     
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
 
-    # Reset Auth if user switches Manager
+    # 1. Reset Auth if user switches Manager
     if "last_mgr" not in st.session_state:
         st.session_state.last_mgr = None
     
@@ -655,26 +653,24 @@ if st.session_state.user_role == "area_manager":
         st.session_state.mgr_authenticated = False
         st.session_state.last_mgr = selected_manager
 
-    # Password Validation Block
+    # 2. Password Validation
     if selected_manager != "Select...":
         if not st.session_state.get("mgr_authenticated", False):
             password = st.text_input(f"Enter password for {selected_manager}", type="password")
             if st.button("🔓 Login"):
-                # Normalize keys: lowercase everything to avoid case-mismatch
-                manager_secrets = {k.lower(): v for k, v in st.secrets.get("MANAGER_PASSWORDS", {}).items()}
+                # Dynamically build the secret key (e.g., MANAGER_ALICE)
+                # Ensure the name in your secrets matches the format below
+                secret_key = f"MANAGER_{selected_manager.upper().strip()}"
+                stored_password = st.secrets.get(secret_key)
                 
-                mgr_key_normalized = selected_manager.lower().strip()
-                stored_hash = manager_secrets.get(mgr_key_normalized)
-                
-                input_hash = hashlib.sha256(password.strip().encode()).hexdigest()
-                
-                if stored_hash and input_hash == stored_hash:
+                # Check if password matches (Plain-text comparison as per your format)
+                if stored_password and password.strip() == stored_password:
                     st.session_state.mgr_authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid password. Please check your credentials.")
+                    st.error("Invalid password or manager not configured.")
         
-        # Render Data ONLY if Authenticated
+        # 3. Render Data ONLY if Authenticated
         if st.session_state.get("mgr_authenticated", False):
             assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
             manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
@@ -691,9 +687,7 @@ if st.session_state.user_role == "area_manager":
                 st.write("### 📦 Manager Weekly Items")
                 make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
 
-    st.stop() # This prevents the rest of the app from showing
-
-
+    st.stop()
 
 # ========================================================
 # AREA MANAGER PORTAL (USING PRE-FETCHED DATA)

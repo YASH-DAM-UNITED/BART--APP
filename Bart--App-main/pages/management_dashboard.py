@@ -11,6 +11,24 @@ import plotly.express as px
 
 
 
+import hashlib
+
+def verify_manager_password(manager_name, password_input):
+    # 1. Get the dictionary of all passwords
+    all_passwords = st.secrets.get("MANAGER_PASSWORDS", {})
+    
+    # 2. Get the specific hash for the selected manager
+    stored_hash = all_passwords.get(manager_name)
+    
+    # 3. If manager doesn't exist in secrets, fail safe
+    if not stored_hash:
+        return False
+        
+    # 4. Hash the input and compare
+    input_hash = hashlib.sha256(password_input.encode()).hexdigest()
+    return input_hash == stored_hash
+
+
 
 # Initialize the state if it doesn't exist
 if "show_manager" not in st.session_state:
@@ -617,35 +635,58 @@ weekly_df = build_df(weekly_items, branch_names)
 if "user_role" not in st.session_state:
     st.switch_page("app.py")
 
-# --- CASE: AREA MANAGER ---
+# ========================================================
+# AREA MANAGER RESTRICTED VIEW (AUTHENTICATED)
+# ========================================================
 if st.session_state.user_role == "area_manager":
-    st.subheader("🔑 Area Manager Restricted View")
+    st.subheader("🔑 Area Manager Restricted Access")
     
     mapping_df = load_manager_mapping()
     unique_managers = sorted([str(m) for m in mapping_df['AreaManager'].unique() if m])
     
     selected_manager = st.selectbox("👤 Select Area Manager", options=["Select..."] + unique_managers)
 
-    if selected_manager != "Select...":
-        assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
-        
-        # Filter the ALREADY LOADED 'all_data'
-        manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
-        
-        if not manager_all_data:
-            st.warning(f"No data found for branches managed by {selected_manager}.")
-        else:
-            m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
-            
-            st.write("### 📦 Manager Daily Items")
-            make_grid(build_df(m_daily, assigned_branch_names), "mgr_daily_grid")
-            st.write("### 📦 Manager Weekly Items")
-            make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
-
+    # 1. Reset Auth if user switches Manager
+    if "last_mgr" not in st.session_state:
+        st.session_state.last_mgr = None
     
-        
-    st.stop()
+    if selected_manager != st.session_state.last_mgr:
+        st.session_state.mgr_authenticated = False
+        st.session_state.last_mgr = selected_manager
 
+    # 2. Password Validation
+    if selected_manager != "Select...":
+        if not st.session_state.get("mgr_authenticated", False):
+            password = st.text_input(f"Enter password for {selected_manager}", type="password")
+            if st.button("🔓 Login"):
+                # Hash the input and compare
+                input_hash = hashlib.sha256(password.encode()).hexdigest()
+                stored_hash = st.secrets["MANAGER_PASSWORDS"].get(selected_manager)
+                
+                if stored_hash and input_hash == stored_hash:
+                    st.session_state.mgr_authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Invalid password.")
+        
+        # 3. Render Data ONLY if Authenticated
+        if st.session_state.get("mgr_authenticated", False):
+            assigned_branch_names = mapping_df[mapping_df['AreaManager'].str.strip() == selected_manager.strip()]['BranchName'].tolist()
+            manager_all_data = [item for item in all_data if item[0].strip() in [b.strip() for b in assigned_branch_names]]
+            
+            if not manager_all_data:
+                st.warning(f"No data found for branches managed by {selected_manager}.")
+            else:
+                st.success(f"Authenticated as {selected_manager}")
+                m_daily, m_weekly = process_stock(manager_all_data, selected_date_str, assigned_branch_names)
+                
+                st.write("### 📦 Manager Daily Items")
+                make_grid(build_df(m_daily, assigned_branch_names), "mgr_daily_grid")
+                
+                st.write("### 📦 Manager Weekly Items")
+                make_grid(build_df(m_weekly, assigned_branch_names), "mgr_weekly_grid")
+
+    st.stop()
 
 
 

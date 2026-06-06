@@ -309,7 +309,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 if st.session_state.authenticated:
     st.success(f"Logged in: {st.session_state.selected_branch}")
     check_for_pending_transfers()
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     if col1.button("📦 Stock Record"):
         refresh_activity()
@@ -327,6 +327,13 @@ if st.session_state.authenticated:
         st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
         refresh_activity()
         st.rerun()
+
+    if col5.button("📝 Delivery Note"):
+        refresh_activity()
+        st.switch_page("pages/delivery.py")
+
+
+
 
     
 

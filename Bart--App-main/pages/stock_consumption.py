@@ -330,17 +330,40 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.scroll_to_review = True
             st.rerun()
 # -----------------------------
-# REVIEW SECTION
+# ENHANCED REVIEW SECTION
 # -----------------------------
 if st.session_state.review_mode:
     st.markdown('<div id="review_section"></div>', unsafe_allow_html=True)
-    st.markdown("## Review")
+    
+    st.markdown("---")
+    st.markdown("### 📋 Final Review")
+    st.write("Please verify the quantities before confirming.")
 
-    for k, v in st.session_state.draft_data.items():
-        st.write(f"{k} → {v}")
-
-    if st.button("✅ Submit"):
-        st.session_state.proceed_submit = True
+    # Display items in a clean 3-column grid
+    data_items = list(st.session_state.draft_data.items())
+    num_cols = 3
+    cols = st.columns(num_cols)
+    
+    for idx, (item, qty) in enumerate(data_items):
+        with cols[idx % num_cols]:
+            # Use metric for a professional, space-saving look
+            st.metric(label=item, value=qty)
+            
+    st.markdown("---")
+    
+    # Action Bar: Use columns to keep buttons side-by-side
+    btn_col1, btn_col2 = st.columns([1, 2])
+    
+    with btn_col1:
+        if st.button("⬅ Edit"):
+            st.session_state.review_mode = False
+            st.rerun()
+            
+    with btn_col2:
+        # Primary button stands out visually
+        if st.button("✅ Confirm and Submit", type="primary", use_container_width=True):
+            st.session_state.proceed_submit = True
+            st.rerun()
 
 # -----------------------------
 # AUTO SCROLL

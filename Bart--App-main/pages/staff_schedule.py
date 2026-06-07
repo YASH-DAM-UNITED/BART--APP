@@ -278,7 +278,7 @@ if edit_mode:
         config[d] = st.column_config.SelectboxColumn(label=day_labels[d], options=list(all_known_shifts), width=100)
 
     # Clear Button
-    if st.button("🧹 Clear All Shifts"):
+    if st.button(" Clear All Shifts"):
         for i in range(len(df_display)):
             for d in DAYS:
                 st.session_state.shift_buffer[f"{i}_{d}"] = ""

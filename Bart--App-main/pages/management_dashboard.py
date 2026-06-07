@@ -8,6 +8,7 @@ import time
 import hashlib
 import io
 import plotly.express as px
+from datetime import datetime, timedelta
 
 
 
@@ -328,7 +329,8 @@ if col3.button("⬅ LOGOUT "):
 # DATE
 # ========================================================
 
-selected_date = st.date_input("📅 Select Date")
+yesterday = datetime.now() - timedelta(days=1)
+selected_date = st.date_input("📅 Select Date", value=yesterday)
 selected_date_str = selected_date.strftime("%Y-%m-%d")
 
 

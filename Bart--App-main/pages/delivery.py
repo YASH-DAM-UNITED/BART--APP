@@ -39,8 +39,9 @@ uploaded_file = st.camera_input("Take a photo of the Delivery Note")
 # 3. Processing
 if uploaded_file and transfer_id:
     if st.button("Submit Delivery Note"):
-        # REPLACE THIS ID with the actual Folder ID from your Google Drive URL
-        FOLDER_ID = "YOUR_FOLDER_ID_HERE" 
+        # REPLACE THIS with the actual Folder ID from your Google Drive folder URL
+        # (This is different from the Spreadsheet ID)
+        FOLDER_ID = "1zGHwdYDtw7kQPcx-UHLDjYTJYU-11_X4" 
         
         with st.status("Uploading...", expanded=True) as status:
             try:
@@ -51,22 +52,23 @@ if uploaded_file and transfer_id:
                 
                 # Sheet Update
                 st.write("Updating Google Sheet...")
-                sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+                # Using your provided Spreadsheet Key and "Delivery" tab
+                sheet = st.session_state.gs_client.open_by_key("1zGHwdYDtw7kQPcx-UHLDjYTJYU-11_X4").worksheet("Delivery")
                 
-                # Find ID
+                # Find ID in the sheet
                 cell = sheet.find(transfer_id)
                 if cell:
+                    # Updates column 8 (Column H) with the drive link
                     sheet.update_cell(cell.row, 8, link)
                     status.update(label="Complete!", state="complete", expanded=False)
                     st.success(f"Delivery Note saved for {transfer_id}!")
                     st.balloons()
                 else:
                     status.update(label="Error", state="error")
-                    st.error(f"Transfer ID '{transfer_id}' not found in the sheet.")
+                    st.error(f"Transfer ID '{transfer_id}' not found in the 'Delivery' sheet.")
                     
             except Exception as e:
                 status.update(label="Critical Error", state="error")
                 st.error(f"Error: {e}")
-
 if st.button("⬅ Back to Dashboard"):
     st.switch_page("app.py")

@@ -376,16 +376,18 @@ if edit_mode:
 # =========================
 # VIEW MODE
 # =========================
-    
-
 else:
     if st.button("🔄 Refresh Data"):
         st.session_state.cached_df = None
         st.rerun()
 
     # 1. Fetch raw data
-    ws = master_sheet.worksheet("StaffSchedule")
-    all_values = ws.get_all_values()
+    try:
+        ws = master_sheet.worksheet("StaffSchedule")
+        all_values = ws.get_all_values()
+    except Exception as e:
+        st.error(f"Error accessing sheet: {e}")
+        st.stop()
     
     if not all_values or len(all_values) < 2:
         st.warning("No data found.")
@@ -395,7 +397,6 @@ else:
     data_rows = all_values[1:]
     
     # 2. Identify indices for key columns
-    # We find where Branch, Name, and Role columns are
     try:
         idx_branch = headers.index("Branch")
         idx_name = headers.index("Name")
@@ -420,7 +421,6 @@ else:
     # 4. Extract data ONLY for selected branch
     clean_data = []
     for row in data_rows:
-        # Check if the row matches the selected branch
         if row[idx_branch] == st.session_state.selected_branch:
             new_row = {}
             for h, idx in indices_to_extract.items():
@@ -429,10 +429,23 @@ else:
         
     df_display = pd.DataFrame(clean_data)
 
-    # 5. Render the Grid
+    # 5. Render the Grid and Download Button
     if df_display.empty:
         st.info("No schedule data found for this branch this week.")
     else:
+        # Prepare CSV for download
+        csv = df_display.to_csv(index=False).encode('utf-8')
+        
+        col1, col2 = st.columns([0.8, 0.2])
+        with col2:
+            st.download_button(
+                label="📥 Download CSV",
+                data=csv,
+                file_name=f"Schedule_{st.session_state.selected_branch}_{week_start_str}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+
         column_defs = [
             {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
             for col in df_display.columns
@@ -447,5 +460,7 @@ else:
             height=500,
             fit_columns_on_grid_load=True
         )
+
+# Final navigation button
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

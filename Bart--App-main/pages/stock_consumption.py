@@ -330,40 +330,51 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.scroll_to_review = True
             st.rerun()
 # -----------------------------
-# ENHANCED REVIEW SECTION
+# SLIM COMPACT REVIEW SECTION
 # -----------------------------
 if st.session_state.review_mode:
     st.markdown('<div id="review_section"></div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 📋 Final Review")
-    st.write("Please verify the quantities before confirming.")
+    st.markdown("### 📋 Review")
 
-    # Display items in a clean 3-column grid
+    # Use a custom CSS style for a very small card
+    st.markdown("""
+    <style>
+    .review-card {
+        padding: 5px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-bottom: 5px;
+        background: #f9f9f9;
+        font-size: 14px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Use 4 columns instead of 3 to pack more in
+    cols = st.columns(4)
     data_items = list(st.session_state.draft_data.items())
-    num_cols = 3
-    cols = st.columns(num_cols)
     
     for idx, (item, qty) in enumerate(data_items):
-        with cols[idx % num_cols]:
-            # Use metric for a professional, space-saving look
-            st.metric(label=item, value=qty)
+        with cols[idx % 4]:
+            st.markdown(f"""
+            <div class="review-card">
+                <b>{item}</b><br>{qty}
+            </div>
+            """, unsafe_allow_html=True)
             
     st.markdown("---")
     
-    # Action Bar: Use columns to keep buttons side-by-side
-    btn_col1, btn_col2 = st.columns([1, 2])
-    
-    with btn_col1:
-        if st.button("⬅ Edit"):
-            st.session_state.review_mode = False
-            st.rerun()
-            
-    with btn_col2:
-        # Primary button stands out visually
-        if st.button("✅ Confirm and Submit", type="primary", use_container_width=True):
-            st.session_state.proceed_submit = True
-            st.rerun()
+    # Small, side-by-side buttons
+    c1, c2 = st.columns(2)
+    if c1.button("⬅ Edit", use_container_width=True):
+        st.session_state.review_mode = False
+        st.rerun()
+        
+    if c2.button("✅ Submit", type="primary", use_container_width=True):
+        st.session_state.proceed_submit = True
+        st.rerun()
 
 # -----------------------------
 # AUTO SCROLL

@@ -439,7 +439,7 @@ else:
         col1, col2 = st.columns([0.8, 0.2])
         with col2:
             st.download_button(
-                label="📥 Download CSV",
+                label="📥 Download Schedule ",
                 data=csv,
                 file_name=f"Schedule_{st.session_state.selected_branch}_{week_start_str}.csv",
                 mime="text/csv",

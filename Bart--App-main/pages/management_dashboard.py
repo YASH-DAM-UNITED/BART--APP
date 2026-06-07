@@ -749,16 +749,14 @@ if st.session_state.get("show_manager", False):
 
 
 # ========================================================
-# GLOBAL GOOGLE-STYLE INVENTORY SEARCH (UPDATED)
+# GLOBAL GOOGLE-STYLE INVENTORY MULTI-SEARCH
 # ========================================================
 
 st.subheader("🔍 Global Inventory Search")
 
-# 1. Ensure both DataFrames have the "Total" column
-# (The build_df function already adds "Total", so this just ensures it's carried over)
+# 1. Ensure the pool is ready
 pool_daily = daily_df.copy()
 pool_daily["Schedule"] = "Daily"
-
 pool_weekly = weekly_df.copy()
 pool_weekly["Schedule"] = "Weekly"
 
@@ -775,40 +773,42 @@ if not search_pool.empty:
     
     search_options = sorted(search_pool["Search_Label"].unique())
     
-    selected_option = st.selectbox(
-        "Type an Item Name, SKU, or UOM to inspect branch stock...",
+    # 3. MULTI-SELECT COMPONENT
+    selected_options = st.multiselect(
+        "Select items to inspect (or search to add more):",
         options=search_options,
-        index=None,
-        placeholder="🔍 Start typing to search across all branches...",
-        key=f"global_search_bar_{selected_date_str}"
+        default=None,
+        placeholder="🔍 Start typing to search and select...",
+        key=f"global_multi_search_{selected_date_str}"
     )
     
-    if selected_option:
-        matched_row = search_pool[search_pool["Search_Label"] == selected_option]
+    # 4. Process selection
+    if selected_options:
+        # Filter pool for all selected items
+        matched_df = search_pool[search_pool["Search_Label"].isin(selected_options)]
         
-        if not matched_row.empty:
-            st.markdown("---")
-            st.success(f"📌 **Selected Product:** {selected_option}")
+        st.markdown("---")
+        st.success(f"📌 **Showing {len(selected_options)} Selected Product(s)**")
+        
+        # Define display columns
+        display_cols = ["Item Name", "SKU", "UOM"] + branch_names + ["Total"]
+        result_df = matched_df[display_cols].reset_index(drop=True)
+        
+        # Render the Grid
+        search_grid_key = f"multi_search_result_grid_{selected_date_str}_{hashlib.md5(str(selected_options).encode()).hexdigest()}"
+        
+        with st.container():
+            make_grid(result_df, search_grid_key)
             
-            # Include "Total" in the display columns list
-            display_cols = ["Item Name", "SKU", "UOM"] + branch_names + ["Total"]
-            result_df = matched_row[display_cols].reset_index(drop=True)
-            
-            search_grid_key = f"search_result_grid_{selected_date_str}_{hashlib.md5(selected_option.encode()).hexdigest()}"
-            
-            with st.container():
-                # make_grid will now automatically see "Total" and apply the pinning logic
-                make_grid(result_df, search_grid_key)
-                
-                # Excel export remains the same
-                excel_data = to_excel_bytes({selected_option[:20]: result_df})
-                st.download_button(
-                    label="📥 Export Selected Item",
-                    data=excel_data,
-                    file_name=f"Report_{selected_date_str}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            st.markdown("---")
+            # Export the aggregated selection
+            excel_data = to_excel_bytes({"Selected_Items": result_df})
+            st.download_button(
+                label=f"📥 Download {len(selected_options)} Item(s) to Excel",
+                data=excel_data,
+                file_name=f"Selected_Items_Report_{selected_date_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        st.markdown("---")
             
 else:
     st.info("No stock data available to search for this date.")

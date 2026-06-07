@@ -330,43 +330,43 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.scroll_to_review = True
             st.rerun()
 # -----------------------------
-# SLIM COMPACT REVIEW SECTION
+# 5-COLUMN COMPACT REVIEW
 # -----------------------------
 if st.session_state.review_mode:
     st.markdown('<div id="review_section"></div>', unsafe_allow_html=True)
     
-    st.markdown("---")
-    st.markdown("### 📋 Review")
+    st.markdown("### 📋 Final Review")
 
-    # Use a custom CSS style for a very small card
+    # Tight CSS for ultra-compact cards
     st.markdown("""
     <style>
-    .review-card {
-        padding: 5px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        margin-bottom: 5px;
-        background: #f9f9f9;
-        font-size: 14px;
+    .compact-card {
+        padding: 4px;
+        border: 1px solid #d1d9e6;
+        border-radius: 6px;
+        margin: 2px;
+        background: #fdfdfd;
+        text-align: center;
+        font-size: 12px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-    # Use 4 columns instead of 3 to pack more in
-    cols = st.columns(4)
+    # 5-Column layout
     data_items = list(st.session_state.draft_data.items())
+    cols = st.columns(5)
     
     for idx, (item, qty) in enumerate(data_items):
-        with cols[idx % 4]:
+        with cols[idx % 5]:
             st.markdown(f"""
-            <div class="review-card">
-                <b>{item}</b><br>{qty}
+            <div class="compact-card">
+                <small>{item}</small><br><b>{qty}</b>
             </div>
             """, unsafe_allow_html=True)
             
     st.markdown("---")
     
-    # Small, side-by-side buttons
+    # Action Buttons
     c1, c2 = st.columns(2)
     if c1.button("⬅ Edit", use_container_width=True):
         st.session_state.review_mode = False

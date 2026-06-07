@@ -507,7 +507,7 @@ def make_grid(df, key):
         resizable=True,
         sortable=True,
         filter=True,
-        editable=False,
+        editable=True,
         wrapText=False,
         autoHeight=False,
         cellStyle={

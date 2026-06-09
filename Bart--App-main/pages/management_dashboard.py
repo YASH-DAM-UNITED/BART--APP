@@ -148,35 +148,28 @@ def to_excel_bytes(data_frames):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
-        
-        # Define formats
+        # Define styles
         header_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
         data_fmt = workbook.add_format({'border': 1, 'align': 'center'})
         total_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
 
         for sheet_name, df in data_frames.items():
-            safe_name = "".join([c for c in sheet_name if c.isalnum() or c in (' ', '_')])[:31]
-            df.to_excel(writer, sheet_name=safe_name, index=False)
+            df.to_excel(writer, sheet_name="Data", index=False)
+            worksheet = writer.sheets["Data"]
             
-            worksheet = writer.sheets[safe_name]
-            worksheet.hide_gridlines(2)
-            
-            # Apply formatting
-            max_row, max_col = df.shape
-            # Format Headers
-            for col_num, value in enumerate(df.columns.values):
-                worksheet.write(0, col_num, value, header_fmt)
-                
-            # Format Data rows
-            for row_num in range(1, max_row + 1):
-                for col_num in range(max_col):
-                    worksheet.write(row_num, col_num, df.iloc[row_num-1, col_num], data_fmt)
+            # Apply formatting to all cells (Borders + Color)
+            for r in range(len(df) + 1):
+                for c in range(len(df.columns)):
+                    # Determine style: Header (Row 0) vs Data
+                    fmt = header_fmt if r == 0 else data_fmt
                     
-            # Color Total row if present
-            if "Total" in df.columns:
-                total_idx = df.columns.get_loc("Total")
-                for row_num in range(1, max_row + 1):
-                    worksheet.write(row_num, total_idx, df.iloc[row_num-1, total_idx], total_fmt)
+                    # Highlight Total column if name contains 'Total'
+                    col_name = str(df.columns[c])
+                    if "Total" in col_name and r > 0:
+                        fmt = total_fmt
+                        
+                    val = df.columns[c] if r == 0 else df.iloc[r-1, c]
+                    worksheet.write(r, c, val, fmt)
                     
     return output.getvalue()
 # ========================================================
@@ -816,8 +809,8 @@ if not search_pool.empty:
         with st.container():
             make_grid(result_df, search_grid_key)
             
-        # --- TRANSPOSE FOR DOWNLOAD ---
-        # 1. Melt the dataframe to get branch names into a row-based format
+        # --- TRANSPOSE FOR DOWNLOAD (Flattened) ---
+        # 1. Melt the dataframe to handle branches as rows
         melted_df = result_df.melt(
             id_vars=["Item Name", "SKU", "UOM"], 
             value_vars=branch_names + ["Total"], 
@@ -825,19 +818,23 @@ if not search_pool.empty:
             value_name="Quantity"
         )
         
-        # 2. Pivot so Branches are rows, and Items are column headers
-        # This creates the vertical hierarchy for Item/SKU/UOM
-        final_export_df = melted_df.pivot_table(
+        # 2. Pivot the data
+        pivoted_df = melted_df.pivot_table(
             index="Branch Name", 
             columns=["Item Name", "SKU", "UOM"], 
             values="Quantity",
             aggfunc='sum'
-        )
+        ).reset_index()
         
-        # Note: We keep this as a MultiIndex DataFrame for the Excel exporter to read as nested headers
+        # 3. CRITICAL: Flatten MultiIndex columns to simple strings
+        # This prevents the NotImplementedError in to_excel
+        pivoted_df.columns = [
+            " | ".join(str(c) for c in col).strip(" | ") if isinstance(col, tuple) else col
+            for col in pivoted_df.columns
+        ]
         
-        # 3. Export
-        excel_data = to_excel_bytes({"Selected_Items": final_export_df})
+        # 4. Final Export
+        excel_data = to_excel_bytes({"Selected_Items": pivoted_df})
         
         st.download_button(
             label=f"📥 Download {len(selected_options)} Item(s) Transposed to Excel",

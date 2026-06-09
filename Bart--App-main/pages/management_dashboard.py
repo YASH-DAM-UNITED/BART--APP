@@ -800,15 +800,26 @@ if not search_pool.empty:
             make_grid(result_df, search_grid_key)
             
         # --- TRANSPOSE FOR DOWNLOAD ---
-        # 1. Transpose the data: Items become columns, Branches become rows
-        transposed_df = result_df.set_index(["Item Name", "SKU", "UOM"]).T
+        # Instead of .T (which creates MultiIndex issues), we melt and pivot
+        # 1. Melt the dataframe to get branch names into a single column
+        melted_df = result_df.melt(
+            id_vars=["Item Name", "SKU", "UOM"], 
+            value_vars=branch_names, 
+            var_name="Branch Name", 
+            value_name="Quantity"
+        )
         
-        # 2. Reset index to flatten the MultiIndex (Fixes the NotImplementedError)
-        # The index level (which contains Branch Names) becomes a regular column
-        final_export_df = transposed_df.reset_index()
+        # 2. Pivot to get the desired Transposed look (Branches as rows, Items as columns)
+        # We create a unique column header for each item to avoid MultiIndex
+        melted_df["Item_Header"] = melted_df["Item Name"] + " (" + melted_df["SKU"] + ")"
+        final_export_df = melted_df.pivot(
+            index="Branch Name", 
+            columns="Item_Header", 
+            values="Quantity"
+        ).reset_index()
         
-        # 3. Rename the index column to "Branch Name"
-        final_export_df = final_export_df.rename(columns={'index': 'Branch Name'})
+        # 3. Clean up column names to ensure they are simple strings
+        final_export_df.columns.name = None
 
         # 4. Export
         excel_data = to_excel_bytes({"Selected_Items": final_export_df})

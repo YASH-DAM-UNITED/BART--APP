@@ -14,7 +14,7 @@ def success_dialog(message):
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
-st.title("🚀 Internal Stock Transfer")
+st.title("🚚 Internal Stock Transfer")
 
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []

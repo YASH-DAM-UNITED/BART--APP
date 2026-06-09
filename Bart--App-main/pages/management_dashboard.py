@@ -782,7 +782,7 @@ if not search_pool.empty:
         key=f"global_multi_search_{selected_date_str}"
     )
     
-    # 4. Process selection
+# 4. Process selection
     if selected_options:
         # Filter pool for all selected items
         matched_df = search_pool[search_pool["Search_Label"].isin(selected_options)]
@@ -794,20 +794,24 @@ if not search_pool.empty:
         display_cols = ["Item Name", "SKU", "UOM"] + branch_names + ["Total"]
         result_df = matched_df[display_cols].reset_index(drop=True)
         
-        # Render the Grid
+        # --- RENDER THE GRID (Original orientation for UI) ---
         search_grid_key = f"multi_search_result_grid_{selected_date_str}_{hashlib.md5(str(selected_options).encode()).hexdigest()}"
-        
         with st.container():
             make_grid(result_df, search_grid_key)
             
-            # Export the aggregated selection
-            excel_data = to_excel_bytes({"Selected_Items": result_df})
-            st.download_button(
-                label=f"📥 Download {len(selected_options)} Item(s) to Excel",
-                data=excel_data,
-                file_name=f"Selected_Items_Report_{selected_date_str}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        # --- TRANSPOSE FOR DOWNLOAD ---
+        # We set the index to the items to preserve metadata during transpose
+        transposed_df = result_df.set_index(["Item Name", "SKU", "UOM"]).T
+        
+        # Create the dictionary for the Excel export
+        excel_data = to_excel_bytes({"Selected_Items": transposed_df})
+        
+        st.download_button(
+            label=f"📥 Download {len(selected_options)} Item(s) Transposed to Excel",
+            data=excel_data,
+            file_name=f"Selected_Items_Transposed_{selected_date_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
         st.markdown("---")
             
 else:

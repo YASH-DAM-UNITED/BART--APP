@@ -148,29 +148,39 @@ def to_excel_bytes(data_frames):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         workbook = writer.book
-        # Define styles
-        header_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
+        # Define formats
+        header_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
         data_fmt = workbook.add_format({'border': 1, 'align': 'center'})
         total_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
 
         for sheet_name, df in data_frames.items():
-            df.to_excel(writer, sheet_name="Data", index=False)
+            # Write data starting at row 3 (leaving room for 3 header rows)
+            df.to_excel(writer, sheet_name="Data", startrow=3, header=False, index=True)
             worksheet = writer.sheets["Data"]
             
-            # Apply formatting to all cells (Borders + Color)
-            for r in range(len(df) + 1):
+            # Write custom Multi-row headers
+            for col_idx, (item, sku, uom) in enumerate(df.columns):
+                worksheet.write(0, col_idx + 1, item, header_fmt) # Row 0: Item Name
+                worksheet.write(1, col_idx + 1, sku, header_fmt)  # Row 1: SKU
+                worksheet.write(2, col_idx + 1, uom, header_fmt)  # Row 2: UOM
+            
+            # Write "Branch Name" label in the top-left cell (row 2, col 0)
+            worksheet.write(2, 0, "Branch Name", header_fmt)
+            
+            # Apply styling and borders to data rows
+            for r in range(len(df)):
+                row_idx = r + 3
+                # Determine if this is the "Total" row based on index name
+                is_total = str(df.index[r]) == "Total"
+                current_fmt = total_fmt if is_total else data_fmt
+                
+                # Write Index (Branch Name)
+                worksheet.write(row_idx, 0, str(df.index[r]), current_fmt)
+                
+                # Write Data
                 for c in range(len(df.columns)):
-                    # Determine style: Header (Row 0) vs Data
-                    fmt = header_fmt if r == 0 else data_fmt
-                    
-                    # Highlight Total column if name contains 'Total'
-                    col_name = str(df.columns[c])
-                    if "Total" in col_name and r > 0:
-                        fmt = total_fmt
-                        
-                    val = df.columns[c] if r == 0 else df.iloc[r-1, c]
-                    worksheet.write(r, c, val, fmt)
-                    
+                    worksheet.write(row_idx, c + 1, df.iloc[r, c], current_fmt)
+            
     return output.getvalue()
 # ========================================================
 # LOAD BRANCHES
@@ -809,8 +819,8 @@ if not search_pool.empty:
         with st.container():
             make_grid(result_df, search_grid_key)
             
-        # --- TRANSPOSE FOR DOWNLOAD (Flattened) ---
-        # 1. Melt the dataframe to handle branches as rows
+        # --- TRANSPOSE FOR DOWNLOAD ---
+        # 1. Melt to get individual branch values
         melted_df = result_df.melt(
             id_vars=["Item Name", "SKU", "UOM"], 
             value_vars=branch_names + ["Total"], 
@@ -818,26 +828,24 @@ if not search_pool.empty:
             value_name="Quantity"
         )
         
-        # 2. Pivot the data
+        # 2. Pivot: Branches as rows, Items/SKU/UOM as columns
         pivoted_df = melted_df.pivot_table(
             index="Branch Name", 
             columns=["Item Name", "SKU", "UOM"], 
             values="Quantity",
             aggfunc='sum'
-        ).reset_index()
+        )
         
-        # 3. CRITICAL: Flatten MultiIndex columns to simple strings
-        # This prevents the NotImplementedError in to_excel
-        pivoted_df.columns = [
-            " | ".join(str(c) for c in col).strip(" | ") if isinstance(col, tuple) else col
-            for col in pivoted_df.columns
-        ]
+        # 3. Explicitly reorder rows to match your exact branch list + Total
+        # This prevents alphabetical sorting and keeps your desired sequence
+        ordered_index = branch_names + (["Total"] if "Total" in pivoted_df.index else [])
+        final_export_df = pivoted_df.reindex(ordered_index)
         
         # 4. Final Export
-        excel_data = to_excel_bytes({"Selected_Items": pivoted_df})
+        excel_data = to_excel_bytes({"Selected_Items": final_export_df})
         
         st.download_button(
-            label=f"📥 Download {len(selected_options)} Item(s) Transposed to Excel",
+            label=f"📥 Download {len(selected_options)} Items Transposed to Excel",
             data=excel_data,
             file_name=f"Selected_Items_Transposed_{selected_date_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

@@ -794,17 +794,24 @@ if not search_pool.empty:
         display_cols = ["Item Name", "SKU", "UOM"] + branch_names + ["Total"]
         result_df = matched_df[display_cols].reset_index(drop=True)
         
-        # --- RENDER THE GRID (Original orientation for UI) ---
+        # --- RENDER THE GRID (UI Version) ---
         search_grid_key = f"multi_search_result_grid_{selected_date_str}_{hashlib.md5(str(selected_options).encode()).hexdigest()}"
         with st.container():
             make_grid(result_df, search_grid_key)
             
         # --- TRANSPOSE FOR DOWNLOAD ---
-        # We set the index to the items to preserve metadata during transpose
+        # 1. Transpose the data: Items become columns, Branches become rows
         transposed_df = result_df.set_index(["Item Name", "SKU", "UOM"]).T
         
-        # Create the dictionary for the Excel export
-        excel_data = to_excel_bytes({"Selected_Items": transposed_df})
+        # 2. Reset index to flatten the MultiIndex (Fixes the NotImplementedError)
+        # The index level (which contains Branch Names) becomes a regular column
+        final_export_df = transposed_df.reset_index()
+        
+        # 3. Rename the index column to "Branch Name"
+        final_export_df = final_export_df.rename(columns={'index': 'Branch Name'})
+
+        # 4. Export
+        excel_data = to_excel_bytes({"Selected_Items": final_export_df})
         
         st.download_button(
             label=f"📥 Download {len(selected_options)} Item(s) Transposed to Excel",

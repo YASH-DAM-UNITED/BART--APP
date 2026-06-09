@@ -800,8 +800,7 @@ if not search_pool.empty:
             make_grid(result_df, search_grid_key)
             
         # --- TRANSPOSE FOR DOWNLOAD ---
-        # Instead of .T (which creates MultiIndex issues), we melt and pivot
-        # 1. Melt the dataframe to get branch names into a single column
+        # 1. Melt the dataframe
         melted_df = result_df.melt(
             id_vars=["Item Name", "SKU", "UOM"], 
             value_vars=branch_names, 
@@ -809,8 +808,15 @@ if not search_pool.empty:
             value_name="Quantity"
         )
         
-        # 2. Pivot to get the desired Transposed look (Branches as rows, Items as columns)
-        # We create a unique column header for each item to avoid MultiIndex
+        # 2. Force the Branch Name to follow your original 'branch_names' order
+        # This prevents the pivot from sorting them alphabetically
+        melted_df["Branch Name"] = pd.Categorical(
+            melted_df["Branch Name"], 
+            categories=branch_names, 
+            ordered=True
+        )
+        
+        # 3. Pivot
         melted_df["Item_Header"] = melted_df["Item Name"] + " (" + melted_df["SKU"] + ")"
         final_export_df = melted_df.pivot(
             index="Branch Name", 
@@ -818,10 +824,13 @@ if not search_pool.empty:
             values="Quantity"
         ).reset_index()
         
-        # 3. Clean up column names to ensure they are simple strings
+        # 4. Ensure the rows are sorted based on the category order we defined
+        final_export_df = final_export_df.sort_values("Branch Name")
+        
+        # 5. Clean up
         final_export_df.columns.name = None
 
-        # 4. Export
+        # 6. Export
         excel_data = to_excel_bytes({"Selected_Items": final_export_df})
         
         st.download_button(

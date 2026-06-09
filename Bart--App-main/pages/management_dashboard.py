@@ -145,22 +145,39 @@ def get_professional_report(report_data, date_str):
     return output.getvalue()
 
 def to_excel_bytes(data_frames):
-    """
-    Converts a dictionary of {sheet_name: dataframe} into Excel bytes.
-    """
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        
+        # Define formats
+        header_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
+        data_fmt = workbook.add_format({'border': 1, 'align': 'center'})
+        total_fmt = workbook.add_format({'bold': True, 'bg_color': '#FFFF00', 'border': 1, 'align': 'center'})
+
         for sheet_name, df in data_frames.items():
-            if '::auto_unique_id::' in df.columns:
-                df = df.drop(columns=['::auto_unique_id::'])
-            # Ensure sheet name is valid for Excel (max 31 chars)
             safe_name = "".join([c for c in sheet_name if c.isalnum() or c in (' ', '_')])[:31]
             df.to_excel(writer, sheet_name=safe_name, index=False)
             
-            # Optional: Add formatting here if you want consistency
             worksheet = writer.sheets[safe_name]
             worksheet.hide_gridlines(2)
             
+            # Apply formatting
+            max_row, max_col = df.shape
+            # Format Headers
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num, value, header_fmt)
+                
+            # Format Data rows
+            for row_num in range(1, max_row + 1):
+                for col_num in range(max_col):
+                    worksheet.write(row_num, col_num, df.iloc[row_num-1, col_num], data_fmt)
+                    
+            # Color Total row if present
+            if "Total" in df.columns:
+                total_idx = df.columns.get_loc("Total")
+                for row_num in range(1, max_row + 1):
+                    worksheet.write(row_num, total_idx, df.iloc[row_num-1, total_idx], total_fmt)
+                    
     return output.getvalue()
 # ========================================================
 # LOAD BRANCHES
@@ -800,37 +817,26 @@ if not search_pool.empty:
             make_grid(result_df, search_grid_key)
             
         # --- TRANSPOSE FOR DOWNLOAD ---
-        # 1. Melt the dataframe
+        # 1. Melt the dataframe to get branch names into a row-based format
         melted_df = result_df.melt(
             id_vars=["Item Name", "SKU", "UOM"], 
-            value_vars=branch_names, 
+            value_vars=branch_names + ["Total"], 
             var_name="Branch Name", 
             value_name="Quantity"
         )
         
-        # 2. Force the Branch Name to follow your original 'branch_names' order
-        # This prevents the pivot from sorting them alphabetically
-        melted_df["Branch Name"] = pd.Categorical(
-            melted_df["Branch Name"], 
-            categories=branch_names, 
-            ordered=True
+        # 2. Pivot so Branches are rows, and Items are column headers
+        # This creates the vertical hierarchy for Item/SKU/UOM
+        final_export_df = melted_df.pivot_table(
+            index="Branch Name", 
+            columns=["Item Name", "SKU", "UOM"], 
+            values="Quantity",
+            aggfunc='sum'
         )
         
-        # 3. Pivot
-        melted_df["Item_Header"] = melted_df["Item Name"] + " (" + melted_df["SKU"] + ")"
-        final_export_df = melted_df.pivot(
-            index="Branch Name", 
-            columns="Item_Header", 
-            values="Quantity"
-        ).reset_index()
+        # Note: We keep this as a MultiIndex DataFrame for the Excel exporter to read as nested headers
         
-        # 4. Ensure the rows are sorted based on the category order we defined
-        final_export_df = final_export_df.sort_values("Branch Name")
-        
-        # 5. Clean up
-        final_export_df.columns.name = None
-
-        # 6. Export
+        # 3. Export
         excel_data = to_excel_bytes({"Selected_Items": final_export_df})
         
         st.download_button(

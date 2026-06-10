@@ -179,39 +179,41 @@ st.subheader("🏢 Specific Branch View")
 all_branches = sorted(df_full["Branch"].dropna().unique().tolist())
 selected_branch = st.selectbox("Select Branch to Analyze", all_branches, key="branch_selector")
 
-# 2. Logic to identify the full week window
-# We find the selected column and take a slice (e.g., +/- 3 days)
-# You may need to adjust the range (e.g., [col_idx-4 : col_idx+4]) 
-# if you want a wider or narrower view of the columns.
-col_idx = df_full.columns.get_loc(selected_col)
-# Define the slice: looking at a 7-column span around the selected date
-# This assumes your columns are laid out: [Day, OT, Day, OT...]
-start_idx = max(0, col_idx - 3) 
-end_idx = min(len(df_full.columns), col_idx + 4)
-
-# Filter columns: keep Meta info + the selected 7-column weekly window
-weekly_col_names = meta_cols + df_full.columns[start_idx:end_idx].tolist()
-df_branch_weekly = df_full[df_full["Branch"] == selected_branch][weekly_col_names].copy()
-
-# 3. Separate out the "Active" logic for the specific day selected earlier
-# We use the 'is_active' function on the specific day selected by the user
-df_branch_single_day = df_full[df_full["Branch"] == selected_branch].copy()
-branch_active_mask = df_branch_single_day[selected_col].apply(lambda x: is_active(x, start_m, end_m))
-
-b_act = df_branch_single_day[branch_active_mask]
-b_inact = df_branch_single_day[~branch_active_mask]
-
-# 4. Display the Section
-sc1, sc2, sc3 = st.columns(3)
-sc1.metric("Active (Selected Day)", len(b_act))
-sc2.metric("Inactive (Selected Day)", len(b_inact))
-sc3.metric("Total", len(df_branch_single_day))
-
-st.subheader(f"🔥 Active Staff (Selected Day: {selected_col})")
-# We only show relevant columns for the active list
-active_display_cols = meta_cols + [selected_col]
-if ot_col: active_display_cols += [ot_col]
-st.dataframe(b_act[active_display_cols], use_container_width=True, hide_index=True)
-
-st.subheader(f"📊 Full Weekly Data: {selected_branch}")
-st.dataframe(df_branch_weekly, use_container_width=True, hide_index=True)
+# 2. SAFE Logic to identify the full week window
+# Ensure selected_col exists in df_full before processing
+if selected_col in df_full.columns:
+    col_idx = df_full.columns.get_loc(selected_col)
+    
+    # Define range (3 days before, 3 days after = 7 columns)
+    start_idx = max(0, col_idx - 3)
+    end_idx = min(len(df_full.columns), col_idx + 4)
+    
+    weekly_col_names = meta_cols + df_full.columns[start_idx:end_idx].tolist()
+    
+    # Filter for the selected branch
+    df_branch_weekly = df_full[df_full["Branch"] == selected_branch][weekly_col_names].copy()
+    
+    # 3. Calculate metrics for the specific day
+    df_branch_single_day = df_full[df_full["Branch"] == selected_branch].copy()
+    
+    # Ensure the shift column exists before applying the active mask
+    if selected_col in df_branch_single_day.columns:
+        branch_active_mask = df_branch_single_day[selected_col].apply(lambda x: is_active(x, start_m, end_m))
+        b_act = df_branch_single_day[branch_active_mask]
+        b_inact = df_branch_single_day[~branch_active_mask]
+        
+        # Display Metrics
+        sc1, sc2, sc3 = st.columns(3)
+        sc1.metric("Active (Selected Day)", len(b_act))
+        sc2.metric("Inactive (Selected Day)", len(b_inact))
+        sc3.metric("Total", len(df_branch_single_day))
+        
+        st.subheader(f"🔥 Active Staff (Selected Day: {selected_col})")
+        st.dataframe(b_act[meta_cols + [selected_col]], use_container_width=True, hide_index=True)
+    else:
+        st.warning("Selected date column not found in data.")
+        
+    st.subheader(f"📊 Full Weekly Data: {selected_branch}")
+    st.dataframe(df_branch_weekly, use_container_width=True, hide_index=True)
+else:
+    st.error("The selected date column is missing from the data. Please refresh.")

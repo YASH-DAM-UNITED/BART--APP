@@ -176,24 +176,36 @@ s_col1, _ = st.columns([1, 2])
 with s_col1: 
     selected_branch = st.selectbox("🏢 Select Branch", branches)
 
-# Filter for the branch
+# 1. Identify the weekly range
+selected_idx = shift_cols.index(shift_col)
+# This gets a slice of 7 days: starting from the selected date or centered
+# Adjust the slice (e.g., selected_idx:selected_idx+7) based on your preference
+weekly_cols = shift_cols[max(0, selected_idx-3) : min(len(shift_cols), selected_idx+4)]
+
+# 2. Filter for the branch and the WEEKLY columns
 df_branch = df_work[df_work["Branch"] == selected_branch].copy()
+df_week = df_branch[["Branch", "Name", "Role"] + weekly_cols].copy()
 
-# IMPORTANT: Extract only the relevant shift column for the calculation
-# This ensures we are only looking at the column chosen in the top dropdown
-df_branch_relevant = df_branch[["Branch", "Name", "Role", shift_col]].copy()
-df_branch_relevant = df_branch_relevant.rename(columns={shift_col: "Shift"})
+# 3. Calculate status for the WHOLE WEEK
+# We iterate through the week and check if they are active on ANY of those days
+def is_active_any_day(row, cols, start_m, end_m):
+    for col in cols:
+        if is_active_in_range(str(row[col]), start_m, end_m):
+            return True
+    return False
 
-# Now use the cleaned, single-column df for calculations
-b_act, b_inact = compute(df_branch_relevant, start_m, end_m)
+# Create a boolean mask for the week
+df_week["Active_In_Week"] = df_week.apply(lambda row: is_active_any_day(row, weekly_cols, start_m, end_m), axis=1)
 
-st.subheader(f"🏢 {selected_branch} Detailed Overview")
+b_act = df_week[df_week["Active_In_Week"] == True]
+b_inact = df_week[df_week["Active_In_Week"] == False]
+
+# 4. Display
+st.subheader(f"🏢 {selected_branch} Weekly Overview ({', '.join([extract_day_month(c) for c in weekly_cols])})")
 sc1, sc2, sc3 = st.columns(3)
-sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch_relevant))
+sc1.metric("Active at least once", len(b_act))
+sc2.metric("Inactive all week", len(b_inact))
+sc3.metric("Total", len(df_week))
 
-st.subheader("🔥 Active Staff")
-st.dataframe(b_act, use_container_width=True, hide_index=True)
-
-st.subheader("📊 Full Branch Data (Selected Day Only)")
-# Combine the filtered results to show only columns relevant to the selection
-st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)
+st.subheader("🔥 Weekly Data")
+st.dataframe(df_week, use_container_width=True, hide_index=True)

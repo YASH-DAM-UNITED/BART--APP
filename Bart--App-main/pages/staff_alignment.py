@@ -173,23 +173,26 @@ st.divider()
 
 # --- Specific Branch View ---
 s_col1, _ = st.columns([1, 2])
-with s_col1: 
-    selected_branch = st.selectbox("🏢 Select Branch", branches)
+with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
+df_branch = df_work[df_work["Branch"] == selected_branch]
 
-# 1. Get the slice of the week (7 days)
-# Find the index of the selected column
+# Calculate based on the single day (Original Logic)
+b_act, b_inact = compute(df_branch, start_m, end_m)
+
+# 1. Define the week slice (3 days before, selected day, 3 days after)
 selected_idx = shift_cols.index(shift_col)
-# Get 3 days before, the selected day, and 3 days after (total 7)
 start_idx = max(0, selected_idx - 3)
 end_idx = min(len(shift_cols), selected_idx + 4)
 weekly_columns = shift_cols[start_idx:end_idx]
 
-# 2. Filter the dataframe for the branch AND the weekly columns
-df_branch = df_work[df_work["Branch"] == selected_branch].copy()
+st.subheader(f"🏢 {selected_branch} Detailed Overview")
+sc1, sc2, sc3 = st.columns(3)
+sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
 
-# Keep Meta columns + only the weekly slice
-cols_to_show = meta_cols + weekly_columns
-df_branch_view = df_branch[cols_to_show]
+st.subheader("🔥 Active Staff")
+st.dataframe(b_act, use_container_width=True, hide_index=True)
 
-st.subheader(f"🏢 {selected_branch} Detailed Overview (Selected Week)")
-st.dataframe(df_branch_view, use_container_width=True, hide_index=True)
+st.subheader("📊 Full Branch Data (Weekly View)")
+# Create the combined dataframe but limit columns to the week
+df_combined = pd.concat([b_act, b_inact], ignore_index=True)
+st.dataframe(df_combined[meta_cols + weekly_columns], use_container_width=True, hide_index=True)

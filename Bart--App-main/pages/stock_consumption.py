@@ -278,63 +278,62 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# 1. INITIALIZE PERSISTENT STORAGE
+# 1. CSS FOR STABILITY
+# -----------------------------
+st.markdown("""
+<style>
+    /* Force inputs to have a consistent height so the list doesn't jump */
+    div[data-testid="stTextInput"] { margin-bottom: 2px !important; }
+    /* Make search box stand out */
+    [data-testid="stTextInput"] > div > div > input { font-size: 18px; }
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# 2. INITIALIZE PERSISTENT STORAGE
 # -----------------------------
 if "stock_inputs" not in st.session_state:
     st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
 
 # -----------------------------
-# 2. SEARCH & FILTER LOGIC
+# 3. SEARCH BAR (Sticky Header)
 # -----------------------------
-st.markdown("### 🔍 Search & Fill")
 search_term = st.text_input(
-    "Find Item...", 
-    placeholder="Type item name to filter...", 
-    key="main_search"
+    "🔍 Filter Items", 
+    placeholder="Start typing to find items...", 
+    key="search_bar"
 ).lower()
 
-# Filter items based on search term
+# -----------------------------
+# 4. REACTIVE LIST (The "Full-Block")
+# -----------------------------
+# Filter the list based on search
 filtered_items = [item for item in processed_items if search_term in item["name"].lower()]
 
-st.caption(f"Showing {len(filtered_items)} of {len(processed_items)} items")
+# We use a container to keep this block separate from the rest of the UI
+with st.container():
+    for item_data in filtered_items:
+        item = item_data["name"]
+        umo = item_data["umo"]
+        label = f"{item} ({umo})" if umo else item
+        
+        # We save the value to session_state as the user types (on_change not required for instant save)
+        st.session_state.stock_inputs[item] = st.text_input(
+            label,
+            value=st.session_state.stock_inputs.get(item, ""),
+            key=f"input_{item}"
+        )
 
 # -----------------------------
-# 3. INPUT AREA (No Form Wrapper)
-# -----------------------------
-# We use a container to keep the input list stable
-input_container = st.container()
-
-with input_container:
-    # Use columns to keep it compact
-    for i in range(0, len(filtered_items), 2): # Using 2 columns for better mobile readability
-        cols = st.columns(2)
-        for j, col in enumerate(cols):
-            if i + j < len(filtered_items):
-                item_data = filtered_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
-                label = f"{item} [{umo}]"
-                
-                # Input stays saved in st.session_state.stock_inputs
-                # The 'key' is unique to the item, so it never forgets the value
-                val = col.text_input(
-                    label,
-                    value=st.session_state.stock_inputs.get(item, ""),
-                    key=f"input_{item}",
-                    placeholder="Qty"
-                )
-                st.session_state.stock_inputs[item] = val
-
-# -----------------------------
-# 4. REVIEW TRIGGER
+# 5. SUBMISSION BLOCK
 # -----------------------------
 st.markdown("---")
 if st.button("✅ Review All Stock", type="primary", use_container_width=True):
-    # Validation logic
+    # Validation: Ensure nothing is blank
     missing = [name for name, val in st.session_state.stock_inputs.items() if not val.strip()]
     
     if missing:
-        show_error_dialog(f"Incomplete: {', '.join(missing[:3])}...")
+        show_error_dialog(f"Incomplete entry for: {missing[0]}...")
     else:
         st.session_state.draft_data = st.session_state.stock_inputs
         st.session_state.review_mode = True

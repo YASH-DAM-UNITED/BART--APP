@@ -278,30 +278,34 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# FILTER & INPUT FORM
+# INPUT FORM & REAL-TIME FILTER
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# 1. Initialize search in session state
+# 1. SEARCH BOX: Must be outside the form to trigger real-time reruns
+# Using session_state ensures the text remains after each automatic rerun
 if "search_query" not in st.session_state:
     st.session_state.search_query = ""
 
-# 2. Search Box (Outside the form, triggers immediate rerun)
+def update_search():
+    st.session_state.search_query = st.session_state.search_input
+
 st.text_input(
     "🔍 Search for an item...", 
     value=st.session_state.search_query,
-    on_change=lambda: setattr(st.session_state, "search_query", st.session_state.search_input),
-    key="search_input"
+    on_change=update_search,
+    key="search_input",
+    placeholder="Start typing to filter..."
 )
 
-# 3. Filter the list
+# 2. FILTERING: Happens immediately when the search_input changes
 query = st.session_state.search_query.lower()
 filtered_items = [
     item for item in processed_items 
     if query in item["name"].lower()
 ]
 
-# 4. Form starts here
+# 3. FORM: Dynamically rendered based on filtered_items
 with st.form("stock_form", clear_on_submit=False):
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
@@ -312,44 +316,43 @@ with st.form("stock_form", clear_on_submit=False):
                 umo = item_data["umo"]
                 label = f"{item} [{umo}]" if umo else item
                 
-                # The key must be tied to the row_idx, NOT the search query,
-                # to keep data in memory while filtering.
-                value = col.text_input(
+                # IMPORTANT: Key is tied to the unique row index (not the item name/search),
+                # so the data persists in session_state even when the item is filtered out.
+                col.text_input(
                     label,
-                    placeholder="Qty",
+                    placeholder="Enter qty",
                     key=f"val_{item_data['row_idx']}" 
                 )
-                # We will collect these from session_state later
-    
+
+    # 4. SUBMISSION
     submitted = st.form_submit_button("🔍 Review Stock")
 
-# 5. Handling submission: Collect values from session_state
-if submitted:
-    # Gather all values currently in session_state that match our items
-    collected_inputs = {}
-    missing = []
-    invalid = []
-    
-    for item_data in processed_items: # Iterate all, not just filtered
-        key_name = f"val_{item_data['row_idx']}"
-        val = st.session_state.get(key_name, "").strip()
+    if submitted:
+        collected_inputs = {}
+        missing = []
+        invalid = []
         
-        if val == "":
-            missing.append(item_data["name"])
-        elif not val.isdigit():
-            invalid.append(item_data["name"])
-        else:
-            collected_inputs[item_data["name"]] = val
+        # Iterate through ALL original items to collect the data
+        for item_data in processed_items:
+            key_name = f"val_{item_data['row_idx']}"
+            val = st.session_state.get(key_name, "").strip()
             
-    if invalid:
-        show_error_dialog(f"Invalid numbers in: {', '.join(invalid)}")
-    elif missing:
-        show_error_dialog("Please fill in all stock quantities.")
-    else:
-        st.session_state.draft_data = collected_inputs
-        st.session_state.review_mode = True
-        st.session_state.scroll_to_review = True
-        st.rerun()
+            if val == "":
+                missing.append(item_data["name"])
+            elif not val.isdigit():
+                invalid.append(item_data["name"])
+            else:
+                collected_inputs[item_data["name"]] = val
+                
+        if invalid:
+            show_error_dialog(f"Invalid numbers in: {', '.join(invalid)}")
+        elif missing:
+            show_error_dialog("Please fill in all stock quantities.")
+        else:
+            st.session_state.draft_data = collected_inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

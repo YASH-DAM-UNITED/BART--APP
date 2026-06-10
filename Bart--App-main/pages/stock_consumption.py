@@ -277,34 +277,49 @@ components.html("""
     setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
-# -----------------------------
-# INPUT FORM
-# -----------------------------
-st.markdown("## Enter Stock")
+# 1. Initialize search state if not exists
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
 
-inputs = {}
+# 2. Add Search Bar at the top (Standard Keyboard)
+search = st.text_input("🔍 Search Items (Name or UMO)...", key="search_query")
 
-with st.form("stock_form", clear_on_submit=False):
+# 3. Filter the list
+query = st.session_state.search_query.lower()
+filtered_items = [
+    item for item in processed_items 
+    if query in item["name"].lower() or query in item["umo"].lower()
+]
 
-    for i in range(0, len(processed_items), 4):
-        cols = st.columns(4)
+st.markdown("---")
 
-        for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
-                
-                label = f"{item} [{umo}]" if umo else item
+# 4. Display the dynamic grid
+# Note: We are NOT using st.form here to allow real-time filtering
+for i in range(0, len(filtered_items), 4):
+    cols = st.columns(4)
+    for j, col in enumerate(cols):
+        if i + j < len(filtered_items):
+            item_data = filtered_items[i + j]
+            item = item_data["name"]
+            umo = item_data["umo"]
+            row_idx = item_data["row_idx"]
+            
+            # Use a unique key for the input based on the specific row
+            input_key = f"qty_{row_idx}"
+            
+            # Initialize session state for this specific item if empty
+            if input_key not in st.session_state:
+                st.session_state[input_key] = ""
+            
+            # Numeric input for quantity
+            val = col.text_input(
+                f"{item} [{umo}]", 
+                value=st.session_state[input_key],
+                key=input_key,
+                placeholder="0"
+            )
+            st.session_state[input_key] = val
 
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
-                    label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
-                )
-
-                inputs[item] = value.strip() if value.strip() else None
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION

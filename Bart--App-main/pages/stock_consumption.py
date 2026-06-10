@@ -278,57 +278,78 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# INPUT FORM
+# FILTER & INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-inputs = {}
+# 1. Initialize search in session state
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
 
+# 2. Search Box (Outside the form, triggers immediate rerun)
+st.text_input(
+    "🔍 Search for an item...", 
+    value=st.session_state.search_query,
+    on_change=lambda: setattr(st.session_state, "search_query", st.session_state.search_input),
+    key="search_input"
+)
+
+# 3. Filter the list
+query = st.session_state.search_query.lower()
+filtered_items = [
+    item for item in processed_items 
+    if query in item["name"].lower()
+]
+
+# 4. Form starts here
 with st.form("stock_form", clear_on_submit=False):
-
-    for i in range(0, len(processed_items), 4):
+    for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
-
         for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
                 item = item_data["name"]
                 umo = item_data["umo"]
-                
                 label = f"{item} [{umo}]" if umo else item
-
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                
+                # The key must be tied to the row_idx, NOT the search query,
+                # to keep data in memory while filtering.
                 value = col.text_input(
                     label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                    placeholder="Qty",
+                    key=f"val_{item_data['row_idx']}" 
                 )
-
-                inputs[item] = value.strip() if value.strip() else None
-
-# -----------------------------
-    # 3. VALIDATION & SUBMISSION
-    # -----------------------------
+                # We will collect these from session_state later
+    
     submitted = st.form_submit_button("🔍 Review Stock")
 
-    if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
-
-        if invalid_items:
-            # Trigger the Dialog Popup
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
-        elif missing:
-            # Trigger the Dialog Popup
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+# 5. Handling submission: Collect values from session_state
+if submitted:
+    # Gather all values currently in session_state that match our items
+    collected_inputs = {}
+    missing = []
+    invalid = []
+    
+    for item_data in processed_items: # Iterate all, not just filtered
+        key_name = f"val_{item_data['row_idx']}"
+        val = st.session_state.get(key_name, "").strip()
+        
+        if val == "":
+            missing.append(item_data["name"])
+        elif not val.isdigit():
+            invalid.append(item_data["name"])
         else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
+            collected_inputs[item_data["name"]] = val
+            
+    if invalid:
+        show_error_dialog(f"Invalid numbers in: {', '.join(invalid)}")
+    elif missing:
+        show_error_dialog("Please fill in all stock quantities.")
+    else:
+        st.session_state.draft_data = collected_inputs
+        st.session_state.review_mode = True
+        st.session_state.scroll_to_review = True
+        st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

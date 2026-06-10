@@ -278,74 +278,57 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# DYNAMIC SEARCH & INPUT (Replaces the old form)
+# INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# Initialize search query in session
-if "search_query" not in st.session_state:
-    st.session_state.search_query = ""
+inputs = {}
 
-# Search Bar (Standard keyboard)
-st.text_input("🔍 Search Items (Name, UMO, or SKU)...", key="search_query")
+with st.form("stock_form", clear_on_submit=False):
 
-# Filter Logic
-query = st.session_state.search_query.lower()
-filtered_items = [
-    item for item in processed_items 
-    if query in item["name"].lower() or query in item["umo"].lower()
-]
+    for i in range(0, len(processed_items), 4):
+        cols = st.columns(4)
 
-# Display items in a grid
-# We use keys linked to the row_idx so data persists even when filtered
-for i in range(0, len(filtered_items), 4):
-    cols = st.columns(4)
-    for j, col in enumerate(cols):
-        if i + j < len(filtered_items):
-            item_data = filtered_items[i + j]
-            item = item_data["name"]
-            umo = item_data["umo"]
-            key = f"qty_{item_data['row_idx']}"
-            
-            if key not in st.session_state:
-                st.session_state[key] = ""
-            
-            # Numeric Input
-            val = col.text_input(
-                f"{item} [{umo}]",
-                value=st.session_state[key],
-                key=key,
-                placeholder="0"
-            )
-            st.session_state[key] = val
+        for j, col in enumerate(cols):
+            if i + j < len(processed_items):
+                item_data = processed_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                label = f"{item} [{umo}]" if umo else item
 
-st.markdown("---")
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
+                    label,
+                    placeholder="Enter quantity",
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                )
 
-# 3. Validation & Review Button (Outside of a form)
-if st.button("🔍 Review Stock", type="primary", use_container_width=True):
-    draft = {}
-    invalid_items = []
-    
-    # Check all processed items (not just filtered ones)
-    for item_data in processed_items:
-        key = f"qty_{item_data['row_idx']}"
-        val = st.session_state.get(key, "").strip()
-        
-        if val:
-            if not val.isdigit():
-                invalid_items.append(item_data["name"])
-            else:
-                draft[item_data["name"]] = val
+                inputs[item] = value.strip() if value.strip() else None
+
+# -----------------------------
+    # 3. VALIDATION & SUBMISSION
+    # -----------------------------
+    submitted = st.form_submit_button("🔍 Review Stock")
+
+    if submitted:
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
+
+        if invalid_items:
+            # Trigger the Dialog Popup
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        elif missing:
+            # Trigger the Dialog Popup
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
         else:
-            invalid_items.append(f"{item_data['name']} (Empty)")
-
-    if invalid_items:
-        show_error_dialog(f"Invalid/Empty entries: {', '.join(invalid_items)}")
-    else:
-        st.session_state.draft_data = draft
-        st.session_state.review_mode = True
-        st.session_state.scroll_to_review = True
-        st.rerun()
+            # All checks passed, move to review
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

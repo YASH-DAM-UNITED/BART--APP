@@ -176,36 +176,20 @@ s_col1, _ = st.columns([1, 2])
 with s_col1: 
     selected_branch = st.selectbox("🏢 Select Branch", branches)
 
-# 1. Identify the weekly range
+# 1. Get the slice of the week (7 days)
+# Find the index of the selected column
 selected_idx = shift_cols.index(shift_col)
-# This gets a slice of 7 days: starting from the selected date or centered
-# Adjust the slice (e.g., selected_idx:selected_idx+7) based on your preference
-weekly_cols = shift_cols[max(0, selected_idx-3) : min(len(shift_cols), selected_idx+4)]
+# Get 3 days before, the selected day, and 3 days after (total 7)
+start_idx = max(0, selected_idx - 3)
+end_idx = min(len(shift_cols), selected_idx + 4)
+weekly_columns = shift_cols[start_idx:end_idx]
 
-# 2. Filter for the branch and the WEEKLY columns
+# 2. Filter the dataframe for the branch AND the weekly columns
 df_branch = df_work[df_work["Branch"] == selected_branch].copy()
-df_week = df_branch[["Branch", "Name", "Role"] + weekly_cols].copy()
 
-# 3. Calculate status for the WHOLE WEEK
-# We iterate through the week and check if they are active on ANY of those days
-def is_active_any_day(row, cols, start_m, end_m):
-    for col in cols:
-        if is_active_in_range(str(row[col]), start_m, end_m):
-            return True
-    return False
+# Keep Meta columns + only the weekly slice
+cols_to_show = meta_cols + weekly_columns
+df_branch_view = df_branch[cols_to_show]
 
-# Create a boolean mask for the week
-df_week["Active_In_Week"] = df_week.apply(lambda row: is_active_any_day(row, weekly_cols, start_m, end_m), axis=1)
-
-b_act = df_week[df_week["Active_In_Week"] == True]
-b_inact = df_week[df_week["Active_In_Week"] == False]
-
-# 4. Display
-st.subheader(f"🏢 {selected_branch} Weekly Overview ({', '.join([extract_day_month(c) for c in weekly_cols])})")
-sc1, sc2, sc3 = st.columns(3)
-sc1.metric("Active at least once", len(b_act))
-sc2.metric("Inactive all week", len(b_inact))
-sc3.metric("Total", len(df_week))
-
-st.subheader("🔥 Weekly Data")
-st.dataframe(df_week, use_container_width=True, hide_index=True)
+st.subheader(f"🏢 {selected_branch} Detailed Overview (Selected Week)")
+st.dataframe(df_branch_view, use_container_width=True, hide_index=True)

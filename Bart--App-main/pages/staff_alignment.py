@@ -171,14 +171,29 @@ summary = [{"Branch": b, "Active": len(compute(df_work[df_work["Branch"] == b], 
 st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 st.divider()
 
-# Specific Branch View
+# --- Specific Branch View ---
 s_col1, _ = st.columns([1, 2])
-with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
-df_branch = df_work[df_work["Branch"] == selected_branch]
-b_act, b_inact = compute(df_branch, start_m, end_m)
+with s_col1: 
+    selected_branch = st.selectbox("🏢 Select Branch", branches)
+
+# Filter for the branch
+df_branch = df_work[df_work["Branch"] == selected_branch].copy()
+
+# IMPORTANT: Extract only the relevant shift column for the calculation
+# This ensures we are only looking at the column chosen in the top dropdown
+df_branch_relevant = df_branch[["Branch", "Name", "Role", shift_col]].copy()
+df_branch_relevant = df_branch_relevant.rename(columns={shift_col: "Shift"})
+
+# Now use the cleaned, single-column df for calculations
+b_act, b_inact = compute(df_branch_relevant, start_m, end_m)
 
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
-sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
-st.subheader("🔥 Active Staff"); st.dataframe(b_act, use_container_width=True, hide_index=True)
-st.subheader("📊 Full Branch Data"); st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)
+sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch_relevant))
+
+st.subheader("🔥 Active Staff")
+st.dataframe(b_act, use_container_width=True, hide_index=True)
+
+st.subheader("📊 Full Branch Data (Selected Day Only)")
+# Combine the filtered results to show only columns relevant to the selection
+st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)

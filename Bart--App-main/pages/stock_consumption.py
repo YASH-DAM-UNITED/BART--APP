@@ -277,58 +277,45 @@ components.html("""
     setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
-# -----------------------------
-# INPUT FORM
-# -----------------------------
-st.markdown("## Enter Stock")
+# 1. Initialize storage for all inputs if not exists
+if "stock_inputs" not in st.session_state:
+    st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
 
-inputs = {}
+# 2. Search Bar
+search_term = st.text_input("🔍 Search items...", placeholder="Type to filter items...").lower()
 
-with st.form("stock_form", clear_on_submit=False):
+# 3. Filtered Logic
+filtered_items = [item for item in processed_items if search_term in item["name"].lower()]
 
-    for i in range(0, len(processed_items), 4):
-        cols = st.columns(4)
+st.info(f"Showing {len(filtered_items)} of {len(processed_items)} items")
 
-        for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
-                
-                label = f"{item} [{umo}]" if umo else item
+# 4. Input Fields (No st.form wrapper needed for live search)
+for item_data in filtered_items:
+    item = item_data["name"]
+    umo = item_data["umo"]
+    label = f"{item} [{umo}]" if umo else item
+    
+    # We use a key for the input, and on_change to save the value
+    st.session_state.stock_inputs[item] = st.text_input(
+        label,
+        value=st.session_state.stock_inputs.get(item, ""),
+        key=f"input_{item}",
+        placeholder="Qty"
+    )
 
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
-                    label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
-                )
-
-                inputs[item] = value.strip() if value.strip() else None
-
-# -----------------------------
-    # 3. VALIDATION & SUBMISSION
-    # -----------------------------
-    submitted = st.form_submit_button("🔍 Review Stock")
-
-    if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
-
-        if invalid_items:
-            # Trigger the Dialog Popup
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
-        elif missing:
-            # Trigger the Dialog Popup
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
-        else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
+# 5. Validation/Submission Button
+if st.button("🔍 Review Stock", type="primary"):
+    # Check if all items in the original list have values
+    empty_items = [name for name, val in st.session_state.stock_inputs.items() if not val.strip()]
+    
+    if empty_items:
+        show_error_dialog(f"Please fill in: {', '.join(empty_items[:3])}...")
+    else:
+        # Move to review phase
+        st.session_state.draft_data = st.session_state.stock_inputs
+        st.session_state.review_mode = True
+        st.session_state.scroll_to_review = True
+        st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

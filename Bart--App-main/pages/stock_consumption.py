@@ -305,24 +305,36 @@ search_term = st.text_input(
 ).lower()
 
 # -----------------------------
-# 4. REACTIVE LIST (The "Full-Block")
+# 4. REACTIVE LIST (4-COLUMN GRID)
 # -----------------------------
-# Filter the list based on search
+# Filter the list
 filtered_items = [item for item in processed_items if search_term in item["name"].lower()]
 
-# We use a container to keep this block separate from the rest of the UI
 with st.container():
-    for item_data in filtered_items:
-        item = item_data["name"]
-        umo = item_data["umo"]
-        label = f"{item} ({umo})" if umo else item
+    # Loop through the filtered items in chunks of 4
+    for i in range(0, len(filtered_items), 4):
+        # Create a row of 4 columns
+        cols = st.columns(4)
         
-        # We save the value to session_state as the user types (on_change not required for instant save)
-        st.session_state.stock_inputs[item] = st.text_input(
-            label,
-            value=st.session_state.stock_inputs.get(item, ""),
-            key=f"input_{item}"
-        )
+        for j in range(4):
+            # Check if we still have items to display
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                # Input field inside the column
+                st.session_state.stock_inputs[item] = cols[j].text_input(
+                    label=f"{item} ({umo})" if umo else item,
+                    value=st.session_state.stock_inputs.get(item, ""),
+                    key=f"input_{item}",
+                    placeholder="Qty"
+                )
+            else:
+                # Add empty space if the row isn't full
+                cols[j].empty()
+
+
 
 # -----------------------------
 # 5. SUBMISSION BLOCK

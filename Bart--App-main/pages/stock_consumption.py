@@ -276,71 +276,59 @@ components.html("""
     // Run after a short delay to ensure elements are rendered
     setTimeout(setNumericKeypad, 500);
 </script>
-""", height=0)# -----------------------------
-# INPUT SECTION (Replacing the Form)
+""", height=0)
+# -----------------------------
+# INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# 1. Search Box (Real-time filtering)
-# We store the search in session_state so it persists during reruns
-if "search_query" not in st.session_state:
-    st.session_state.search_query = ""
+inputs = {}
 
-# The key 'search_input' makes this update the page instantly on every keypress
-st.text_input(
-    "🔍 Search for an item...", 
-    key="search_input",
-    value=st.session_state.search_query,
-    on_change=lambda: setattr(st.session_state, "search_query", st.session_state.search_input)
-)
+with st.form("stock_form", clear_on_submit=False):
 
-# 2. Filter logic
-query = st.session_state.search_query.lower()
-filtered_items = [item for item in processed_items if query in item["name"].lower()]
-
-# 3. Dynamic Display Container (The "Perfect" Grid)
-# We use a container so we can clear/redraw this specific area easily
-with st.container():
-    for i in range(0, len(filtered_items), 4):
+    for i in range(0, len(processed_items), 4):
         cols = st.columns(4)
+
         for j, col in enumerate(cols):
-            if i + j < len(filtered_items):
-                item_data = filtered_items[i + j]
-                # Key is tied to the unique row_idx, so data is preserved even when filtered out
-                col.text_input(
-                    f"{item_data['name']} [{item_data['umo']}]",
-                    key=f"val_{item_data['row_idx']}",
-                    placeholder="Qty"
+            if i + j < len(processed_items):
+                item_data = processed_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                label = f"{item} [{umo}]" if umo else item
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
+                    label,
+                    placeholder="Enter quantity",
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
 
-# 4. Floating Submission (Outside the loop, visually distinct)
-st.markdown("---")
-if st.button("✅ Review and Submit", type="primary", use_container_width=True):
-    collected_inputs = {}
-    invalid = []
-    
-    # Iterate through all original items to capture values
-    for item_data in processed_items:
-        key = f"val_{item_data['row_idx']}"
-        val = str(st.session_state.get(key, "")).strip()
-        
-        # Only validate fields where the user actually entered something
-        if val != "":
-            if not val.isdigit():
-                invalid.append(item_data["name"])
-            else:
-                collected_inputs[item_data["name"]] = val
-    
-    if invalid:
-        show_error_dialog(f"Invalid numbers: {', '.join(invalid)}")
-    elif not collected_inputs:
-        show_error_dialog("Please enter at least one quantity before submitting.")
-    else:
-        # Move to review
-        st.session_state.draft_data = collected_inputs
-        st.session_state.review_mode = True
-        st.session_state.scroll_to_review = True
-        st.rerun()
+                inputs[item] = value.strip() if value.strip() else None
+
+# -----------------------------
+    # 3. VALIDATION & SUBMISSION
+    # -----------------------------
+    submitted = st.form_submit_button("🔍 Review Stock")
+
+    if submitted:
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
+
+        if invalid_items:
+            # Trigger the Dialog Popup
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        elif missing:
+            # Trigger the Dialog Popup
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+        else:
+            # All checks passed, move to review
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

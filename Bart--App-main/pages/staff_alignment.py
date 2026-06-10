@@ -176,7 +176,7 @@ s_col1, _ = st.columns([1, 2])
 with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
 df_branch = df_work[df_work["Branch"] == selected_branch]
 
-# Calculate based on the single day (Original Logic)
+# Calculate based on the single day (Original Logic remains untouched)
 b_act, b_inact = compute(df_branch, start_m, end_m)
 
 # 1. Define the week slice (3 days before, selected day, 3 days after)
@@ -193,6 +193,13 @@ st.subheader("🔥 Active Staff")
 st.dataframe(b_act, use_container_width=True, hide_index=True)
 
 st.subheader("📊 Full Branch Data (Weekly View)")
-# Create the combined dataframe but limit columns to the week
+# Create the combined dataframe
 df_combined = pd.concat([b_act, b_inact], ignore_index=True)
-st.dataframe(df_combined[meta_cols + weekly_columns], use_container_width=True, hide_index=True)
+
+# Define columns to show: Meta + Weekly Shifts + Overtime
+# Ensure "Overtime" exists in your columns, otherwise it will throw an error
+cols_to_display = meta_cols + weekly_columns
+if "Overtime" in df_combined.columns:
+    cols_to_display += ["Overtime"]
+
+st.dataframe(df_combined[cols_to_display], use_container_width=True, hide_index=True)

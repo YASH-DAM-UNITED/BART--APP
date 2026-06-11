@@ -412,7 +412,7 @@ else:
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    target_headers = ["Name", "Role"] + week_cols + [ot_col_name]
+    target_headers = ["Name", "Role","CONTACT"] + week_cols + [ot_col_name]
     
     # Map headers to indices
     header_to_idx = {h: i for i, h in enumerate(headers)}

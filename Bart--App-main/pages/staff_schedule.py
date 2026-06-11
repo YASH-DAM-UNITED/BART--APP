@@ -354,7 +354,6 @@ if edit_mode:
 
                 cols_to_map = {d: day_labels[d] for d in DAYS}
                 cols_to_map["Over-Time"] = ot_header
-                cols_to_map["Role"] = "Role"
                 
                 for key, day_header in cols_to_map.items():
                     if day_header not in headers:
@@ -364,7 +363,7 @@ if edit_mode:
                         col_idx = new_col_idx
                     else:
                         col_idx = headers.index(day_header) + 1
-                    val_to_write = str(row[key])
+                    
                     updates.append(gspread.Cell(row=target_row_idx, col=col_idx, value=str(row[key])))
             
             ws.update_cells(updates)

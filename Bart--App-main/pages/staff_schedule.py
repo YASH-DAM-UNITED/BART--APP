@@ -248,7 +248,7 @@ if edit_mode:
     # 1. Prepare df_display
     df_display = (df[["Name", "Role"]].dropna(subset=["Name"]).drop_duplicates().reset_index(drop=True)) if not df.empty else pd.DataFrame(columns=["Name", "Role"] + DAYS)
     if st.session_state.deleted_staff: 
-        df_display = df_display[~df_display["Name"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
+        df_display = df_display[~df_display["Name","Role"].isin(st.session_state.deleted_staff)].reset_index(drop=True)
     
     # Ensure all days are columns
     for d in DAYS:

@@ -943,7 +943,7 @@ st.markdown("---")
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📊 karan Insights")
+    st.subheader("📊 INVENTORY Insights")
     st.caption("Exports all categories into a professionally styled Excel workbook.")
 
 with col2:

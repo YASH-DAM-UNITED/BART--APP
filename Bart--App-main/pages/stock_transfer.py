@@ -61,47 +61,78 @@ if st.session_state.transfer_cart:
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
-    if st.button("Confirm and Send All", key="confirm_btn"):
+if st.button("Confirm and Send All", key="confirm_btn"):
         try:
-            # 1. Capture Jeddah time and generate unique ID
+            # 1. Setup Connection
+            creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+            scope = ["https://spreadsheets.google.com/feeds", "https://spreadsheets.google.com/auth/drive"]
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            client = gspread.authorize(creds)
+            
+            # 2. Get Source Branch Data
+            source_branch = st.session_state.get("selected_branch")
+            if not source_branch:
+                st.error("Branch not selected.")
+                st.stop()
+                
+            branch_sheet = client.open(source_branch).worksheet("Stocks")
+            
+            # 3. Identify the last column (most recent date)
+            # Assuming row 1 contains the headers/dates
+            header_row = branch_sheet.row_values(1)
+            last_col_index = len(header_row) 
+            
+            # 4. Check Stock Availability First (Transaction Integrity)
+            for entry in st.session_state.transfer_cart:
+                item_cell = branch_sheet.find(entry['item'])
+                if not item_cell:
+                    st.error(f"Item '{entry['item']}' not found in {source_branch} sheet.")
+                    st.stop()
+                
+                current_val = branch_sheet.cell(item_cell.row, last_col_index).value
+                current_stock = int(current_val) if (current_val and current_val.isdigit()) else 0
+                
+                if current_stock < entry['qty']:
+                    st.error(f"Insufficient stock for {entry['item']}! (Available: {current_stock})")
+                    st.stop()
+
+            # 5. Perform Deductions
+            for entry in st.session_state.transfer_cart:
+                item_cell = branch_sheet.find(entry['item'])
+                current_val = int(branch_sheet.cell(item_cell.row, last_col_index).value)
+                new_stock = current_val - entry['qty']
+                branch_sheet.update_cell(item_cell.row, last_col_index, new_stock)
+            
+            # 6. Log to Master Transfer Sheet
+            transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+            
             jeddah_time = datetime.now() + timedelta(hours=3)
             date_str = jeddah_time.strftime("%Y%m%d")
             random_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
             transfer_id = f"TR-{date_str}-{random_suffix}"
-            current_timestamp = jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             
-            # 2. Connect to Google Sheets
-            creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-            client = gspread.authorize(creds)
-            sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+            combined_items_str = "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart])
+            combined_qtys_str = "\n".join([str(e['qty']) for e in st.session_state.transfer_cart])
             
-            # 3. Format strings for beautiful Google Sheet layout
-            item_details = [f"• {entry['item']} ({entry['qty']} {entry['uom']})" for entry in st.session_state.transfer_cart]
-            combined_items_str = "\n".join(item_details)
-            
-            quantities_list = [str(entry['qty']) for entry in st.session_state.transfer_cart]
-            combined_qtys_str = "\n".join(quantities_list)
-            
-            # 4. Prepare row: ID is now the first column
             row_data = [
-                transfer_id,                                # ID Column
-                str(st.session_state.get("selected_branch", "Unknown")), 
-                str(destination), 
-                str(combined_items_str), 
-                str(combined_qtys_str), 
+                transfer_id,
+                str(source_branch),
+                str(destination),
+                str(combined_items_str),
+                str(combined_qtys_str),
                 str(reason),
-                "Pending",                                  # Status
-                str(current_timestamp)                      # Timestamp
+                "Pending",
+                jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
             ]
             
-            sheet.append_row(row_data)
+            transfer_sheet.append_row(row_data)
+            
+            # 7. Finalize
             st.session_state.transfer_cart = []
-            success_dialog(f"Transfer successful! ID: {transfer_id}")
+            success_dialog(f"Transfer {transfer_id} processed and stock deducted.")
             
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"System Error: {e}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

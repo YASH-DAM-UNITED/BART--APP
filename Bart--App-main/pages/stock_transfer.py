@@ -19,49 +19,38 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct):
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        ws = sh.worksheet("Stocks")
+        
+        # Changed to your specific tab name
+        ws = sh.worksheet("Stocks") 
 
-        # 1. Row Identification
+        # 1. Row Index
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Error: '{item_name}' not in Col 1."
+            return f"Error: '{item_name}' not found."
         row_index = all_items.index(item_name) + 1
-        print(f"DEBUG: Item Found! Row: {row_index}")
 
-        # 2. Force Column Identification (Skip empty gap)
-        # We look at Row 1, but we tell it to look from Column 14 (N) to 20
-        # This prevents it from counting 'DAILY ITEM' or 'SKU' as the date column
+        # 2. Latest Column Index
         header_row = ws.row_values(1)
+        # Filter for the last non-empty column in Row 1
+        non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
+        col_index = non_empty[-1] + 1
         
-        # We define a range: looking for the latest date in columns 14 to 20
-        # This assumes your dates are always in columns N through T
-        potential_date_cols = header_row[13:20] 
-        # Find the last non-empty column index in that range
-        last_col_idx = 0
-        for i, val in enumerate(potential_date_cols):
-            if val and str(val).strip():
-                last_col_idx = 14 + i
-        
-        col_index = last_col_idx
-        print(f"DEBUG: Selected Column: {col_index}")
-
-        if col_index < 14:
-            return "Error: Could not identify Date Column. Check that dates are in Columns N-T."
-
-        # 3. Update using Cell Value direct
+        # 3. Read Current Value
         current_val = ws.cell(row_index, col_index).value
         current_int = int(current_val) if (current_val and str(current_val).strip().isdigit()) else 0
         new_val = current_int - int(qty_to_deduct)
         
-        # Using a direct write that is more compatible than update()
-        ws.update_cell(row_index, col_index, new_val)
-        print(f"DEBUG: Successfully updated cell at ({row_index}, {col_index}) to {new_val}")
+        # 4. Perform Update
+        # Using A1 notation to ensure the write is clean and bypasses 200 errors
+        cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
+        ws.update(range_name=cell_a1, values=[[new_val]])
         
+        print(f"DEBUG: Successfully updated {cell_a1} to {new_val}")
         return "Success"
         
     except Exception as e:
-        print(f"DEBUG CRITICAL ERROR: {str(e)}")
-        return str(e)
+        print(f"DEBUG: Critical Error: {str(e)}")
+        return f"Error: {str(e)}"
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")

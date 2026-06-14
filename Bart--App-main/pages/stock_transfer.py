@@ -68,7 +68,6 @@ if st.session_state.transfer_cart:
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
 
-
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
         # 1. Setup Connection
@@ -78,31 +77,36 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         )
         client = gspread.authorize(creds)
         
-        # 2. Get Branch name and Open Sheets
+        # 2. Open Files
         source_branch = st.session_state.get("selected_branch")
         branch_sheet = client.open(source_branch).worksheet("Stocks")
         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
         
-        # 3. Get the last column index (Date)
+        # 3. IDENTIFY TARGET COLUMN (Most recent date)
+        # We look at Row 1 and find the index of the last column
         header_row = branch_sheet.row_values(1)
         last_col = len(header_row) 
         
-        # 4. Perform Deduction
+        # 4. Deduction Loop (Specific to Column A)
         for entry in st.session_state.transfer_cart:
-            # Locate item row
-            cell = branch_sheet.find(entry['item'])
+            # SEARCH ONLY COLUMN 1 (A) to prevent finding SKUs or other data
+            cell = branch_sheet.find(entry['item'].strip(), in_column=1)
+            
             if cell:
-                # Get current value, ensure it is a number
-                val = branch_sheet.cell(cell.row, last_col).value
-                current_val = float(val) if val and val.replace('.','',1).isdigit() else 0.0
+                # Fetch the value from the intersection of Row and Last Column
+                raw_val = branch_sheet.cell(cell.row, last_col).value
+                current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
                 
-                # Deduct
+                # Perform the deduction
                 new_val = current_val - float(entry['qty'])
                 
-                # Direct Update
+                # Update the cell
                 branch_sheet.update_cell(cell.row, last_col, new_val)
+            else:
+                st.error(f"Critical: Could not find item '{entry['item']}' in Column A.")
+                st.stop()
         
-        # 5. Log to Master Transfer Sheet
+        # 5. Log to Master
         jeddah_time = datetime.now() + timedelta(hours=3)
         transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}"
         
@@ -117,13 +121,12 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
         ])
         
-        # 6. Finalize
         st.session_state.transfer_cart = []
-        st.success(f"Success! Stock deducted from {source_branch}.")
+        st.success(f"Stock successfully deducted from {source_branch}!")
         st.rerun()
 
     except Exception as e:
-        st.error(f"Error: {str(e)}")
+        st.error(f"Transaction Error: {str(e)}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

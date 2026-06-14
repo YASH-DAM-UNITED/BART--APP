@@ -67,46 +67,83 @@ if st.session_state.transfer_cart:
     st.subheader("📦 Finalize Transfer")
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
+
+
+
+
+
+
+
 if st.button("Confirm and Send All", key="confirm_btn"):
-    # 1. VALIDATION STEP
+    # 1. Configuration & Cache Check
     source_branch = st.session_state.get("selected_branch")
-    st.write(f"DEBUG: Validating branch: '{source_branch}'")
     
-    if not source_branch or source_branch == "":
-        st.error("Session cache is empty! Please select a branch first.")
+    if not source_branch:
+        st.error("Branch name missing. Please select a branch first.")
         st.stop()
 
     try:
-        # 2. Setup Auth
+        # 2. Setup Google Connection
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
         
-        # 3. SEARCH DRIVE (The "Truth" check)
-        # We don't try to open directly. We list files first.
-        drive_files = client.list_spreadsheet_files()
-        # Look for a match in the list of files the Service Account can see
-        matching_files = [f for f in drive_files if f['name'] == source_branch]
+        # 3. Open File and Worksheet
+        # Using open(source_branch) which matches BARTXX names perfectly
+        spreadsheet = client.open(source_branch)
+        # Access index 0 to avoid tab-naming errors
+        branch_sheet = spreadsheet.get_worksheet(0)
         
-        if not matching_files:
-            # If we don't find it, show all files the bot CAN see
-            all_files = [f['name'] for f in drive_files[:10]] # Show first 10
-            st.error(f"FATAL: File '{source_branch}' not found in accessible files.")
-            st.write(f"DEBUG: Here are the first 10 files the Bot CAN see: {all_files}")
-            st.stop()
+        # 4. Identify Target Column (Date)
+        # Based on your screenshot, data is in the last column of the sheet
+        header_row = branch_sheet.row_values(1)
+        last_col = len(header_row) 
         
-        # 4. If we reach here, we have the file!
-        spreadsheet_id = matching_files[0]['id']
-        branch_sheet = client.open_by_key(spreadsheet_id).get_worksheet(0)
+        # 5. Deduction Loop
+        cell_list = []
+        for entry in st.session_state.transfer_cart:
+            # Search ONLY in Column 1 (Column A) for the item name
+            cell = branch_sheet.find(entry['item'].strip(), in_column=1)
+            
+            if cell:
+                # Fetch current value and calculate
+                raw_val = branch_sheet.cell(cell.row, last_col).value
+                current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
+                new_val = current_val - float(entry['qty'])
+                
+                # Prepare for bulk update
+                cell_list.append(gspread.Cell(row=cell.row, col=last_col, value=new_val))
+            else:
+                st.warning(f"Item '{entry['item']}' not found in {source_branch}. Skipping.")
         
-        st.write(f"DEBUG: Successfully accessed: {branch_sheet.title}")
+        # 6. Execute Batch Update (Prevents <Response [200]> errors)
+        if cell_list:
+            branch_sheet.update_cells(cell_list)
         
-        # [ ... Proceed with your deduction logic ... ]
+        # 7. Log to Master Sheet
+        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        jeddah_time = datetime.now() + timedelta(hours=3)
+        
+        transfer_sheet.append_row([
+            f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}", 
+            source_branch, 
+            destination, 
+            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+            "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
+            reason, 
+            "Pending", 
+            jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+        ])
+        
+        # 8. Reset and Notify
+        st.session_state.transfer_cart = []
+        st.success(f"Success! Stock deducted from {source_branch}.")
+        st.rerun()
 
     except Exception as e:
-        st.error(f"Critical System Error: {str(e)}")
+        st.error(f"Transaction Failed: {str(e)}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

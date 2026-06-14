@@ -192,7 +192,7 @@ div.stButton > button:active { transform: scale(0.98) translateY(0); }
         margin-bottom: 20px !important;
     }
     .card-content {
-        padding: 22px 18px !important;
+        padding: 15px 20px !important;
     }
     
     /* Make buttons easier to tap accurately on smartphones */

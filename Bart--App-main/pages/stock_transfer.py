@@ -71,64 +71,67 @@ if st.session_state.transfer_cart:
 
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
-        # 1. Setup Connection
+        # 1. Setup Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
         
-        # 2. Get Branch Info from Session State
-        # Ensure 'selected_branch_id' or similar is stored in your dashboard
-        source_branch_name = st.session_state.get("selected_branch") 
+        # 2. Get Origin Branch name and Open Sheets
+        source_branch = st.session_state.get("selected_branch")
+        branch_sheet = client.open(source_branch).worksheet("Stocks")
+        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
         
-        # 3. Open the Sheet (Using the session name)
-        branch_sheet = client.open(source_branch_name).worksheet("Stocks")
+        # 3. Dynamic Column Logic
+        header_row = branch_sheet.row_values(1)
+        last_col = len(header_row) 
         
-        # 4. Get the most recent column (Last column index)
-        last_col = len(branch_sheet.row_values(1))
+        # 4. Prepare Batch Data
+        # We fetch all cell values to calculate locally
+        cell_list = branch_sheet.range(1, last_col, branch_sheet.row_count, last_col)
         
-        # 5. Prepare Batch Updates for all items in cart
         updates = []
         for entry in st.session_state.transfer_cart:
-            # Locate the row for the item
+            # Find the row for the item
             cell = branch_sheet.find(entry['item'])
             if cell:
-                # Get current value from the latest column
+                # Get current stock
                 current_val = float(branch_sheet.cell(cell.row, last_col).value or 0)
-                # Subtract the input quantity
+                # Calculate new stock
                 new_val = current_val - float(entry['qty'])
                 
-                # Add to batch list
+                # Add to batch update list
                 updates.append({
                     'range': gspread.utils.rowcol_to_a1(cell.row, last_col),
                     'values': [[new_val]]
                 })
         
-        # 6. Execute Batch Update (Highly reliable)
+        # 5. Execute Single Batch Update (Prevents Response 200 issues)
         if updates:
             branch_sheet.batch_update(updates)
         
-        # 7. Log to Master sheet
-        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        # 6. Log to Master sheet
         jeddah_time = datetime.now() + timedelta(hours=3)
         transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}"
-        
-        row_data = [
-            transfer_id, source_branch_name, destination, 
-            "\n".join([f"{e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+        transfer_sheet.append_row([
+            transfer_id, source_branch, destination, 
+            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
             reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
-        ]
-        transfer_sheet.append_row(row_data)
+        ])
         
-        # 8. Clear Cart and Success
+        # 7. Finalize
         st.session_state.transfer_cart = []
-        st.success(f"Transfer {transfer_id} successful and stock deducted!")
+        st.success(f"Success! Stock deducted from {source_branch}.")
         st.rerun()
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        # This will now show the actual technical reason for failure
+        st.error(f"Error: {str(e)}")
+        # Check if Google gave a specific API error message
+        if hasattr(e, 'response') and e.response is not None:
+            st.write(f"API Details: {e.response.text}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

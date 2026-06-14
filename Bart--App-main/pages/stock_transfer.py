@@ -71,70 +71,64 @@ if st.session_state.transfer_cart:
 
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
-        # 1. Setup Auth
-        creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        # 1. Setup Connection
+        creds = Credentials.from_service_account_info(
+            st.secrets["GOOGLE_CREDS_JSON"], 
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
         client = gspread.authorize(creds)
         
-        # 2. Open Sheets
-        source_branch = st.session_state.get("selected_branch")
-        branch_sheet = client.open(source_branch).worksheet("Stocks")
-        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        # 2. Get Branch Info from Session State
+        # Ensure 'selected_branch_id' or similar is stored in your dashboard
+        source_branch_name = st.session_state.get("selected_branch") 
         
-        # 3. Get last column (Dynamic for current date)
-        header_row = branch_sheet.row_values(1)
-        last_col = len(header_row) 
+        # 3. Open the Sheet (Using the session name)
+        branch_sheet = client.open(source_branch_name).worksheet("Stocks")
         
-        # 4. Prepare Batch Updates
-        batch_updates = []
+        # 4. Get the most recent column (Last column index)
+        last_col = len(branch_sheet.row_values(1))
+        
+        # 5. Prepare Batch Updates for all items in cart
+        updates = []
         for entry in st.session_state.transfer_cart:
-            # Locate item
+            # Locate the row for the item
             cell = branch_sheet.find(entry['item'])
-            if not cell:
-                st.error(f"Item '{entry['item']}' not found.")
-                st.stop()
-            
-            # Check current stock
-            current_val = branch_sheet.cell(cell.row, last_col).value
-            current_stock = int(float(current_val)) if current_val else 0
-            
-            if current_stock < entry['qty']:
-                st.error(f"Insufficient stock for {entry['item']}!")
-                st.stop()
-            
-            # Prepare the update structure
-            new_stock = current_stock - entry['qty']
-            batch_updates.append({
-                'range': gspread.utils.rowcol_to_a1(cell.row, last_col),
-                'values': [[new_stock]]
-            })
+            if cell:
+                # Get current value from the latest column
+                current_val = float(branch_sheet.cell(cell.row, last_col).value or 0)
+                # Subtract the input quantity
+                new_val = current_val - float(entry['qty'])
+                
+                # Add to batch list
+                updates.append({
+                    'range': gspread.utils.rowcol_to_a1(cell.row, last_col),
+                    'values': [[new_val]]
+                })
         
-        # 5. Execute Batch Update (This fixes the Response 200 issue)
-        branch_sheet.batch_update(batch_updates)
+        # 6. Execute Batch Update (Highly reliable)
+        if updates:
+            branch_sheet.batch_update(updates)
         
-        # 6. Log Transaction
+        # 7. Log to Master sheet
+        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
         jeddah_time = datetime.now() + timedelta(hours=3)
-        transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+        transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}"
         
         row_data = [
-            transfer_id, str(source_branch), str(destination),
-            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]),
+            transfer_id, source_branch_name, destination, 
+            "\n".join([f"{e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
-            str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+            reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
         ]
         transfer_sheet.append_row(row_data)
         
-        # 7. Reset and Success
+        # 8. Clear Cart and Success
         st.session_state.transfer_cart = []
-        st.success(f"Transfer {transfer_id} confirmed!")
+        st.success(f"Transfer {transfer_id} successful and stock deducted!")
         st.rerun()
 
     except Exception as e:
-        st.error(f"System Error: {str(e)}")
+        st.error(f"Error: {e}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

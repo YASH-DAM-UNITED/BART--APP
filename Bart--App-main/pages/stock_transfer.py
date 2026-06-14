@@ -13,44 +13,46 @@ def success_dialog(message):
         st.rerun()
 
 
-
-
-
-
-
-
 def deduct_stock(client, branch_string, item_name, qty_to_deduct, date_header):
     try:
-        # 1. Parse branch ID: 'B006 - SAFA1' -> 'B006' -> '006' -> 'BART006'
-        # Adjust the split/replace logic to match your exact file naming
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
-        
-        # 2. Open the specific file in Drive
         sh = client.open(file_name)
-        # Note: Change "Inventory" to the exact name of the tab in your branch files
+        
+        # Use your exact tab name here
         ws = sh.worksheet("Inventory") 
         
-        # 3. Find Item Row (Col 1) and Date Column (Row 1)
-        item_cell = ws.find(item_name)
-        if not item_cell:
-            return f"Item '{item_name}' not found."
+        # 1. Use a more robust find
+        # We strip both to ensure hidden spaces don't break the match
+        cell = None
+        for row_val in ws.get_all_values():
+            if item_name.strip() in row_val[0].strip():
+                # Finds the row index (adding 1 because get_all_values is 0-indexed)
+                row_index = ws.get_all_values().index(row_val) + 1
+                cell = True
+                break
+        
+        if not cell:
+            return f"Could not find item '{item_name}' in '{file_name}'."
             
+        # 2. Find Date Column
         header_row = ws.row_values(1)
         if date_header not in header_row:
-            return f"Date '{date_header}' not found."
+            return f"Date '{date_header}' not found. Headers found: {header_row[:3]}"
         
         col_index = header_row.index(date_header) + 1
         
-        # 4. Perform math and update
-        current_val = int(ws.cell(item_cell.row, col_index).value or 0)
+        # 3. Update
+        current_val_str = ws.cell(row_index, col_index).value
+        # Handle empty cells as 0
+        current_val = int(current_val_str) if (current_val_str and current_val_str.isdigit()) else 0
         new_val = current_val - int(qty_to_deduct)
         
-        ws.update_cell(item_cell.row, col_index, new_val)
+        ws.update_cell(row_index, col_index, new_val)
         return "Success"
         
     except Exception as e:
-        return str(e)
+        return f"Error: {str(e)}"
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")

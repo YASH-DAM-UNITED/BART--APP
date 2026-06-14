@@ -66,7 +66,11 @@ st.markdown("""<style>
 
 /* Transparencies */
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] { background: transparent !important; }
-h1 { margin-bottom: 0px !important; }
+h1 { 
+    margin-top: 0px !important; 
+    margin-bottom: 5px !important; 
+    line-height: 1.1 !important; /* Tightens the spacing between text lines */
+}
 
 /* =========================================================
    DESKTOP MASTER STYLES (Your Original Looks)

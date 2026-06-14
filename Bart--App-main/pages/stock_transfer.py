@@ -4,6 +4,8 @@ import random
 import string
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
+from google.oauth2.service_account import Credentials
+import gspread
 
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
@@ -65,8 +67,9 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         try:
             # 1. Setup Connection
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-            scope = ["https://spreadsheets.google.com/feeds", "https://spreadsheets.google.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
             client = gspread.authorize(creds)
             
             # 2. Get Source Branch Data

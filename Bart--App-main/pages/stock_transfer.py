@@ -19,7 +19,7 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct):
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        ws = sh.worksheet("Inventory")
+        ws = sh.worksheet("Stocks")
 
         # 1. Row Identification
         all_items = ws.col_values(1)

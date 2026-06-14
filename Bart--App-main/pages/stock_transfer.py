@@ -19,32 +19,35 @@ def success_dialog(message):
 
 
 
-def prepare_batch_updates(ws, cart, math_op="subtract"):
+def prepare_batch_updates(ws, cart):
+    # Fetch all data once to avoid repeated calls
     all_data = ws.get_all_values()
-    if not all_data: return None
+    if not all_data: return "Error: Sheet is empty"
     
     items_column = [row[0] for row in all_data]
     header_row = all_data[0]
+    
+    # Identify the correct column (last non-empty column)
     non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
     col_index = non_empty[-1] 
     
     batch_list = []
+    
     for entry in cart:
         if entry['item'] in items_column:
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            new_val = current_num - int(entry['qty'])
             
-            # Perform Math
-            if math_op == "subtract":
-                new_val = current_num - int(entry['qty'])
-            else:
-                new_val = current_num + int(entry['qty'])
-            
+            # Prepare update for batch
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})
             
-    return batch_list
+    if batch_list:
+        ws.batch_update(batch_list)
+        return "Success"
+    return "Error: Items not found in sheet"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚚 Internal Stock Transfer")
@@ -95,43 +98,51 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
 if st.button("Confirm and Send All", key="confirm_btn"):
+    # 1. Define variables at the start so they are accessible throughout the block
     jeddah_time = datetime.now() + timedelta(hours=3)
-    transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{random.randint(1000,9999)}"
-    
-    with st.spinner("Processing transfer..."):
+    transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+    destination = st.session_state.get("dest_sel", "Unknown")
+    reason = st.session_state.get("reason_input", "No reason provided")
+    origin_branch = st.session_state.selected_branch
+
+    with st.spinner("Processing your transfer..."):
         try:
+            # 2. Setup client
             creds = ServiceAccountCredentials.from_json_keyfile_dict(
                 st.secrets["GOOGLE_CREDS_JSON"], 
                 ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             )
             client = gspread.authorize(creds)
             
-            # 1. Identify Origin and Destination Spreadsheets
-            # Assumes destination is a name like "Branch 02 - Riyadh"
-            origin_ws = client.open(st.session_state.selected_branch).worksheet("Stocks")
-            dest_ws = client.open(st.session_state.dest_sel).worksheet("Stocks")
+            # 3. Identify Branch
+            branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
+            sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
             
-            # 2. Generate Batch Payloads
-            origin_updates = prepare_batch_updates(origin_ws, st.session_state.transfer_cart, "subtract")
-            dest_updates = prepare_batch_updates(dest_ws, st.session_state.transfer_cart, "add")
-            
-            # 3. Execute Updates
-            if origin_updates: origin_ws.batch_update(origin_updates)
-            if dest_updates: dest_ws.batch_update(dest_updates)
-            
-            # 4. Log to Master
-            transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-            transfer_sheet.append_row([
-                transfer_id, st.session_state.selected_branch, st.session_state.dest_sel, 
-                "\n".join([f"{e['item']} ({e['qty']})" for e in st.session_state.transfer_cart]), 
-                "Success", jeddah_time.strftime("%Y-%m-%d %H:%M")
-            ])
-            
-            st.session_state.transfer_cart = []
-            st.success("Transfer successful!")
-            
+            if not sh:
+                st.error("Could not find branch spreadsheet.")
+            else:
+                ws = sh.worksheet("Stocks")
+                
+                # 4. Perform Batch Update (The optimized call)
+                result = prepare_batch_updates(ws, st.session_state.transfer_cart)
+                
+                if result == "Success":
+                    # 5. Log to Master
+                    transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+                    transfer_sheet.append_row([
+                        transfer_id, origin_branch, str(destination), 
+                        "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+                        "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
+                        reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+                    ])
+                    
+                    st.session_state.transfer_cart = []
+                    success_dialog(f"Transfer successful! ID: {transfer_id}")
+                else:
+                    st.error(result)
+                    
         except Exception as e:
-            st.error(f"Transfer Failed: {e}")
+            st.error(f"Critical Error: {e}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

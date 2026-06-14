@@ -191,9 +191,19 @@ div.stButton > button:active { transform: scale(0.98) translateY(0); }
     .card-glow {
         margin-bottom: 20px !important;
     }
-    .card-content {
-        padding: 15px 20px !important;
+.card-content { 
+    position: relative; 
+    background: #FFFFFF; 
+    border-radius: 20px; 
+    padding: 15px 20px; /* Reduced from 30px to make it thinner */
+    z-index: 1; 
     }
+
+
+.card-title {
+    font-size: 16px !important; /* Smaller title text */
+    }
+
     
     /* Make buttons easier to tap accurately on smartphones */
     div.stButton > button {

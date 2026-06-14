@@ -410,7 +410,7 @@ else:
     
     # 3. Calculate target columns for the selected week
     week_cols = [day_labels[d] for d in DAYS]
-    start_date_comparison = datetime(2026, 5, 1)
+    start_date_comparison = datetime(2026, 6, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"

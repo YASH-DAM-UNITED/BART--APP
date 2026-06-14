@@ -9,7 +9,12 @@ import gspread
 import re
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread.utils
-
+# 1. Place this at the very top, after your imports
+creds = ServiceAccountCredentials.from_json_keyfile_dict(
+    st.secrets["GOOGLE_CREDS_JSON"], 
+    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+)
+client = gspread.authorize(creds)
 
 
 

@@ -6,44 +6,6 @@ import streamlit.components.v1 as components
 
 
 
-# Set up state
-if "lang" not in st.session_state: st.session_state.lang = "en"
-
-# Define your texts
-texts = {
-    "en": {
-        "title": "B A R T",
-        "sub": "Operations management <br>just got easier.",
-        "desc": "Welcome to the central command unit for BART...",
-        "btn_staff": "Staff Access →"
-    },
-    "ar": {
-        "title": "بـارت",
-        "sub": "إدارة العمليات <br>أصبحت أسهل.",
-        "desc": "أهلاً بك في وحدة التحكم المركزية لـ BART...",
-        "btn_staff": "وصول الموظفين ←"
-    }
-}
-
-# Select the language
-T = texts[st.session_state.lang]
-
-# 2. Initialize Language State
-if "lang" not in st.session_state:
-    st.session_state.lang = "en"
-
-# 3. Simple Toggle in the Sidebar (or top of page)
-lang_col1, lang_col2 = st.columns([10, 1])
-with lang_col2:
-    if st.button("🌐"):
-        st.session_state.lang = "ar" if st.session_state.lang == "en" else "en"
-        st.rerun()
-
-# 4. Helper function to get text
-def _(key):
-    return translations[st.session_state.lang].get(key, key)
-
-
 
 
 
@@ -258,7 +220,7 @@ st.markdown("<div class='animate-text delay-1' style='text-align: center;'><span
 # Wrapped classes here to target font alterations safely across viewports
 st.markdown(f"""
 <h1 class='animate-text delay-2 main-title-text' style='text-align: center; font-size: 88px; font-weight: 800; color: #111; margin-top: 5px; margin-bottom: -15px; letter-spacing: -2.5px;'>
-    <span class='bart-logo'>{T['title']}</span><!--
+    <span class='bart-logo'>B A R T</span><!--
  --><span style="position: relative; display: inline-block;">
         <span style="
             position: absolute;

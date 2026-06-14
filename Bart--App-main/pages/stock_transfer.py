@@ -76,51 +76,47 @@ if st.session_state.transfer_cart:
 
 if st.button("Confirm and Send All", key="confirm_btn"):
     source_branch = st.session_state.get("selected_branch")
-    
+    st.write(f"DEBUG START: Processing {source_branch}")
+
     try:
-        # 1. Setup Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
         
-        # 2. Open Spreadsheet by Name
+        st.write("DEBUG 1: Auth successful. Opening Spreadsheet...")
         spreadsheet = client.open(source_branch)
+        
+        st.write("DEBUG 2: Spreadsheet opened. Getting worksheet...")
         branch_sheet = spreadsheet.get_worksheet(0)
-        last_col = len(branch_sheet.row_values(1))
         
-        # 3. Process Items
-        for entry in st.session_state.transfer_cart:
-            cell = branch_sheet.find(entry['item'].strip(), in_column=1)
+        st.write("DEBUG 3: Worksheet accessed. Finding item...")
+        # We process just one item to test the write function
+        entry = st.session_state.transfer_cart[0]
+        cell = branch_sheet.find(entry['item'].strip(), in_column=1)
+        
+        if cell:
+            st.write(f"DEBUG 4: Item found at row {cell.row}. Preparing update...")
+            last_col = len(branch_sheet.row_values(1))
+            new_val = 1.0 # Test value
             
-            if cell:
-                # Calculate
-                raw_val = branch_sheet.cell(cell.row, last_col).value
-                current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
-                new_val = current_val - float(entry['qty'])
-                
-                # 4. BYPASS: Use raw API call to update the cell
-                # This bypasses the gspread response parsing that causes the [200] error
-                spreadsheet.values_update(
-                    f"'{branch_sheet.title}'!{gspread.utils.rowcol_to_a1(cell.row, last_col)}",
-                    params={'valueInputOption': 'RAW'},
-                    body={'values': [[new_val]]}
-                )
-        
-        # 5. Log to Master (Also using raw update for consistency)
-        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-        transfer_sheet.append_row([
-            "TR-SYNC", source_branch, destination, str(entry['item']), str(entry['qty']), "Pending", "Success"
-        ])
-        
-        st.session_state.transfer_cart = []
-        st.success("Deduction complete!")
-        st.rerun()
-
+            st.write(f"DEBUG 5: Attempting raw update at row {cell.row}, col {last_col}")
+            # This is the raw request
+            spreadsheet.values_update(
+                f"'{branch_sheet.title}'!{gspread.utils.rowcol_to_a1(cell.row, last_col)}",
+                params={'valueInputOption': 'RAW'},
+                body={'values': [[new_val]]}
+            )
+            st.write("DEBUG 6: Update successful!")
+        else:
+            st.error("DEBUG: Item not found in Column A")
+            
     except Exception as e:
-        # If this STILL fails, the error message will be the exact Google API response body
-        st.error(f"SYSTEM BYPASS FAILURE: {str(e)}")
+        st.error(f"DEBUG FAILED AT: {str(e)}")
+        # If gspread is throwing the 200, it might be due to the response body
+        if hasattr(e, 'response'):
+            st.write(f"DEBUG RESPONSE BODY: {e.response.text}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

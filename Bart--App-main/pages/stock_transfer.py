@@ -12,7 +12,6 @@ def success_dialog(message):
     if st.button("Close", key="close_dialog"):
         st.rerun()
 
-
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
         branch_id = branch_string.split(" - ")[0].replace("B", "")
@@ -28,8 +27,6 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct):
 
         # 2. Find the LATEST column (Last column with data in Row 1)
         header_row = ws.row_values(1)
-        # We find the index of the last non-empty header
-        # Filter out empty strings to find the last actual date
         non_empty_headers = [h for h in header_row if h.strip() != ""]
         col_index = len(non_empty_headers) 
         

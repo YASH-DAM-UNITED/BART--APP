@@ -75,16 +75,11 @@ if st.session_state.transfer_cart:
 
 
 if st.button("Confirm and Send All", key="confirm_btn"):
-    source_branch = st.session_state.get("selected_branch")
-    st.write(f"DEBUG: Input branch is '{source_branch}'")
-    
-    # 1. Clean the name to match "BARTXX" format
-    # Example: If input is "B006 - SAFA1", this extracts "BART06"
-    branch_code = "BART" + source_branch.split(" ")[0].replace("B", "")
-    st.write(f"DEBUG: Searching for file matching: '{branch_code}'")
+    source_branch = st.session_state.get("selected_branch") # Expected: "BART06"
+    st.write(f"DEBUG: Processing branch: '{source_branch}'")
 
     try:
-        # 2. Authenticate
+        # 1. Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -93,49 +88,46 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         drive_service = build('drive', 'v3', credentials=creds)
         st.write("DEBUG: Auth complete.")
 
-        # 3. Search Drive for the File
-        query = f"name contains '{branch_code}' and mimeType = 'application/vnd.google-apps.spreadsheet'"
+        # 2. Find file by exact name match
+        query = f"name = '{source_branch}' and mimeType = 'application/vnd.google-apps.spreadsheet'"
         results = drive_service.files().list(q=query, fields="files(id, name)").execute()
         files = results.get('files', [])
         
         if not files:
-            st.error(f"DEBUG: No file found with name containing '{branch_code}'.")
+            st.error(f"DEBUG: File '{source_branch}' NOT FOUND in Drive!")
             st.stop()
-        
+            
         spreadsheet_id = files[0]['id']
-        st.write(f"DEBUG: Found file: '{files[0]['name']}' (ID: {spreadsheet_id})")
+        st.write(f"DEBUG: Found '{files[0]['name']}' (ID: {spreadsheet_id})")
 
-        # 4. Open Spreadsheet & Sheet
+        # 3. Open Worksheet
         spreadsheet = client.open_by_key(spreadsheet_id)
         branch_sheet = spreadsheet.get_worksheet(0)
-        st.write(f"DEBUG: Worksheet '{branch_sheet.title}' opened successfully.")
+        st.write(f"DEBUG: Opened worksheet: {branch_sheet.title}")
 
-        # 5. Deduction Logic
+        # 4. Deduction
         header_row = branch_sheet.row_values(1)
         last_col = len(header_row)
-        st.write(f"DEBUG: Target Column Index identified as {last_col}")
-
         cell_list = []
+        
         for entry in st.session_state.transfer_cart:
-            st.write(f"DEBUG: Looking for item: {entry['item']}")
             cell = branch_sheet.find(entry['item'].strip(), in_column=1)
-            
             if cell:
                 raw_val = branch_sheet.cell(cell.row, last_col).value
                 current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
                 new_val = current_val - float(entry['qty'])
                 cell_list.append(gspread.Cell(row=cell.row, col=last_col, value=new_val))
-                st.write(f"DEBUG: Calculated {entry['item']} = {new_val}")
+                st.write(f"DEBUG: Prepared {entry['item']}: {current_val} -> {new_val}")
             else:
-                st.warning(f"DEBUG: Could not find item '{entry['item']}' in Column A.")
+                st.warning(f"DEBUG: Item '{entry['item']}' not found in {source_branch}.")
 
-        # 6. Execute Write
+        # 5. Write to Sheet
         if cell_list:
-            st.write("DEBUG: Sending update to Google...")
+            st.write("DEBUG: Sending update...")
             branch_sheet.update_cells(cell_list)
-            st.write("DEBUG: Write success!")
+            st.write("DEBUG: Write SUCCESS.")
             
-            # Log to master
+            # Master Log
             transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
             transfer_sheet.append_row([str(source_branch), "Transferred", "Success"])
             
@@ -144,8 +136,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             st.rerun()
 
     except Exception as e:
-        st.error(f"DEBUG: CRITICAL FAILURE at {str(e)}")
-        # Check if Google gave us specific error info
+        st.error(f"DEBUG: FAILED at {str(e)}")
         if hasattr(e, 'response'):
             st.write(f"DEBUG: API RESPONSE: {e.response.text}")
 

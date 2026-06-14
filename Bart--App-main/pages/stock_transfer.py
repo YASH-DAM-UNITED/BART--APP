@@ -18,35 +18,30 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct, date_header):
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        
-        # Use your exact tab name here
-        ws = sh.worksheet("Inventory") 
-        
-        # 1. Use a more robust find
-        # We strip both to ensure hidden spaces don't break the match
-        cell = None
-        for row_val in ws.get_all_values():
-            if item_name.strip() in row_val[0].strip():
-                # Finds the row index (adding 1 because get_all_values is 0-indexed)
-                row_index = ws.get_all_values().index(row_val) + 1
-                cell = True
-                break
-        
-        if not cell:
-            return f"Could not find item '{item_name}' in '{file_name}'."
-            
-        # 2. Find Date Column
+        ws = sh.worksheet("Inventory") # Ensure this tab name matches exactly!
+
+        # 1. Find the Item Row
+        # Item names are in Column A (1)
+        all_items = ws.col_values(1)
+        if item_name not in all_items:
+            return f"Item '{item_name}' not found in Column A."
+        row_index = all_items.index(item_name) + 1
+
+        # 2. Find the Date Column
+        # YOUR DATES ARE IN ROW 1. Let's get Row 1
         header_row = ws.row_values(1)
+        
+        # Check if date_header exists in the row
         if date_header not in header_row:
-            return f"Date '{date_header}' not found. Headers found: {header_row[:3]}"
+            return f"Date '{date_header}' not found in the header row."
         
         col_index = header_row.index(date_header) + 1
         
         # 3. Update
-        current_val_str = ws.cell(row_index, col_index).value
-        # Handle empty cells as 0
-        current_val = int(current_val_str) if (current_val_str and current_val_str.isdigit()) else 0
-        new_val = current_val - int(qty_to_deduct)
+        current_val = ws.cell(row_index, col_index).value
+        # If cell is empty, default to 0
+        current_int = int(current_val) if (current_val and str(current_val).strip()) else 0
+        new_val = current_int - int(qty_to_deduct)
         
         ws.update_cell(row_index, col_index, new_val)
         return "Success"

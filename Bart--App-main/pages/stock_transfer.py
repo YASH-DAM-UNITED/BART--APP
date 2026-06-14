@@ -12,6 +12,10 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 import random
 import string
+
+from googleapiclient.discovery import build # <--- THIS IS THE MISSING IMPORT
+import gspread
+from gspread.utils import rowcol_to_a1
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
 def success_dialog(message):
@@ -74,12 +78,13 @@ if st.session_state.transfer_cart:
 
 
 
+
 if st.button("Confirm and Send All", key="confirm_btn"):
     source_branch = st.session_state.get("selected_branch") # Expected: "BART06"
     st.write(f"DEBUG: Processing branch: '{source_branch}'")
 
     try:
-        # 1. Auth
+        # 1. Setup Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -88,7 +93,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         drive_service = build('drive', 'v3', credentials=creds)
         st.write("DEBUG: Auth complete.")
 
-        # 2. Find file by exact name match
+        # 2. Find file by exact name match (e.g., "BART06")
         query = f"name = '{source_branch}' and mimeType = 'application/vnd.google-apps.spreadsheet'"
         results = drive_service.files().list(q=query, fields="files(id, name)").execute()
         files = results.get('files', [])

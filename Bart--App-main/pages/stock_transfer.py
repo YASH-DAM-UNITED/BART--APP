@@ -18,14 +18,12 @@ def success_dialog(message):
 
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
-        # Extract the code (e.g., "B06" -> "06")
-        branch_code = branch_string.split(" - ")[0].replace("B", "").strip()
-        # Ensure we are looking for BART06
-        target_name = f"BART{branch_code}"
+        # Extract the code correctly (e.g., "B06" from "B06 - SAFA")
+        branch_code = branch_string.split(" - ")[0].strip()
+        # file_name is now exactly what you see in Drive: e.g., "BART06"
+        target_name = f"BART{branch_code.replace('B', '')}" 
         
-        print(f"DEBUG: Searching for file named '{target_name}'")
-        
-        # SEARCH BY TITLE (Case insensitive)
+        # SEARCH FOR FILE
         sh = None
         for spreadsheet in client.openall():
             if spreadsheet.title.strip().upper() == target_name.upper():
@@ -33,23 +31,22 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct):
                 break
         
         if not sh:
-            return f"Error: Could not find file named '{target_name}'. Check your Drive."
+            return f"Could not find file named '{target_name}'. Available files: {[s.title for s in client.openall()]}"
 
         ws = sh.worksheet("Stocks")
 
-        # 1. Row Index
+        # Row Index
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Error: '{item_name}' not in Column A."
+            return f"Item '{item_name}' not in Column A."
         row_index = all_items.index(item_name) + 1
 
-        # 2. Latest Column Index (Look only in Row 1)
+        # Column Index (Latest)
         header_row = ws.row_values(1)
-        # Find the last column index that has a date
         non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
         col_index = non_empty[-1] + 1
         
-        # 3. Perform update
+        # Update
         cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
         current_val = ws.acell(cell_a1).value
         new_val = int(float(current_val or 0)) - int(qty_to_deduct)
@@ -129,10 +126,11 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             ])
 
             # Update Branch
+            origin_branch = st.session_state.selected_branch
             for entry in st.session_state.transfer_cart:
-                result = deduct_stock(client, destination, entry['item'], entry['qty'])
+                result = deduct_stock(client, origin_branch, entry['item'], entry['qty'])
                 if result != "Success":
-                    st.error(f"Failed to deduct {entry['item']}: {result}")
+                    st.error(f"Failed to deduct {entry['item']} from {origin_branch}: {result}")
                     st.stop()
             
             st.session_state.transfer_cart = []

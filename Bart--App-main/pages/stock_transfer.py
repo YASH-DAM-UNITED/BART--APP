@@ -119,7 +119,14 @@ if st.session_state.transfer_cart:
     st.subheader("📦 Finalize Transfer")
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
-    if st.button("Confirm and Send All", key="confirm_btn"):
+
+
+
+
+
+
+
+if st.button("Confirm and Send All", key="confirm_btn"):
     # 1. Define variables
     jeddah_time = datetime.now() + timedelta(hours=3)
     transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"

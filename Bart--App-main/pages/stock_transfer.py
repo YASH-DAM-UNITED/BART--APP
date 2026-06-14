@@ -119,35 +119,35 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
 if st.button("Confirm and Send All", key="confirm_btn"):
-    # Pre-calculate details
+    # 1. Setup metadata
     jeddah_time = datetime.now() + timedelta(hours=3)
     transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+    
+    # 2. Get info from session state (Instant, no API call)
     origin_branch = st.session_state.selected_branch
     branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
     
+    # ASSUMPTION: 'branch_map' is already in st.session_state 
+    # e.g., st.session_state.branch_map = {'006': 'spreadsheet_id_123', ...}
+    sheet_id = st.session_state.branch_map.get(branch_id)
+    
     with st.spinner("Processing..."):
         try:
-            # Re-authorize client
             creds = ServiceAccountCredentials.from_json_keyfile_dict(
                 st.secrets["GOOGLE_CREDS_JSON"], 
                 ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             )
             client = gspread.authorize(creds)
             
-            # 1. CALL 1: Update Branch Stocks (Using Cached ID)
-            sheet_id = st.session_state.branch_map.get(branch_id)
-            if not sheet_id:
-                st.error("Branch ID not found in mapping!")
-                st.stop()
-                
-            sh = client.open_by_key(sheet_id)
-            ws = sh.worksheet("Stocks")
-            
-            # Use the Batch Update function (Defined previously)
+            # CALL 1: Update Branch Stocks
+            # open_by_key is extremely fast because it uses the ID directly
+            ws = client.open_by_key(sheet_id).worksheet("Stocks")
             result = prepare_batch_updates(ws, st.session_state.transfer_cart)
             
             if result == "Success":
-                # 2. CALL 2: Log to Master Sheet
+                # CALL 2: Log to Master
+                # Use open_by_key here too if you have the MASTER ID in session state
+                # or just open by name if it's the only one
                 transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                 transfer_sheet.append_row([
                     transfer_id, origin_branch, str(st.session_state.dest_sel), 

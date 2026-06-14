@@ -95,7 +95,6 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         try:
             # 1. Setup
             jeddah_time = datetime.now() + timedelta(hours=3)
-            today_header = jeddah_time.strftime("%Y-%m-%d")
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
             
             creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
@@ -118,8 +117,9 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             transfer_sheet.append_row(row_data)
 
             # 3. Update Branch Stock
+            # Now passing exactly 4 arguments as defined in the updated function
             for entry in st.session_state.transfer_cart:
-                result = deduct_stock(client, destination, entry['item'], entry['qty'], today_header)
+                result = deduct_stock(client, destination, entry['item'], entry['qty'])
                 if result != "Success":
                     st.error(f"Failed to deduct {entry['item']}: {result}")
             

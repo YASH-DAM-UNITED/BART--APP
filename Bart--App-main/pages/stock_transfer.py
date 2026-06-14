@@ -18,39 +18,47 @@ def success_dialog(message):
 
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
-        branch_id = branch_string.split(" - ")[0].replace("B", "")
-        file_name = f"BART{branch_id}"
-        sh = client.open(file_name)
+        # Extract the code (e.g., "B06" -> "06")
+        branch_code = branch_string.split(" - ")[0].replace("B", "").strip()
+        # Ensure we are looking for BART06
+        target_name = f"BART{branch_code}"
+        
+        print(f"DEBUG: Searching for file named '{target_name}'")
+        
+        # SEARCH BY TITLE (Case insensitive)
+        sh = None
+        for spreadsheet in client.openall():
+            if spreadsheet.title.strip().upper() == target_name.upper():
+                sh = spreadsheet
+                break
+        
+        if not sh:
+            return f"Error: Could not find file named '{target_name}'. Check your Drive."
+
         ws = sh.worksheet("Stocks")
 
-        # 1. Identify Row
+        # 1. Row Index
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Item '{item_name}' not in Column A."
+            return f"Error: '{item_name}' not in Column A."
         row_index = all_items.index(item_name) + 1
 
-        # 2. Identify Column
+        # 2. Latest Column Index (Look only in Row 1)
         header_row = ws.row_values(1)
+        # Find the last column index that has a date
         non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
         col_index = non_empty[-1] + 1
         
-        # 3. Target Cell
+        # 3. Perform update
         cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
-        
-        # 4. READ-WRITE DEBUG
         current_val = ws.acell(cell_a1).value
-        print(f"DEBUG: Attempting to write to {cell_a1}. Current val: {current_val}")
-        
         new_val = int(float(current_val or 0)) - int(qty_to_deduct)
         
-        # 5. EXECUTE UPDATE
         ws.update(range_name=cell_a1, values=[[new_val]])
-        
         return "Success"
         
     except Exception as e:
-        # If it hits here, we will see the exact traceback
-        return f"CRITICAL ERROR: {type(e).__name__} - {str(e)}"
+        return f"CRITICAL ERROR: {str(e)}"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚚 Internal Stock Transfer")

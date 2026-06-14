@@ -4,7 +4,10 @@ import random
 import string
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
-
+import streamlit as st
+import gspread
+import re
+from oauth2client.service_account import ServiceAccountCredentials
 import gspread.utils
 
 # ---------------- DIALOG DEFINITION ----------------
@@ -16,58 +19,35 @@ def success_dialog(message):
 
 
 
-
-
-def deduct_stock(client, branch_string, item_name, qty_to_deduct):
-    try:
-        # 1. CLEAN THE BRANCH CODE
-        # Extracts digits from the branch string (e.g., 'B006 - SAFA1' -> '006')
-        import re
-        branch_numbers = re.findall(r'\d+', branch_string.split(" - ")[0])
-        branch_id_str = branch_numbers[0] if branch_numbers else ""
-        
-        # 2. SEARCH FOR FILE BY NUMBER
-        sh = None
-        # We look for a file that contains the number part, e.g., '06'
-        for spreadsheet in client.openall():
-            # Check if the file name contains the branch ID (e.g., BART06 contains 06)
-            if str(int(branch_id_str)) in spreadsheet.title:
-                sh = spreadsheet
-                break
-        
-        if not sh:
-            available = [s.title for s in client.openall()]
-            return f"Error: Could not find matching file for '{branch_string}'. Available: {available}"
-
-        # 3. WORK WITH THE 'Stocks' TAB
-        ws = sh.worksheet("Stocks")
-
-        # 4. FIND ROW
-        all_items = ws.col_values(1)
-        if item_name not in all_items:
-            return f"Item '{item_name}' not in Column A."
-        row_index = all_items.index(item_name) + 1
-
-        # 5. FIND COLUMN (Last date)
-        header_row = ws.row_values(1)
-        non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
-        col_index = non_empty[-1] + 1
-        
-        # 6. READ AND CALCULATE
-        cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
-        current_val = ws.acell(cell_a1).value
-        # Ensure we handle empty cells correctly
-        current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
-        new_val = current_num - int(qty_to_deduct)
-        
-        # 7. WRITE TO SHEET
-        ws.update(range_name=cell_a1, values=[[new_val]])
-        
-        print(f"DEBUG: Successfully deducted {qty_to_deduct} from {cell_a1} in {sh.title}")
+def prepare_batch_updates(ws, cart):
+    # Fetch all data once to avoid repeated calls
+    all_data = ws.get_all_values()
+    if not all_data: return "Error: Sheet is empty"
+    
+    items_column = [row[0] for row in all_data]
+    header_row = all_data[0]
+    
+    # Identify the correct column (last non-empty column)
+    non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
+    col_index = non_empty[-1] 
+    
+    batch_list = []
+    
+    for entry in cart:
+        if entry['item'] in items_column:
+            row_idx = items_column.index(entry['item'])
+            current_val = all_data[row_idx][col_index]
+            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            new_val = current_num - int(entry['qty'])
+            
+            # Prepare update for batch
+            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+            batch_list.append({"range": cell_address, "values": [[new_val]]})
+            
+    if batch_list:
+        ws.batch_update(batch_list)
         return "Success"
-        
-    except Exception as e:
-        return f"CRITICAL ERROR: {str(e)}"
+    return "Error: Items not found in sheet"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚚 Internal Stock Transfer")
@@ -118,36 +98,41 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
 if st.button("Confirm and Send All", key="confirm_btn"):
-    with st.spinner("Processing..."):
+    with st.spinner("Processing your transfer..."):
         try:
-            jeddah_time = datetime.now() + timedelta(hours=3)
-            transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
-            
-            creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+            # Setup
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["GOOGLE_CREDS_JSON"], 
+                    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
             client = gspread.authorize(creds)
             
-            # Log to Master
-            transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-            transfer_sheet.append_row([
-                transfer_id, str(st.session_state.get("selected_branch", "Unknown")), 
-                str(destination), "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
-                "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
-                str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
-            ])
-
-            # Update Branch
+            # Identify Branch
             origin_branch = st.session_state.selected_branch
-            for entry in st.session_state.transfer_cart:
-                result = deduct_stock(client, origin_branch, entry['item'], entry['qty'])
-                if result != "Success":
-                    st.error(f"Failed to deduct {entry['item']} from {origin_branch}: {result}")
-                    st.stop()
+            branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
+            sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
             
-            st.session_state.transfer_cart = []
-            success_dialog(f"Transfer successful! ID: {transfer_id}")
-            
+            if not sh:
+                st.error("Could not find branch spreadsheet.")
+            else:
+                ws = sh.worksheet("Stocks")
+                
+                # Perform Batch Update (1 API call)
+                result = prepare_batch_updates(ws, st.session_state.transfer_cart)
+                
+                if result == "Success":
+                    # Log to Master (1 API call)
+                    transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+                    transfer_sheet.append_row([
+                        transfer_id, origin_branch, str(destination), 
+                        "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+                        "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
+                        reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+                    ])
+                    
+                    st.session_state.transfer_cart = []
+                    st.success(f"Transfer successful! ID: {transfer_id}")
+                else:
+                    st.error(result)
+                    
         except Exception as e:
             st.error(f"Critical Error: {e}")
 

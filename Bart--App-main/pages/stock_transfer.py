@@ -14,44 +14,46 @@ def success_dialog(message):
     if st.button("Close", key="close_dialog"):
         st.rerun()
 
+
+
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        
-        # Changed to your specific tab name
-        ws = sh.worksheet("Stocks") 
+        ws = sh.worksheet("Stocks")
 
-        # 1. Row Index
+        # 1. Identify Row (Searching Column A)
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Error: '{item_name}' not found."
+            return f"Item '{item_name}' not in Column A."
         row_index = all_items.index(item_name) + 1
 
-        # 2. Latest Column Index
+        # 2. Identify Column (Right-most header in Row 1)
         header_row = ws.row_values(1)
-        # Filter for the last non-empty column in Row 1
         non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
         col_index = non_empty[-1] + 1
         
-        # 3. Read Current Value
+        # 3. Read current value
         current_val = ws.cell(row_index, col_index).value
         current_int = int(current_val) if (current_val and str(current_val).strip().isdigit()) else 0
         new_val = current_int - int(qty_to_deduct)
         
-        # 4. Perform Update
-        # Using A1 notation to ensure the write is clean and bypasses 200 errors
+        # 4. CRITICAL: Batch Update (Bypasses standard update_cell issues)
         cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
-        ws.update(range_name=cell_a1, values=[[new_val]])
         
-        print(f"DEBUG: Successfully updated {cell_a1} to {new_val}")
+        # Using batch_update to force the write
+        ws.batch_update([{
+            'range': cell_a1,
+            'values': [[new_val]]
+        }])
+        
+        print(f"DEBUG SUCCESS: Updated {cell_a1} to {new_val}")
         return "Success"
         
     except Exception as e:
-        print(f"DEBUG: Critical Error: {str(e)}")
-        return f"Error: {str(e)}"
-
+        # If this fails, the error message will be printed clearly
+        return f"CRITICAL ERROR: {str(e)}"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚚 Internal Stock Transfer")

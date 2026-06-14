@@ -79,38 +79,47 @@ if st.session_state.transfer_cart:
 
 
 
-if st.button("Confirm and Send All", key="confirm_btn"):
-    source_branch = st.session_state.get("selected_branch") # Expected: "BART06"
-    st.write(f"DEBUG: Processing branch: '{source_branch}'")
 
+# --- 1. DYNAMIC BRANCH DISCOVERY ---
+# This runs once to populate the list of branches from your actual Drive files
+if "branch_list" not in st.session_state:
     try:
-        # 1. Setup Auth
+        creds = Credentials.from_service_account_info(
+            st.secrets["GOOGLE_CREDS_JSON"], 
+            scopes=["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/spreadsheets"]
+        )
+        drive_service = build('drive', 'v3', credentials=creds)
+        
+        # Finds all Google Sheets that start with 'BART'
+        results = drive_service.files().list(
+            q="name contains 'BART' and mimeType = 'application/vnd.google-apps.spreadsheet'", 
+            fields="files(name)"
+        ).execute()
+        
+        st.session_state.branch_list = sorted([f['name'] for f in results.get('files', [])])
+    except Exception as e:
+        st.error(f"Error fetching branches: {e}")
+        st.session_state.branch_list = []
+
+# --- 2. USER SELECTION ---
+selected_branch = st.selectbox("Select Branch", st.session_state.branch_list)
+st.session_state.selected_branch = selected_branch
+
+# --- 3. DEDUCTION & UPDATE LOGIC ---
+if st.button("Confirm and Send All", key="confirm_btn"):
+    try:
+        # Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
-        drive_service = build('drive', 'v3', credentials=creds)
-        st.write("DEBUG: Auth complete.")
-
-        # 2. Find file by exact name match (e.g., "BART06")
-        query = f"name = '{source_branch}' and mimeType = 'application/vnd.google-apps.spreadsheet'"
-        results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-        files = results.get('files', [])
         
-        if not files:
-            st.error(f"DEBUG: File '{source_branch}' NOT FOUND in Drive!")
-            st.stop()
-            
-        spreadsheet_id = files[0]['id']
-        st.write(f"DEBUG: Found '{files[0]['name']}' (ID: {spreadsheet_id})")
-
-        # 3. Open Worksheet
-        spreadsheet = client.open_by_key(spreadsheet_id)
+        # Open by name (Since the name came directly from Drive, this is safe)
+        spreadsheet = client.open(selected_branch)
         branch_sheet = spreadsheet.get_worksheet(0)
-        st.write(f"DEBUG: Opened worksheet: {branch_sheet.title}")
-
-        # 4. Deduction
+        
+        # Prepare Deductions
         header_row = branch_sheet.row_values(1)
         last_col = len(header_row)
         cell_list = []
@@ -122,28 +131,27 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                 current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
                 new_val = current_val - float(entry['qty'])
                 cell_list.append(gspread.Cell(row=cell.row, col=last_col, value=new_val))
-                st.write(f"DEBUG: Prepared {entry['item']}: {current_val} -> {new_val}")
-            else:
-                st.warning(f"DEBUG: Item '{entry['item']}' not found in {source_branch}.")
-
-        # 5. Write to Sheet
+        
+        # Bulk update
         if cell_list:
-            st.write("DEBUG: Sending update...")
             branch_sheet.update_cells(cell_list)
-            st.write("DEBUG: Write SUCCESS.")
             
-            # Master Log
-            transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-            transfer_sheet.append_row([str(source_branch), "Transferred", "Success"])
+            # Log to Master
+            master_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+            master_sheet.append_row([
+                selected_branch, 
+                "Processed", 
+                datetime.now().strftime("%Y-%m-%d %H:%M")
+            ])
             
             st.session_state.transfer_cart = []
-            st.success("Transaction Complete!")
+            st.success(f"Success! Deducted from {selected_branch}")
             st.rerun()
+        else:
+            st.warning("No items found to update.")
 
     except Exception as e:
-        st.error(f"DEBUG: FAILED at {str(e)}")
-        if hasattr(e, 'response'):
-            st.write(f"DEBUG: API RESPONSE: {e.response.text}")
+        st.error(f"CRITICAL FAILURE: {str(e)}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

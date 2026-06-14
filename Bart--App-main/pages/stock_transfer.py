@@ -68,60 +68,45 @@ if st.session_state.transfer_cart:
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
 if st.button("Confirm and Send All", key="confirm_btn"):
+    # 1. VALIDATION STEP
+    source_branch = st.session_state.get("selected_branch")
+    st.write(f"DEBUG: Validating branch: '{source_branch}'")
+    
+    if not source_branch or source_branch == "":
+        st.error("Session cache is empty! Please select a branch first.")
+        st.stop()
+
     try:
-        # --- DEBUG STEP 1: Connection ---
-        st.write("DEBUG: Starting Authentication...")
+        # 2. Setup Auth
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
-        st.write("DEBUG: Auth successful.")
         
-        # --- DEBUG STEP 2: Opening Sheet ---
-        source_branch = st.session_state.get("selected_branch")
-        st.write(f"DEBUG: Attempting to open sheet: {source_branch}")
-        branch_sheet = client.open(source_branch).worksheet("Stocks")
-        st.write(f"DEBUG: Sheet opened. Worksheet 'Stocks' found.")
+        # 3. SEARCH DRIVE (The "Truth" check)
+        # We don't try to open directly. We list files first.
+        drive_files = client.list_spreadsheet_files()
+        # Look for a match in the list of files the Service Account can see
+        matching_files = [f for f in drive_files if f['name'] == source_branch]
         
-        # --- DEBUG STEP 3: Finding Item ---
-        header_row = branch_sheet.row_values(1)
-        last_col = len(header_row)
-        st.write(f"DEBUG: Last column detected at index: {last_col}")
+        if not matching_files:
+            # If we don't find it, show all files the bot CAN see
+            all_files = [f['name'] for f in drive_files[:10]] # Show first 10
+            st.error(f"FATAL: File '{source_branch}' not found in accessible files.")
+            st.write(f"DEBUG: Here are the first 10 files the Bot CAN see: {all_files}")
+            st.stop()
         
-        cell_list = []
-        for entry in st.session_state.transfer_cart:
-            st.write(f"DEBUG: Searching for item: '{entry['item']}'")
-            cell = branch_sheet.find(entry['item'].strip(), in_column=1)
-            
-            if cell:
-                st.write(f"DEBUG: Item found at Row {cell.row}")
-                raw_val = branch_sheet.cell(cell.row, last_col).value
-                current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
-                new_val = current_val - float(entry['qty'])
-                st.write(f"DEBUG: Current: {current_val}, New: {new_val}")
-                
-                cell_list.append(gspread.Cell(row=cell.row, col=last_col, value=new_val))
-            else:
-                st.error(f"DEBUG: FAILED - Item '{entry['item']}' not found in Column A.")
-                st.stop()
+        # 4. If we reach here, we have the file!
+        spreadsheet_id = matching_files[0]['id']
+        branch_sheet = client.open_by_key(spreadsheet_id).get_worksheet(0)
         
-        # --- DEBUG STEP 4: Execution ---
-        if cell_list:
-            st.write("DEBUG: Sending batch update to Google...")
-            branch_sheet.update_cells(cell_list)
-            st.write("DEBUG: Update command sent.")
+        st.write(f"DEBUG: Successfully accessed: {branch_sheet.title}")
         
-        # --- DEBUG STEP 5: Success ---
-        st.success("Transfer complete!")
-        st.session_state.transfer_cart = []
-        st.rerun()
+        # [ ... Proceed with your deduction logic ... ]
 
     except Exception as e:
-        st.error(f"DEBUG CRITICAL FAILURE: {str(e)}")
-        # If gspread provides an API response, show it
-        if hasattr(e, 'response'):
-            st.write(f"DEBUG API RESPONSE: {e.response.text}")
+        st.error(f"Critical System Error: {str(e)}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

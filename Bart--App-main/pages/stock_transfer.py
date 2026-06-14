@@ -71,67 +71,59 @@ if st.session_state.transfer_cart:
 
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
-        # 1. Setup Auth
+        # 1. Setup Connection
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
         
-        # 2. Get Origin Branch name and Open Sheets
+        # 2. Get Branch name and Open Sheets
         source_branch = st.session_state.get("selected_branch")
         branch_sheet = client.open(source_branch).worksheet("Stocks")
         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
         
-        # 3. Dynamic Column Logic
+        # 3. Get the last column index (Date)
         header_row = branch_sheet.row_values(1)
         last_col = len(header_row) 
         
-        # 4. Prepare Batch Data
-        # We fetch all cell values to calculate locally
-        cell_list = branch_sheet.range(1, last_col, branch_sheet.row_count, last_col)
-        
-        updates = []
+        # 4. Perform Deduction
         for entry in st.session_state.transfer_cart:
-            # Find the row for the item
+            # Locate item row
             cell = branch_sheet.find(entry['item'])
             if cell:
-                # Get current stock
-                current_val = float(branch_sheet.cell(cell.row, last_col).value or 0)
-                # Calculate new stock
+                # Get current value, ensure it is a number
+                val = branch_sheet.cell(cell.row, last_col).value
+                current_val = float(val) if val and val.replace('.','',1).isdigit() else 0.0
+                
+                # Deduct
                 new_val = current_val - float(entry['qty'])
                 
-                # Add to batch update list
-                updates.append({
-                    'range': gspread.utils.rowcol_to_a1(cell.row, last_col),
-                    'values': [[new_val]]
-                })
+                # Direct Update
+                branch_sheet.update_cell(cell.row, last_col, new_val)
         
-        # 5. Execute Single Batch Update (Prevents Response 200 issues)
-        if updates:
-            branch_sheet.batch_update(updates)
-        
-        # 6. Log to Master sheet
+        # 5. Log to Master Transfer Sheet
         jeddah_time = datetime.now() + timedelta(hours=3)
         transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}"
+        
         transfer_sheet.append_row([
-            transfer_id, source_branch, destination, 
+            transfer_id, 
+            source_branch, 
+            destination, 
             "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
-            reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+            reason, 
+            "Pending", 
+            jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
         ])
         
-        # 7. Finalize
+        # 6. Finalize
         st.session_state.transfer_cart = []
         st.success(f"Success! Stock deducted from {source_branch}.")
         st.rerun()
 
     except Exception as e:
-        # This will now show the actual technical reason for failure
         st.error(f"Error: {str(e)}")
-        # Check if Google gave a specific API error message
-        if hasattr(e, 'response') and e.response is not None:
-            st.write(f"API Details: {e.response.text}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

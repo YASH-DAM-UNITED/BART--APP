@@ -18,7 +18,7 @@ def deduct_stock(client, branch_string, item_name, qty_to_deduct, date_header):
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        ws = sh.worksheet("Inventory") # Ensure this tab name matches exactly!
+        ws = sh.worksheet("Stocks") # Ensure this tab name matches exactly!
 
         # 1. Find the Item Row
         # Item names are in Column A (1)

@@ -141,6 +141,8 @@ if st.button("Confirm and Send All", key="confirm_btn"):
 
     with st.spinner("Processing your transfer..."):
         try:
+            
+
             # 2. Setup client
             creds = ServiceAccountCredentials.from_json_keyfile_dict(
                 st.secrets["GOOGLE_CREDS_JSON"], 
@@ -150,23 +152,19 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             
             # 3. Identify Branch
             branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
-            origin_sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
-            ws_origin = origin_sh.worksheet("Stocks")
-            res_origin = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, "subtract")
-
-
             dest_id = re.findall(r'\d+', destination.split(" - ")[0])[0]
-            dest_sh = next((s for s in client.openall() if str(int(dest_id)) in s.title), None)
-            ws_dest = dest_sh.worksheet("Stocks")
-            res_dest = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, "add")
             
-            if not origin_sh and dest_sh:
-                st.error("Could not find branch spreadsheet.")
+            origin_sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
+            dest_sh = next((s for s in client.openall() if str(int(dest_id)) in s.title), None)
+            
+            # Check if sheets were found BEFORE trying to use them
+            if not origin_sh or not dest_sh:
+                st.error("Could not find one of the branch spreadsheets.")
             else:
                 ws_origin = origin_sh.worksheet("Stocks")
                 ws_dest = dest_sh.worksheet("Stocks")
                 
-                # 4. Perform Batch Update (The optimized call)
+                # 4. Perform Batch Updates
                 res_origin = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, operation="subtract")
                 res_dest = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, operation="add")
                 
@@ -183,7 +181,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                     st.session_state.transfer_cart = []
                     success_dialog(f"Transfer successful! ID: {transfer_id}")
                 else:
-                    st.error(result)
+                    st.error(f"Update failed. Origin: {res_origin}, Dest: {res_dest}")
                     
         except Exception as e:
             st.error(f"Critical Error: {e}")

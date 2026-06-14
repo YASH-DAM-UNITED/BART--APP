@@ -332,7 +332,7 @@ if edit_mode:
             
         try:
             ws = master_sheet.worksheet("StaffSchedule")
-            start_date_comparison = datetime(2026, 5, 1)
+            start_date_comparison = datetime(2026, 6, 1)
             week_start_dt = datetime.combine(week_start, datetime.min.time())
             week_diff = (week_start_dt - start_date_comparison).days // 7
             ot_header = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"

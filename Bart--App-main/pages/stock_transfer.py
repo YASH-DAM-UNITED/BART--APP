@@ -67,66 +67,61 @@ if st.session_state.transfer_cart:
     st.subheader("📦 Finalize Transfer")
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
-
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
-        # 1. Setup Connection
+        # --- DEBUG STEP 1: Connection ---
+        st.write("DEBUG: Starting Authentication...")
         creds = Credentials.from_service_account_info(
             st.secrets["GOOGLE_CREDS_JSON"], 
             scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         )
         client = gspread.authorize(creds)
+        st.write("DEBUG: Auth successful.")
         
-        # 2. Open Files
+        # --- DEBUG STEP 2: Opening Sheet ---
         source_branch = st.session_state.get("selected_branch")
+        st.write(f"DEBUG: Attempting to open sheet: {source_branch}")
         branch_sheet = client.open(source_branch).worksheet("Stocks")
-        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        st.write(f"DEBUG: Sheet opened. Worksheet 'Stocks' found.")
         
-        # 3. IDENTIFY TARGET COLUMN (Most recent date)
-        # We look at Row 1 and find the index of the last column
+        # --- DEBUG STEP 3: Finding Item ---
         header_row = branch_sheet.row_values(1)
-        last_col = len(header_row) 
+        last_col = len(header_row)
+        st.write(f"DEBUG: Last column detected at index: {last_col}")
         
-        # 4. Deduction Loop (Specific to Column A)
+        cell_list = []
         for entry in st.session_state.transfer_cart:
-            # SEARCH ONLY COLUMN 1 (A) to prevent finding SKUs or other data
+            st.write(f"DEBUG: Searching for item: '{entry['item']}'")
             cell = branch_sheet.find(entry['item'].strip(), in_column=1)
             
             if cell:
-                # Fetch the value from the intersection of Row and Last Column
+                st.write(f"DEBUG: Item found at Row {cell.row}")
                 raw_val = branch_sheet.cell(cell.row, last_col).value
                 current_val = float(raw_val) if (raw_val and str(raw_val).replace('.','',1).isdigit()) else 0.0
-                
-                # Perform the deduction
                 new_val = current_val - float(entry['qty'])
+                st.write(f"DEBUG: Current: {current_val}, New: {new_val}")
                 
-                # Update the cell
-                branch_sheet.update_cell(cell.row, last_col, new_val)
+                cell_list.append(gspread.Cell(row=cell.row, col=last_col, value=new_val))
             else:
-                st.error(f"Critical: Could not find item '{entry['item']}' in Column A.")
+                st.error(f"DEBUG: FAILED - Item '{entry['item']}' not found in Column A.")
                 st.stop()
         
-        # 5. Log to Master
-        jeddah_time = datetime.now() + timedelta(hours=3)
-        transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d%H%M')}"
+        # --- DEBUG STEP 4: Execution ---
+        if cell_list:
+            st.write("DEBUG: Sending batch update to Google...")
+            branch_sheet.update_cells(cell_list)
+            st.write("DEBUG: Update command sent.")
         
-        transfer_sheet.append_row([
-            transfer_id, 
-            source_branch, 
-            destination, 
-            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
-            "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
-            reason, 
-            "Pending", 
-            jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
-        ])
-        
+        # --- DEBUG STEP 5: Success ---
+        st.success("Transfer complete!")
         st.session_state.transfer_cart = []
-        st.success(f"Stock successfully deducted from {source_branch}!")
         st.rerun()
 
     except Exception as e:
-        st.error(f"Transaction Error: {str(e)}")
+        st.error(f"DEBUG CRITICAL FAILURE: {str(e)}")
+        # If gspread provides an API response, show it
+        if hasattr(e, 'response'):
+            st.write(f"DEBUG API RESPONSE: {e.response.text}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

@@ -14,31 +14,43 @@ def success_dialog(message):
 
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
+        # STAGE 1: File Setup
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
+        print(f"DEBUG [Stage 1]: Attempting to open file: {file_name}")
         sh = client.open(file_name)
-        ws = sh.worksheet("Stocks") 
+        ws = sh.worksheet("Stocks")
+        print(f"DEBUG [Stage 1]: Successfully opened worksheet 'Inventory'.")
 
-        # 1. Find Row (Column A)
+        # STAGE 2: Row Identification
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Item '{item_name}' not found."
+            return f"Error: Item '{item_name}' not found in Column A."
         row_index = all_items.index(item_name) + 1
+        print(f"DEBUG [Stage 2]: Item '{item_name}' found at Row: {row_index}")
 
-        # 2. Find the LATEST column (Last column with data in Row 1)
+        # STAGE 3: Column Identification (Latest Date)
         header_row = ws.row_values(1)
-        non_empty_headers = [h for h in header_row if h.strip() != ""]
-        col_index = len(non_empty_headers) 
-        
-        # 3. Update
+        non_empty_headers = [h for h in header_row if h and h.strip() != ""]
+        col_index = len(non_empty_headers)
+        print(f"DEBUG [Stage 3]: Latest column identified at index: {col_index}")
+
+        # STAGE 4: Data Read
         current_val = ws.cell(row_index, col_index).value
+        print(f"DEBUG [Stage 4]: Current value in cell ({row_index}, {col_index}) is '{current_val}'")
+        
+        # STAGE 5: Calculation and Update
         current_int = int(current_val) if (current_val and str(current_val).strip().isdigit()) else 0
         new_val = current_int - int(qty_to_deduct)
+        print(f"DEBUG [Stage 5]: New value will be {new_val}. Attempting update...")
         
         ws.update_cell(row_index, col_index, new_val)
+        print(f"DEBUG [Stage 5]: Update command sent successfully.")
+        
         return "Success"
         
     except Exception as e:
+        print(f"DEBUG [Critical]: Failed at some stage. Error: {str(e)}")
         return f"Error: {str(e)}"
 
 # ---------------- PAGE CONFIG ----------------

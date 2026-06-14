@@ -98,15 +98,23 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
 if st.button("Confirm and Send All", key="confirm_btn"):
+    # 1. Define variables at the start so they are accessible throughout the block
+    jeddah_time = datetime.now() + timedelta(hours=3)
+    transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+    destination = st.session_state.get("dest_sel", "Unknown")
+    reason = st.session_state.get("reason_input", "No reason provided")
+    origin_branch = st.session_state.selected_branch
+
     with st.spinner("Processing your transfer..."):
         try:
-            # Setup
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["GOOGLE_CREDS_JSON"], 
-                    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
+            # 2. Setup client
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                st.secrets["GOOGLE_CREDS_JSON"], 
+                ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            )
             client = gspread.authorize(creds)
             
-            # Identify Branch
-            origin_branch = st.session_state.selected_branch
+            # 3. Identify Branch
             branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
             sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
             
@@ -115,11 +123,11 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             else:
                 ws = sh.worksheet("Stocks")
                 
-                # Perform Batch Update (1 API call)
+                # 4. Perform Batch Update (The optimized call)
                 result = prepare_batch_updates(ws, st.session_state.transfer_cart)
                 
                 if result == "Success":
-                    # Log to Master (1 API call)
+                    # 5. Log to Master
                     transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                     transfer_sheet.append_row([
                         transfer_id, origin_branch, str(destination), 
@@ -129,7 +137,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                     ])
                     
                     st.session_state.transfer_cart = []
-                    st.success(f"Transfer successful! ID: {transfer_id}")
+                    success_dialog(f"Transfer successful! ID: {transfer_id}")
                 else:
                     st.error(result)
                     

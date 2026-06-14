@@ -13,34 +13,29 @@ def success_dialog(message):
         st.rerun()
 
 
-def deduct_stock(client, branch_string, item_name, qty_to_deduct, date_header):
+def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
         sh = client.open(file_name)
-        ws = sh.worksheet("Stocks") # Ensure this tab name matches exactly!
+        ws = sh.worksheet("Stocks") 
 
-        # 1. Find the Item Row
-        # Item names are in Column A (1)
+        # 1. Find Row (Column A)
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Item '{item_name}' not found in Column A."
+            return f"Item '{item_name}' not found."
         row_index = all_items.index(item_name) + 1
 
-        # 2. Find the Date Column
-        # YOUR DATES ARE IN ROW 1. Let's get Row 1
+        # 2. Find the LATEST column (Last column with data in Row 1)
         header_row = ws.row_values(1)
-        
-        # Check if date_header exists in the row
-        if date_header not in header_row:
-            return f"Date '{date_header}' not found in the header row."
-        
-        col_index = header_row.index(date_header) + 1
+        # We find the index of the last non-empty header
+        # Filter out empty strings to find the last actual date
+        non_empty_headers = [h for h in header_row if h.strip() != ""]
+        col_index = len(non_empty_headers) 
         
         # 3. Update
         current_val = ws.cell(row_index, col_index).value
-        # If cell is empty, default to 0
-        current_int = int(current_val) if (current_val and str(current_val).strip()) else 0
+        current_int = int(current_val) if (current_val and str(current_val).strip().isdigit()) else 0
         new_val = current_int - int(qty_to_deduct)
         
         ws.update_cell(row_index, col_index, new_val)

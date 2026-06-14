@@ -19,8 +19,7 @@ def success_dialog(message):
 
 
 
-def prepare_batch_updates(ws, cart):
-    # Fetch all data once to avoid repeated calls
+def prepare_batch_updates(ws, cart, operation="subtract"):
     all_data = ws.get_all_values()
     if not all_data: return "Error: Sheet is empty"
     
@@ -38,9 +37,44 @@ def prepare_batch_updates(ws, cart):
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
-            new_val = current_num - int(entry['qty'])
             
-            # Prepare update for batch
+            # Choose operation
+            if operation == "subtract":
+                new_val = current_num - int(entry['qty'])
+            else: # add
+                new_val = current_num + int(entry['qty'])
+            
+            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+            batch_list.append({"range": cell_address, "values": [[new_val]]})
+            
+    if batch_list:
+        ws.batch_update(batch_list)
+        return "Success"
+    return "Error: Items not found in sheet"def prepare_batch_updates(ws, cart, operation="subtract"):
+    all_data = ws.get_all_values()
+    if not all_data: return "Error: Sheet is empty"
+    
+    items_column = [row[0] for row in all_data]
+    header_row = all_data[0]
+    
+    # Identify the correct column (last non-empty column)
+    non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
+    col_index = non_empty[-1] 
+    
+    batch_list = []
+    
+    for entry in cart:
+        if entry['item'] in items_column:
+            row_idx = items_column.index(entry['item'])
+            current_val = all_data[row_idx][col_index]
+            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            
+            # Choose operation
+            if operation == "subtract":
+                new_val = current_num - int(entry['qty'])
+            else: # add
+                new_val = current_num + int(entry['qty'])
+            
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})
             
@@ -116,17 +150,27 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             
             # 3. Identify Branch
             branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
-            sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
+            origin_sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
+            ws_origin = origin_sh.worksheet("Stocks")
+            res_origin = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, "subtract")
+
+
+            dest_id = re.findall(r'\d+', destination.split(" - ")[0])[0]
+            dest_sh = next((s for s in client.openall() if str(int(dest_id)) in s.title), None)
+            ws_dest = dest_sh.worksheet("Stocks")
+            res_dest = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, "add")
             
-            if not sh:
+            if not origin_sh and dest_sh:
                 st.error("Could not find branch spreadsheet.")
             else:
-                ws = sh.worksheet("Stocks")
+                ws_origin = origin_sh.worksheet("Stocks")
+                ws_dest = dest_sh.worksheet("Stocks")
                 
                 # 4. Perform Batch Update (The optimized call)
-                result = prepare_batch_updates(ws, st.session_state.transfer_cart)
+                res_origin = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, operation="subtract")
+                res_dest = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, operation="add")
                 
-                if result == "Success":
+                if res_origin == "Success" and res_dest == "Success":
                     # 5. Log to Master
                     transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                     transfer_sheet.append_row([

@@ -16,42 +16,54 @@ def success_dialog(message):
 
 
 
+
+
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
-        # Extract the code correctly (e.g., "B06" from "B06 - SAFA")
-        branch_code = branch_string.split(" - ")[0].strip()
-        # file_name is now exactly what you see in Drive: e.g., "BART06"
-        target_name = f"BART{branch_code.replace('B', '')}" 
+        # 1. CLEAN THE BRANCH CODE
+        # Extracts digits from the branch string (e.g., 'B006 - SAFA1' -> '006')
+        import re
+        branch_numbers = re.findall(r'\d+', branch_string.split(" - ")[0])
+        branch_id_str = branch_numbers[0] if branch_numbers else ""
         
-        # SEARCH FOR FILE
+        # 2. SEARCH FOR FILE BY NUMBER
         sh = None
+        # We look for a file that contains the number part, e.g., '06'
         for spreadsheet in client.openall():
-            if spreadsheet.title.strip().upper() == target_name.upper():
+            # Check if the file name contains the branch ID (e.g., BART06 contains 06)
+            if str(int(branch_id_str)) in spreadsheet.title:
                 sh = spreadsheet
                 break
         
         if not sh:
-            return f"Could not find file named '{target_name}'. Available files: {[s.title for s in client.openall()]}"
+            available = [s.title for s in client.openall()]
+            return f"Error: Could not find matching file for '{branch_string}'. Available: {available}"
 
+        # 3. WORK WITH THE 'Stocks' TAB
         ws = sh.worksheet("Stocks")
 
-        # Row Index
+        # 4. FIND ROW
         all_items = ws.col_values(1)
         if item_name not in all_items:
             return f"Item '{item_name}' not in Column A."
         row_index = all_items.index(item_name) + 1
 
-        # Column Index (Latest)
+        # 5. FIND COLUMN (Last date)
         header_row = ws.row_values(1)
         non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
         col_index = non_empty[-1] + 1
         
-        # Update
+        # 6. READ AND CALCULATE
         cell_a1 = gspread.utils.rowcol_to_a1(row_index, col_index)
         current_val = ws.acell(cell_a1).value
-        new_val = int(float(current_val or 0)) - int(qty_to_deduct)
+        # Ensure we handle empty cells correctly
+        current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+        new_val = current_num - int(qty_to_deduct)
         
+        # 7. WRITE TO SHEET
         ws.update(range_name=cell_a1, values=[[new_val]])
+        
+        print(f"DEBUG: Successfully deducted {qty_to_deduct} from {cell_a1} in {sh.title}")
         return "Success"
         
     except Exception as e:

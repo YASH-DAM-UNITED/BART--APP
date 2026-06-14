@@ -69,10 +69,9 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
 
 
-# --- REPLACEMENT FOR YOUR "Confirm and Send All" BUTTON BLOCK ---
 if st.button("Confirm and Send All", key="confirm_btn"):
     try:
-        # 1. Setup Secure Connection
+        # 1. Setup Auth
         creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
@@ -83,63 +82,59 @@ if st.button("Confirm and Send All", key="confirm_btn"):
         
         # 2. Open Sheets
         source_branch = st.session_state.get("selected_branch")
-        if not source_branch:
-            st.error("Branch name not found in session.")
-            st.stop()
-            
-        # Access the specific branch sheet and the Master log
         branch_sheet = client.open(source_branch).worksheet("Stocks")
         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
         
-        # 3. Dynamic Column Logic (Find the last column in Row 1)
+        # 3. Get last column (Dynamic for current date)
         header_row = branch_sheet.row_values(1)
-        last_col_index = len(header_row) 
+        last_col = len(header_row) 
         
-        # 4. PRE-CHECK: Ensure all items exist and have enough stock
+        # 4. Prepare Batch Updates
+        batch_updates = []
         for entry in st.session_state.transfer_cart:
+            # Locate item
             cell = branch_sheet.find(entry['item'])
             if not cell:
-                st.error(f"Item '{entry['item']}' not found in {source_branch} sheet.")
+                st.error(f"Item '{entry['item']}' not found.")
                 st.stop()
             
-            # Read current stock from the last column
-            current_val = branch_sheet.cell(cell.row, last_col_index).value
+            # Check current stock
+            current_val = branch_sheet.cell(cell.row, last_col).value
             current_stock = int(float(current_val)) if current_val else 0
             
             if current_stock < entry['qty']:
-                st.error(f"Insufficient stock for {entry['item']}! (Available: {current_stock})")
+                st.error(f"Insufficient stock for {entry['item']}!")
                 st.stop()
-
-        # 5. EXECUTION: Deduct stock from branch sheet
-        for entry in st.session_state.transfer_cart:
-            cell = branch_sheet.find(entry['item'])
-            current_val = int(float(branch_sheet.cell(cell.row, last_col_index).value))
-            new_stock = current_val - entry['qty']
-            branch_sheet.update_cell(cell.row, last_col_index, new_stock)
+            
+            # Prepare the update structure
+            new_stock = current_stock - entry['qty']
+            batch_updates.append({
+                'range': gspread.utils.rowcol_to_a1(cell.row, last_col),
+                'values': [[new_stock]]
+            })
         
-        # 6. LOGGING: Add to Transfers sheet
+        # 5. Execute Batch Update (This fixes the Response 200 issue)
+        branch_sheet.batch_update(batch_updates)
+        
+        # 6. Log Transaction
         jeddah_time = datetime.now() + timedelta(hours=3)
         transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
         
         row_data = [
-            transfer_id,
-            str(source_branch),
-            str(destination),
+            transfer_id, str(source_branch), str(destination),
             "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]),
             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]),
-            str(reason),
-            "Pending",
-            jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+            str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
         ]
-        
         transfer_sheet.append_row(row_data)
         
-        # 7. Final Success
+        # 7. Reset and Success
         st.session_state.transfer_cart = []
-        success_dialog(f"Transfer {transfer_id} successfully processed!")
-        
+        st.success(f"Transfer {transfer_id} confirmed!")
+        st.rerun()
+
     except Exception as e:
-        st.error(f"Critical Update Error: {e}")
+        st.error(f"System Error: {str(e)}")
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

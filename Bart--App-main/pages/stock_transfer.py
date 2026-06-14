@@ -5,6 +5,8 @@ import string
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 
+import gspread.utils
+
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
 def success_dialog(message):
@@ -14,44 +16,43 @@ def success_dialog(message):
 
 def deduct_stock(client, branch_string, item_name, qty_to_deduct):
     try:
-        # STAGE 1: File Setup
+        # STAGE 1: Setup
         branch_id = branch_string.split(" - ")[0].replace("B", "")
         file_name = f"BART{branch_id}"
-        print(f"DEBUG [Stage 1]: Attempting to open file: {file_name}")
+        print(f"DEBUG: Opening {file_name}")
         sh = client.open(file_name)
-        ws = sh.worksheet("Stocks")
-        print(f"DEBUG [Stage 1]: Successfully opened worksheet 'Inventory'.")
+        ws = sh.worksheet("Inventory")
 
-        # STAGE 2: Row Identification
+        # STAGE 2: Find Row
         all_items = ws.col_values(1)
         if item_name not in all_items:
-            return f"Error: Item '{item_name}' not found in Column A."
+            return f"Error: '{item_name}' not in Col 1."
         row_index = all_items.index(item_name) + 1
-        print(f"DEBUG [Stage 2]: Item '{item_name}' found at Row: {row_index}")
+        print(f"DEBUG: Item row is {row_index}")
 
-        # STAGE 3: Column Identification (Latest Date)
+        # STAGE 3: Identify Latest Column (Date Column)
         header_row = ws.row_values(1)
-        non_empty_headers = [h for h in header_row if h and h.strip() != ""]
-        col_index = len(non_empty_headers)
-        print(f"DEBUG [Stage 3]: Latest column identified at index: {col_index}")
+        # Filters non-empty cells to find the right-most column
+        non_empty_headers = [i for i, h in enumerate(header_row) if h and str(h).strip() != ""]
+        col_index = non_empty_headers[-1] + 1 # +1 for 1-based index
+        print(f"DEBUG: Target column index is {col_index}")
 
-        # STAGE 4: Data Read
+        # STAGE 4: Calculate
         current_val = ws.cell(row_index, col_index).value
-        print(f"DEBUG [Stage 4]: Current value in cell ({row_index}, {col_index}) is '{current_val}'")
-        
-        # STAGE 5: Calculation and Update
         current_int = int(current_val) if (current_val and str(current_val).strip().isdigit()) else 0
         new_val = current_int - int(qty_to_deduct)
-        print(f"DEBUG [Stage 5]: New value will be {new_val}. Attempting update...")
-        
-        ws.update_cell(row_index, col_index, new_val)
-        print(f"DEBUG [Stage 5]: Update command sent successfully.")
+        print(f"DEBUG: Changing {current_int} to {new_val}")
+
+        # STAGE 5: Robust Update
+        cell_address = gspread.utils.rowcol_to_a1(row_index, col_index)
+        ws.update(range_name=cell_address, values=[[new_val]])
+        print(f"DEBUG: Success at {cell_address}")
         
         return "Success"
         
     except Exception as e:
-        print(f"DEBUG [Critical]: Failed at some stage. Error: {str(e)}")
-        return f"Error: {str(e)}"
+        print(f"DEBUG: Error occurred: {str(e)}")
+        return str(e)
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
@@ -103,9 +104,8 @@ if st.session_state.transfer_cart:
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
 if st.button("Confirm and Send All", key="confirm_btn"):
-    with st.spinner("Processing transfer and updating branch stock..."):
+    with st.spinner("Processing..."):
         try:
-            # 1. Setup
             jeddah_time = datetime.now() + timedelta(hours=3)
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
             
@@ -114,28 +114,22 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
             client = gspread.authorize(creds)
             
-            # 2. Log to Master Sheet
+            # Log to Master
             transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-            row_data = [
-                transfer_id, 
-                str(st.session_state.get("selected_branch", "Unknown")), 
-                str(destination), 
-                "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+            transfer_sheet.append_row([
+                transfer_id, str(st.session_state.get("selected_branch", "Unknown")), 
+                str(destination), "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
                 "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
-                str(reason),
-                "Pending", 
-                jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
-            ]
-            transfer_sheet.append_row(row_data)
+                str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+            ])
 
-            # 3. Update Branch Stock
-            # Now passing exactly 4 arguments as defined in the updated function
+            # Update Branch
             for entry in st.session_state.transfer_cart:
                 result = deduct_stock(client, destination, entry['item'], entry['qty'])
                 if result != "Success":
                     st.error(f"Failed to deduct {entry['item']}: {result}")
+                    st.stop()
             
-            # 4. Finalize
             st.session_state.transfer_cart = []
             success_dialog(f"Transfer successful! ID: {transfer_id}")
             

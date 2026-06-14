@@ -18,24 +18,36 @@ def success_dialog(message):
         st.rerun()
 
 
-def update_stocks(worksheet, cart, operation):
-    all_data = worksheet.get_all_values()
-    items_col = [row[0] for row in all_data]
-    col_idx = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
+
+def prepare_batch_updates(ws, cart):
+    # Fetch all data once to avoid repeated calls
+    all_data = ws.get_all_values()
+    if not all_data: return "Error: Sheet is empty"
     
-    batch = []
+    items_column = [row[0] for row in all_data]
+    header_row = all_data[0]
+    
+    # Identify the correct column (last non-empty column)
+    non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
+    col_index = non_empty[-1] 
+    
+    batch_list = []
+    
     for entry in cart:
-        if entry['item'] in items_col:
-            row_idx = items_col.index(entry['item'])
-            current = int(float(all_data[row_idx][col_idx] or 0))
-            # The only difference: addition or subtraction
-            new_val = (current - int(entry['qty'])) if operation == "sub" else (current + int(entry['qty']))
+        if entry['item'] in items_column:
+            row_idx = items_column.index(entry['item'])
+            current_val = all_data[row_idx][col_index]
+            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            new_val = current_num - int(entry['qty'])
             
-            cell = gspread.utils.rowcol_to_a1(row_idx + 1, col_idx + 1)
-            batch.append({"range": cell, "values": [[new_val]]})
+            # Prepare update for batch
+            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+            batch_list.append({"range": cell_address, "values": [[new_val]]})
             
-    if batch:
-        worksheet.batch_update(batch)
+    if batch_list:
+        ws.batch_update(batch_list)
+        return "Success"
+    return "Error: Items not found in sheet"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 st.title("🚚 Internal Stock Transfer")
@@ -93,54 +105,29 @@ if st.button("Confirm and Send All", key="confirm_btn"):
     reason = st.session_state.get("reason_input", "No reason provided")
     origin_branch = st.session_state.selected_branch
 
-with st.spinner("Processing your transfer..."):
+    with st.spinner("Processing your transfer..."):
         try:
-            # 1. Setup client
+            # 2. Setup client
             creds = ServiceAccountCredentials.from_json_keyfile_dict(
                 st.secrets["GOOGLE_CREDS_JSON"], 
                 ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
             )
             client = gspread.authorize(creds)
             
-            # 2. Identify Origin Branch
+            # 3. Identify Branch
             branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
             sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
             
             if not sh:
-                st.error("Could not find origin branch spreadsheet.")
+                st.error("Could not find branch spreadsheet.")
             else:
                 ws = sh.worksheet("Stocks")
                 
-                # --- SUBTRACTION (Origin) ---
-                # We use your existing function to handle the minus
-                res_sub = prepare_batch_updates(ws, st.session_state.transfer_cart)
+                # 4. Perform Batch Update (The optimized call)
+                result = prepare_batch_updates(ws, st.session_state.transfer_cart)
                 
-                if res_sub == "Success":
-                    # --- ADDITION (Destination) ---
-                    # Keep your destination variable logic as is
-                    dest_sh = client.open(destination)
-                    dest_ws = dest_sh.worksheet("Stocks")
-                    
-                    # We reuse your existing function logic, but we need to add, 
-                    # so we create a small temporary helper for the addition:
-                    dest_data = dest_ws.get_all_values()
-                    dest_items = [row[0] for row in dest_data]
-                    dest_header = dest_data[0]
-                    dest_col_idx = [i for i, h in enumerate(dest_header) if h and str(h).strip()][-1]
-                    
-                    add_list = []
-                    for entry in st.session_state.transfer_cart:
-                        if entry['item'] in dest_items:
-                            row_idx = dest_items.index(entry['item'])
-                            curr_val = int(float(dest_data[row_idx][dest_col_idx] or 0))
-                            new_val = curr_val + int(entry['qty'])
-                            cell_addr = gspread.utils.rowcol_to_a1(row_idx + 1, dest_col_idx + 1)
-                            add_list.append({"range": cell_addr, "values": [[new_val]]})
-                    
-                    if add_list:
-                        dest_ws.batch_update(add_list)
-                    
-                    # 3. Log to Master
+                if result == "Success":
+                    # 5. Log to Master
                     transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                     transfer_sheet.append_row([
                         transfer_id, origin_branch, str(destination), 
@@ -152,7 +139,8 @@ with st.spinner("Processing your transfer..."):
                     st.session_state.transfer_cart = []
                     success_dialog(f"Transfer successful! ID: {transfer_id}")
                 else:
-                    st.error(res_sub)
+                    st.error(result)
+                    
         except Exception as e:
             st.error(f"Critical Error: {e}")
 

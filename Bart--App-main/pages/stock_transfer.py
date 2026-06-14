@@ -50,37 +50,6 @@ def prepare_batch_updates(ws, cart, operation="subtract"):
     if batch_list:
         ws.batch_update(batch_list)
         return "Success"
-    return "Error: Items not found in sheet"def prepare_batch_updates(ws, cart, operation="subtract"):
-    all_data = ws.get_all_values()
-    if not all_data: return "Error: Sheet is empty"
-    
-    items_column = [row[0] for row in all_data]
-    header_row = all_data[0]
-    
-    # Identify the correct column (last non-empty column)
-    non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
-    col_index = non_empty[-1] 
-    
-    batch_list = []
-    
-    for entry in cart:
-        if entry['item'] in items_column:
-            row_idx = items_column.index(entry['item'])
-            current_val = all_data[row_idx][col_index]
-            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
-            
-            # Choose operation
-            if operation == "subtract":
-                new_val = current_num - int(entry['qty'])
-            else: # add
-                new_val = current_num + int(entry['qty'])
-            
-            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
-            batch_list.append({"range": cell_address, "values": [[new_val]]})
-            
-    if batch_list:
-        ws.batch_update(batch_list)
-        return "Success"
     return "Error: Items not found in sheet"
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")

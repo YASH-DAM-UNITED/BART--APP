@@ -95,8 +95,8 @@ def break_duty_dialog(row_idx, row_name, day_name):
         total_hrs = hrs1 + hrs2
         
         # Validation: Check if total hours meet the 9-hour requirement
-        if total_hrs < 8:
-            st.error(f"❌ Total duration is {total_hrs} hours. Minimum 8 hours required.")
+        if total_hrs < 9:
+            st.error(f"❌ Total duration is {total_hrs} hours. Minimum 9 hours required.")
         else:
             value = format_break_duty(d1s, d1e, d2s, d2e)
             

@@ -116,12 +116,22 @@ def show_transfer_dialog(transfer):
         update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
 def parse_transfer_items(transfer_data):
-    items = transfer_data['Items'].replace("• ", "").split("\n")
-    qtys = transfer_data['Quantities'].split("\n")
+    # Safely get the items and quantities strings, default to empty string if missing
+    items_str = transfer_data.get('Items', "")
+    qtys_str = transfer_data.get('Quantities', "")
+    
+    # If the data is empty, return an empty cart to prevent crashing
+    if not items_str or not qtys_str:
+        return []
+        
+    items = items_str.replace("• ", "").split("\n")
+    qtys = qtys_str.split("\n")
+    
     cart = []
-    for i in range(len(items)):
-        item_name = items[i].split(" (")[0]
-        cart.append({"item": item_name, "qty": qtys[i]})
+    # Ensure we don't go out of bounds if lists are different lengths
+    for i in range(min(len(items), len(qtys))):
+        item_name = items[i].split(" (")[0].strip()
+        cart.append({"item": item_name, "qty": qtys[i].strip()})
     return cart
 
 

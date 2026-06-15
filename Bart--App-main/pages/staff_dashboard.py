@@ -140,38 +140,42 @@ def parse_transfer_items(transfer_data):
 
 
 
-
 def update_transfer_status(transfer_id, status, transfer_data):
-    # 1. Open Master and update status
     client = st.session_state.gs_client
     sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
     cell = sheet.find(transfer_id)
     if cell:
         sheet.update_cell(cell.row, 7, status)
     
-    # 2. If Rejected, perform the "Reverse" Operation
+    # 2. If Rejected, perform the "Reverse" Operation on BOTH branches
     if status == "Rejected":
-        # We need the Origin ID to return the stock
         origin_branch_raw = transfer_data['Origin']
+        dest_branch_raw = transfer_data['Destination'] # Grab destination from data
+        
         origin_id = origin_branch_raw.split(" - ")[0]
+        dest_id = dest_branch_raw.split(" - ")[0]
         
-        # Get the Origin Spreadsheet ID from your branch_map
         origin_key = st.session_state.branch_map.get(origin_id)
+        dest_key = st.session_state.branch_map.get(dest_id)
         
-        if origin_key:
+        cart = parse_transfer_items(transfer_data)
+        
+        if origin_key and dest_key:
+            # Open both sheets
             origin_sh = client.open_by_key(origin_key)
+            dest_sh = client.open_by_key(dest_key)
+            
+            # Add back to Origin
             ws_origin = origin_sh.worksheet("Stocks")
+            prepare_batch_updates(ws_origin, cart, "add")
             
-            # Use your existing prepare_batch_updates function
-            # To "Return" stock, we ADD it back to the Origin
-            # We treat the 'cart' as the items in the transfer
+            # Subtract from Destination
+            ws_dest = dest_sh.worksheet("Stocks")
+            prepare_batch_updates(ws_dest, cart, "subtract")
             
-            # You'll need to parse the items/qty from the master sheet record
-            # Or pass the transfer_data dict directly
-            prepare_batch_updates(ws_origin, parse_transfer_items(transfer_data), "add")
-            st.success(f"Stock returned to {origin_branch_raw}")
+            st.success(f"Rejected: Stock returned to {origin_branch_raw} and removed from {dest_branch_raw}")
         else:
-            st.error("Could not find Origin branch to return stock.")
+            st.error("Could not find branch map IDs to complete the reversal.")
 def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()
     if not all_data: return "Error: Sheet is empty"

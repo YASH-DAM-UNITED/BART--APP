@@ -17,36 +17,33 @@ def success_dialog(message):
     if st.button("Close", key="close_dialog"):
         st.rerun()
 
-def prepare_batch_updates(ws, cart):
-    # Fetch all data once to avoid repeated calls
+def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()
-    if not all_data: 
-        return "Error: Sheet is empty"
+    if not all_data: return "Error: Sheet is empty"
     
     items_column = [row[0] for row in all_data]
-    header_row = all_data[0]
-    
-    # Identify the correct column (last non-empty column)
-    non_empty = [i for i, h in enumerate(header_row) if h and str(h).strip()]
-    col_index = non_empty[-1] 
+    col_index = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
     
     batch_list = []
-    
     for entry in cart:
         if entry['item'] in items_column:
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
-            new_val = current_num - int(entry['qty'])
             
-            # Prepare update for batch
+            # Subtraction for origin, Addition for destination
+            if mode == "subtract":
+                new_val = current_num - int(entry['qty'])
+            else:
+                new_val = current_num + int(entry['qty'])
+            
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})
             
     if batch_list:
         ws.batch_update(batch_list)
         return "Success"
-    return "Error: Items not found in sheet"
+    return "Error: Items not found"
 
 # ---------------- MAIN APP LOGIC ----------------
 st.title("🚚 Internal Stock Transfer")
@@ -112,18 +109,21 @@ if st.session_state.transfer_cart:
                 client = gspread.authorize(creds)
                 
                 # 3. Identify Branch
-                branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
-                sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
+                origin_id = re.findall(r'\d+', st.session_state.selected_branch.split(" - ")[0])[0]
+                dest_id = re.findall(r'\d+', str(destination).split(" - ")[0])[0]
+                sh_origin = next(s for s in client.openall() if str(int(origin_id)) in s.title)
+                sh_dest = next(s for s in client.openall() if str(int(dest_id)) in s.title)
+                
                 
                 if not sh:
                     st.error("Could not find branch spreadsheet.")
                 else:
-                    ws = sh.worksheet("Stocks")
                     
-                    # 4. Perform Batch Update
-                    result = prepare_batch_updates(ws, st.session_state.transfer_cart)
                     
-                    if result == "Success":
+                    res_origin = prepare_batch_updates(sh_origin.worksheet("Stocks"), st.session_state.transfer_cart, "subtract")
+                    res_dest = prepare_batch_updates(sh_dest.worksheet("Stocks"), st.session_state.transfer_cart, "add")
+                    
+                    if res_sub == "Success" and res_add == "Success":
                         # 5. Log to Master
                         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                         transfer_sheet.append_row([

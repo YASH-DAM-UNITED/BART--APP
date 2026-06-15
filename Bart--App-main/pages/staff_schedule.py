@@ -76,11 +76,11 @@ def success_dialog():
 
 
 
-@st.dialog("☕ Set Break Duty")
+@st.dialog(" Set Break Duty")
 def break_duty_dialog(row_idx, row_name, day_name):
     st.write(f"Configure Break Duty for **{row_name}** on **{day_name}**")
     
-    # ... (Keep your selectboxes as they are) ...
+    # Dropdowns for D1 and D2
     d1s = st.selectbox("D1 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], key=f"d1s_{row_idx}_{day_name}")
     d1e = st.selectbox("D1 End", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=3, key=f"d1e_{row_idx}_{day_name}")
     d2s = st.selectbox("D2 Start", [f"{h}{ap}" for h in range(1, 13) for ap in ["AM", "PM"]], index=8, key=f"d2s_{row_idx}_{day_name}")
@@ -89,15 +89,23 @@ def break_duty_dialog(row_idx, row_name, day_name):
     apply_all = st.checkbox("Apply to all working days this week")
     
     if st.button("Apply Break Duty", use_container_width=True):
-        value = format_break_duty(d1s, d1e, d2s, d2e)
+        # Calculate hours using existing logic
+        hrs1 = calculate_hours(d1s, d1e)
+        hrs2 = calculate_hours(d2s, d2e)
+        total_hrs = hrs1 + hrs2
         
-        if apply_all:
-            for day in DAYS:
-                st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
+        # Validation: Check if total hours meet the 9-hour requirement
+        if total_hrs < 9:
+            st.error(f"❌ Total duration is {total_hrs} hours. Minimum 9 hours required.")
         else:
-            st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
-        st.rerun()
-
+            value = format_break_duty(d1s, d1e, d2s, d2e)
+            
+            if apply_all:
+                for day in DAYS:
+                    st.session_state.shift_buffer[f"{row_idx}_{day}"] = value
+            else:
+                st.session_state.shift_buffer[f"{row_idx}_{day_name}"] = value
+            st.rerun()
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Configure shift for **{row_name}** on **{day_name}**")

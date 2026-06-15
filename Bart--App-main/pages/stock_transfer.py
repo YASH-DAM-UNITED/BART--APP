@@ -34,7 +34,9 @@ st.set_page_config(page_title="Stock Transfer", layout="centered")
 def success_dialog(message):
     st.write(message)
     if st.button("Close", key="close_dialog"):
-        st.rerun()
+        st.switch_page("pages/staff_dashboard.py")
+        
+        
 
 def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()

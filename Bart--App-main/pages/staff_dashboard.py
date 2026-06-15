@@ -116,22 +116,25 @@ def show_transfer_dialog(transfer):
         update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
 def parse_transfer_items(transfer_data):
-    # Safely get the items and quantities strings, default to empty string if missing
-    items_str = transfer_data.get('Items', "")
-    qtys_str = transfer_data.get('Quantities', "")
+    # Ensure we get strings, even if the data is None or empty
+    items_str = str(transfer_data.get('Items', ""))
+    qtys_str = str(transfer_data.get('Quantities', ""))
     
-    # If the data is empty, return an empty cart to prevent crashing
-    if not items_str or not qtys_str:
+    # If there is no data, return an empty list immediately
+    if not items_str.strip() or not qtys_str.strip():
         return []
-        
-    items = items_str.replace("• ", "").split("\n")
-    qtys = qtys_str.split("\n")
+    
+    # Clean and split
+    items = [i.replace("• ", "").strip() for i in items_str.split("\n") if i.strip()]
+    qtys = [q.strip() for q in qtys_str.split("\n") if q.strip()]
     
     cart = []
-    # Ensure we don't go out of bounds if lists are different lengths
+    # Loop through the shorter list to avoid index errors
     for i in range(min(len(items), len(qtys))):
+        # Extract item name if it has extra detail like "(Qty UOM)"
         item_name = items[i].split(" (")[0].strip()
-        cart.append({"item": item_name, "qty": qtys[i].strip()})
+        cart.append({"item": item_name, "qty": qtys[i]})
+        
     return cart
 
 

@@ -134,29 +134,23 @@ with col3:
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 
-# Initialize session state so they are never undefined
 if "start_time_str" not in st.session_state: st.session_state.start_time_str = "12:00 AM"
 if "end_time_str" not in st.session_state: st.session_state.end_time_str = "11:59 PM"
 
-# Layout: 2 main columns for Start and End, plus a button column
-col_layout = st.columns([2, 2, 1])
+# 1. Use vertical_alignment="bottom" to align items across the row
+col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1], vertical_alignment="bottom")
 
-with col_layout[0]:
-    st.write("##### Start Time")
-    c1, c2 = st.columns(2)
-    with c1: start_val = st.text_input("Time", value="12:00", key="s_val")
-    with c2: start_period = st.selectbox("AM/PM", ["AM", "PM"], key="s_per")
+with col1:
+    start_val = st.text_input("Start Time", value="12:00", key="s_val")
+with col2:
+    start_period = st.selectbox("AM/PM", ["AM", "PM"], key="s_per")
+with col3:
+    end_val = st.text_input("End Time", value="11:59", key="e_val")
+with col4:
+    end_period = st.selectbox("AM/PM", ["PM", "AM"], key="e_per")
 
-with col_layout[1]:
-    st.write("##### End Time")
-    c3, c4 = st.columns(2)
-    with c3: end_val = st.text_input("Time", value="11:59", key="e_val")
-    with c4: end_period = st.selectbox("AM/PM", ["PM", "AM"], key="e_per")
-
-with col_layout[2]:
-    st.write(" ") # Spacer
-    st.write(" ") # Spacer
-    if st.button("🚀 Calculate", use_container_width=True):
+with col5:
+    if st.button(" Calculate", use_container_width=True):
         def to_min(t_str, period):
             h, m = map(int, t_str.split(":"))
             h = 12 if h == 12 else h
@@ -168,6 +162,10 @@ with col_layout[2]:
         st.session_state.start_time_str = f"{start_val} {start_period}"
         st.session_state.end_time_str = f"{end_val} {end_period}"
         st.rerun()
+
+# Ensure variables exist for the subheader
+start_input = st.session_state.start_time_str
+end_input = st.session_state.end_time_str
 
 # These ensure the variables exist for the rest of your app logic
 start_input = st.session_state.start_time_str

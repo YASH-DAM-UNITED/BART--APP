@@ -1,7 +1,7 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-
+import gspread.utils
 
 import streamlit as st
 import gspread
@@ -127,20 +127,27 @@ def parse_transfer_items(transfer_data):
 def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()
     if not all_data: return "Error: Sheet is empty"
+    
+    # Identify item column and stock column
     items_column = [row[0] for row in all_data]
-    col_index = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
+    # Assuming last column is the stock column
+    col_index = len(all_data[0]) - 1 
+    
     batch_list = []
     for entry in cart:
         if entry['item'] in items_column:
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            
             if mode == "subtract":
                 new_val = current_num - int(entry['qty'])
             else:
                 new_val = current_num + int(entry['qty'])
+                
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})
+            
     if batch_list:
         ws.batch_update(batch_list)
         return "Success"

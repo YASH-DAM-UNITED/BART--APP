@@ -85,6 +85,14 @@ for k, v in defaults.items():
 
 
 
+# Load the Branch Map so "Reject" logic knows where to send stock back
+if "branch_map" not in st.session_state:
+    master_sh = st.session_state.gs_client.open("MASTERBRANCHSHEET")
+    branch_ws = master_sh.worksheet("Branches")
+    data = branch_ws.get_all_values()[1:]
+    st.session_state.branch_map = {row[0]: row[1] for row in data}
+
+
 # --- HELPER FUNCTIONS FOR NOTIFICATIONS ---
 @st.dialog("📦 New Transfer Received")
 def show_transfer_dialog(transfer):
@@ -102,19 +110,59 @@ def show_transfer_dialog(transfer):
     
     col1, col2 = st.columns(2)
     if col1.button("✅ Accept", use_container_width=True):
-        update_transfer_status(transfer['ID'], "Accepted")
+        update_transfer_status(transfer['ID'], "Accepted", transfer)
         st.rerun()
     if col2.button("❌ Reject", use_container_width=True):
-        update_transfer_status(transfer['ID'], "Rejected")
+        update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
 
-def update_transfer_status(transfer_id, status):
-    sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+def update_transfer_status(transfer_id, status, transfer_data):
+    # 1. Open Master and update status
+    client = st.session_state.gs_client
+    sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
     cell = sheet.find(transfer_id)
     if cell:
-        # Col 7 is the Status column
         sheet.update_cell(cell.row, 7, status)
-        st.success(f"Transfer {transfer_id} marked as {status}")
+    
+    # 2. If Rejected, perform the "Reverse" Operation
+    if status == "Rejected":
+        # We need the Origin ID to return the stock
+        origin_branch_raw = transfer_data['Origin']
+        origin_id = origin_branch_raw.split(" - ")[0]
+        
+        # Get the Origin Spreadsheet ID from your branch_map
+        origin_key = st.session_state.branch_map.get(origin_id)
+        
+        if origin_key:
+            origin_sh = client.open_by_key(origin_key)
+            ws_origin = origin_sh.worksheet("Stocks")
+            
+            # Use your existing prepare_batch_updates function
+            # To "Return" stock, we ADD it back to the Origin
+            # We treat the 'cart' as the items in the transfer
+            
+            # You'll need to parse the items/qty from the master sheet record
+            # Or pass the transfer_data dict directly
+            prepare_batch_updates(ws_origin, parse_transfer_items(transfer_data), "add")
+            st.success(f"Stock returned to {origin_branch_raw}")
+        else:
+            st.error("Could not find Origin branch to return stock.")
+
+
+
+def parse_transfer_items(transfer_data):
+    # This assumes your Master sheet stores items and quantities in rows 
+    # as we defined them before. 
+    # Example logic:
+    items = transfer_data['Items'].replace("• ", "").split("\n")
+    qtys = transfer_data['Quantities'].split("\n")
+    
+    cart = []
+    for i in range(len(items)):
+        # Extract item name from "Item Name (Qty UOM)"
+        item_name = items[i].split(" (")[0]
+        cart.append({"item": item_name, "qty": qtys[i]})
+    return cart
 
 def check_for_pending_transfers():
     sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
@@ -309,6 +357,7 @@ if st.session_state.selected_branch != "-- Select Branch --":
 if st.session_state.authenticated:
     st.success(f"Logged in: {st.session_state.selected_branch}")
     check_for_pending_transfers()
+    
     col1, col2, col3, col4 = st.columns(4)
 
     if col1.button("📦 Stock Record"):
@@ -408,21 +457,7 @@ if st.session_state.get("show_stock_view", False):
         st.session_state.show_stock_view = False
         st.rerun()
 
-# --- 1. Notification Check (Run on load) ---
-def check_notifications():
-    # Only hit the API for the notifications tab
-    sheet = client.open("MASTERBRANCHSHEET").worksheet("Notifications")
-    records = sheet.get_all_records()
-    
-    my_code = st.session_state.selected_branch.split(" - ")[0]
-    
-    # Filter for unread
-    unread = [r for r in records if r['TargetBranchCode'] == my_code and r['Status'] == 'unread']
-    
-    for note in unread:
-        st.toast(f"📦 Incoming Transfer: {note['Message']}", icon="🔔")
-        # Update sheet to 'read' to prevent loop
-        # (Add logic here to find row index and update status to 'read')
+
 
 
 

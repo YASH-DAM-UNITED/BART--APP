@@ -115,6 +115,17 @@ def show_transfer_dialog(transfer):
     if col2.button("❌ Reject", use_container_width=True):
         update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
+
+
+
+result = prepare_batch_updates(ws_dest, cart, "subtract")
+
+if result != "Success":
+    st.error(result) # This will display the "Error: Insufficient stock..." message
+    return # Stop the rest of the function!
+else:
+    # Proceed to update Master sheet status...
+    st.success("Transfer processed successfully!")
 def parse_transfer_items(transfer_data):
     # Ensure we get strings, even if the data is None or empty
     items_str = str(transfer_data.get('Items', ""))
@@ -180,22 +191,31 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()
     if not all_data: return "Error: Sheet is empty"
     
-    # Identify item column and stock column
     items_column = [row[0] for row in all_data]
-    # Assuming last column is the stock column
     col_index = len(all_data[0]) - 1 
     
     batch_list = []
+    
+    # First: Check for sufficient stock (ONLY for subtraction)
+    if mode == "subtract":
+        for entry in cart:
+            if entry['item'] in items_column:
+                row_idx = items_column.index(entry['item'])
+                current_val = all_data[row_idx][col_index]
+                current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+                
+                # VALIDATION: If transfer qty > current stock, abort!
+                if int(entry['qty']) > current_num:
+                    return f"Error: Insufficient stock for {entry['item']}. Available: {current_num}"
+
+    # Second: Perform updates
     for entry in cart:
         if entry['item'] in items_column:
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
             
-            if mode == "subtract":
-                new_val = current_num - int(entry['qty'])
-            else:
-                new_val = current_num + int(entry['qty'])
+            new_val = current_num - int(entry['qty']) if mode == "subtract" else current_num + int(entry['qty'])
                 
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})

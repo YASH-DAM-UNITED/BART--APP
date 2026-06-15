@@ -115,55 +115,36 @@ def show_transfer_dialog(transfer):
     if col2.button("❌ Reject", use_container_width=True):
         update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
-
-def update_transfer_status(transfer_id, status, transfer_data):
-    # 1. Open Master and update status
-    client = st.session_state.gs_client
-    sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-    cell = sheet.find(transfer_id)
-    if cell:
-        sheet.update_cell(cell.row, 7, status)
-    
-    # 2. If Rejected, perform the "Reverse" Operation
-    if status == "Rejected":
-        # We need the Origin ID to return the stock
-        origin_branch_raw = transfer_data['Origin']
-        origin_id = origin_branch_raw.split(" - ")[0]
-        
-        # Get the Origin Spreadsheet ID from your branch_map
-        origin_key = st.session_state.branch_map.get(origin_id)
-        
-        if origin_key:
-            origin_sh = client.open_by_key(origin_key)
-            ws_origin = origin_sh.worksheet("Stocks")
-            
-            # Use your existing prepare_batch_updates function
-            # To "Return" stock, we ADD it back to the Origin
-            # We treat the 'cart' as the items in the transfer
-            
-            # You'll need to parse the items/qty from the master sheet record
-            # Or pass the transfer_data dict directly
-            prepare_batch_updates(ws_origin, parse_transfer_items(transfer_data), "add")
-            st.success(f"Stock returned to {origin_branch_raw}")
-        else:
-            st.error("Could not find Origin branch to return stock.")
-
-
-
 def parse_transfer_items(transfer_data):
-    # This assumes your Master sheet stores items and quantities in rows 
-    # as we defined them before. 
-    # Example logic:
     items = transfer_data['Items'].replace("• ", "").split("\n")
     qtys = transfer_data['Quantities'].split("\n")
-    
     cart = []
     for i in range(len(items)):
-        # Extract item name from "Item Name (Qty UOM)"
         item_name = items[i].split(" (")[0]
         cart.append({"item": item_name, "qty": qtys[i]})
     return cart
 
+def prepare_batch_updates(ws, cart, mode="subtract"):
+    all_data = ws.get_all_values()
+    if not all_data: return "Error: Sheet is empty"
+    items_column = [row[0] for row in all_data]
+    col_index = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
+    batch_list = []
+    for entry in cart:
+        if entry['item'] in items_column:
+            row_idx = items_column.index(entry['item'])
+            current_val = all_data[row_idx][col_index]
+            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            if mode == "subtract":
+                new_val = current_num - int(entry['qty'])
+            else:
+                new_val = current_num + int(entry['qty'])
+            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+            batch_list.append({"range": cell_address, "values": [[new_val]]})
+    if batch_list:
+        ws.batch_update(batch_list)
+        return "Success"
+    return "Error: Items not found"
 def check_for_pending_transfers():
     sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
     records = sheet.get_all_records()

@@ -2,34 +2,14 @@ import streamlit as st
 import gspread
 import random
 import string
-from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta
-import streamlit as st
-import gspread
 import re
 from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime, timedelta
 import gspread.utils
-# 1. Place this at the very top, after your imports
-creds = ServiceAccountCredentials.from_json_keyfile_dict(
-    st.secrets["GOOGLE_CREDS_JSON"], 
-    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-)
-client = gspread.authorize(creds)
 
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Stock Transfer", layout="centered")
 
-
-# Load the branch mapping once to avoid repeated API calls
-if "branch_map" not in st.session_state:
-    try:
-        # Open your master sheet
-        master_sh = client.open("MASTERBRANCHSHEET")
-        master_ws = master_sh.worksheet("Sheet1")
-        all_rows = master_ws.get_all_values()
-        
-        # We skip row 0 (header), then map Column B (index 1) to Column C (index 2)
-        st.session_state.branch_map = {row[1]: row[2] for row in all_rows[1:] if row[1]}
-    except Exception as e:
-        st.error(f"Error loading branch map: {e}")
 # ---------------- DIALOG DEFINITION ----------------
 @st.dialog("Transfer Success")
 def success_dialog(message):
@@ -37,11 +17,11 @@ def success_dialog(message):
     if st.button("Close", key="close_dialog"):
         st.rerun()
 
-
-
-def prepare_batch_updates(ws, cart, operation="subtract"):
+def prepare_batch_updates(ws, cart):
+    # Fetch all data once to avoid repeated calls
     all_data = ws.get_all_values()
-    if not all_data: return "Error: Sheet is empty"
+    if not all_data: 
+        return "Error: Sheet is empty"
     
     items_column = [row[0] for row in all_data]
     header_row = all_data[0]
@@ -57,13 +37,9 @@ def prepare_batch_updates(ws, cart, operation="subtract"):
             row_idx = items_column.index(entry['item'])
             current_val = all_data[row_idx][col_index]
             current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+            new_val = current_num - int(entry['qty'])
             
-            # Choose operation
-            if operation == "subtract":
-                new_val = current_num - int(entry['qty'])
-            else: # add
-                new_val = current_num + int(entry['qty'])
-            
+            # Prepare update for batch
             cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
             batch_list.append({"range": cell_address, "values": [[new_val]]})
             
@@ -71,8 +47,8 @@ def prepare_batch_updates(ws, cart, operation="subtract"):
         ws.batch_update(batch_list)
         return "Success"
     return "Error: Items not found in sheet"
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Stock Transfer", layout="centered")
+
+# ---------------- MAIN APP LOGIC ----------------
 st.title("🚚 Internal Stock Transfer")
 
 if "transfer_cart" not in st.session_state:
@@ -119,70 +95,51 @@ if st.session_state.transfer_cart:
     st.subheader("📦 Finalize Transfer")
     destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
     reason = st.text_area("Reason for Transfer", key="reason_input")
+    
+    if st.button("Confirm and Send All", key="confirm_btn"):
+        # 1. Define variables
+        jeddah_time = datetime.now() + timedelta(hours=3)
+        transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
+        origin_branch = st.session_state.selected_branch
 
-
-
-
-
-
-
-if st.button("Confirm and Send All", key="confirm_btn"):
-    # 1. Define variables
-    jeddah_time = datetime.now() + timedelta(hours=3)
-    transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
-    destination = st.session_state.get("dest_sel", "Unknown")
-    reason = st.session_state.get("reason_input", "No reason provided")
-    origin_branch = st.session_state.selected_branch
-
-    with st.spinner("Processing your transfer..."):
-        try:
-            # 2. Keep your extraction logic (it's safe to keep it here)
-            branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
-            dest_id = re.findall(r'\d+', destination.split(" - ")[0])[0]
-            
-            # Setup client
-            creds = ServiceAccountCredentials.from_json_keyfile_dict(
-                st.secrets["GOOGLE_CREDS_JSON"], 
-                ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-            )
-            client = gspread.authorize(creds)
-            
-            # 3. USE MAPPING FOR FAST LOOKUP (Prevents Quota Error)
-            # We use the mapping from Sheet1 to get the keys
-            origin_key = st.session_state.branch_map.get(origin_branch)
-            dest_key = st.session_state.branch_map.get(destination)
-            
-            if not origin_key or not dest_key:
-                st.error("Could not find the Spreadsheet ID in your mapping.")
-            else:
-                # Open directly using the keys
-                origin_sh = client.open_by_key(origin_key)
-                dest_sh = client.open_by_key(dest_key)
+        with st.spinner("Processing your transfer..."):
+            try:
+                # 2. Setup client
+                creds = ServiceAccountCredentials.from_json_keyfile_dict(
+                    st.secrets["GOOGLE_CREDS_JSON"], 
+                    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+                )
+                client = gspread.authorize(creds)
                 
-                ws_origin = origin_sh.worksheet("Stocks")
-                ws_dest = dest_sh.worksheet("Stocks")
+                # 3. Identify Branch
+                branch_id = re.findall(r'\d+', origin_branch.split(" - ")[0])[0]
+                sh = next((s for s in client.openall() if str(int(branch_id)) in s.title), None)
                 
-                # 4. Perform Batch Updates
-                res_origin = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, operation="subtract")
-                res_dest = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, operation="add")
-                
-                if res_origin == "Success" and res_dest == "Success":
-                    # 5. Log to Master
-                    transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-                    transfer_sheet.append_row([
-                        transfer_id, origin_branch, str(destination), 
-                        "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
-                        "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
-                        reason, "Completed", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
-                    ])
-                    
-                    st.session_state.transfer_cart = []
-                    success_dialog(f"Transfer successful! ID: {transfer_id}")
+                if not sh:
+                    st.error("Could not find branch spreadsheet.")
                 else:
-                    st.error(f"Update failed. Origin: {res_origin}, Dest: {res_dest}")
+                    ws = sh.worksheet("Stocks")
                     
-        except Exception as e:
-            st.error(f"Critical Error: {e}")
+                    # 4. Perform Batch Update
+                    result = prepare_batch_updates(ws, st.session_state.transfer_cart)
+                    
+                    if result == "Success":
+                        # 5. Log to Master
+                        transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+                        transfer_sheet.append_row([
+                            transfer_id, origin_branch, str(destination), 
+                            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+                            "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
+                            reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+                        ])
+                        
+                        st.session_state.transfer_cart = []
+                        success_dialog(f"Transfer successful! ID: {transfer_id}")
+                    else:
+                        st.error(result)
+            except Exception as e:
+                st.error(f"Critical Error: {e}")
+
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):
     st.switch_page("pages/staff_dashboard.py")

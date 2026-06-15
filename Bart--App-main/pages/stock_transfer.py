@@ -115,7 +115,7 @@ if st.session_state.transfer_cart:
                 sh_dest = next(s for s in client.openall() if str(int(dest_id)) in s.title)
                 
                 
-                if not sh:
+                if not sh_origin or not sh_dest:
                     st.error("Could not find branch spreadsheet.")
                 else:
                     

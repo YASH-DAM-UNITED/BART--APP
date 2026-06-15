@@ -132,25 +132,31 @@ with col3:
         st.switch_page("pages/management_dashboard.py")
 
 # --- CUSTOM RANGE UI ---
-st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
-if "start_time_str" not in st.session_state: st.session_state.start_time_str = "00:00"
-if "end_time_str" not in st.session_state: st.session_state.end_time_str = "23:59"
-if "start_min" not in st.session_state: st.session_state.start_min = 0
-if "end_min" not in st.session_state: st.session_state.end_min = 1439
+st.markdown("### 🕒 Analyze Schedule for Custom Time Range (12h format)")
+if "start_time_str" not in st.session_state: st.session_state.start_time_str = "12:00 AM"
+if "end_time_str" not in st.session_state: st.session_state.end_time_str = "11:59 PM"
 
 r_col1, r_col2, r_col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 with r_col1:
-    start_input = st.text_input("From (HH:MM)", value=st.session_state.start_time_str)
+    start_input = st.text_input("From (e.g., 09:00 AM)", value=st.session_state.start_time_str)
 with r_col2:
-    end_input = st.text_input("To (HH:MM)", value=st.session_state.end_time_str)
+    end_input = st.text_input("To (e.g., 05:00 PM)", value=st.session_state.end_time_str)
 with r_col3:
     if st.button("🚀 Calculate Range", use_container_width=True):
-        if re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", start_input) and re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", end_input):
+        # Regex to support HH:MM AM/PM
+        pattern = r"^(0?[1-9]|1[0-2]):([0-5][0-9])\s*(AM|PM)$"
+        
+        if re.match(pattern, start_input, re.I) and re.match(pattern, end_input, re.I):
+            def to_minutes_12h(time_str):
+                t = datetime.strptime(time_str.strip(), "%I:%M %p")
+                return t.hour * 60 + t.minute
+            
             st.session_state.start_time_str, st.session_state.end_time_str = start_input, end_input
-            h1, m1 = map(int, start_input.split(":")); h2, m2 = map(int, end_input.split(":"))
-            st.session_state.start_min = h1 * 60 + m1; st.session_state.end_min = h2 * 60 + m2
+            st.session_state.start_min = to_minutes_12h(start_input)
+            st.session_state.end_min = to_minutes_12h(end_input)
             st.rerun()
-        else: st.error("Invalid format! Use HH:MM")
+        else: 
+            st.error("Invalid format! Use: HH:MM AM/PM (e.g., 09:30 AM)")
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

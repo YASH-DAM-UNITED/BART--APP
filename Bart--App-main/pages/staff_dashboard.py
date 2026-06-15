@@ -124,6 +124,41 @@ def parse_transfer_items(transfer_data):
         cart.append({"item": item_name, "qty": qtys[i]})
     return cart
 
+
+
+
+
+def update_transfer_status(transfer_id, status, transfer_data):
+    # 1. Open Master and update status
+    client = st.session_state.gs_client
+    sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+    cell = sheet.find(transfer_id)
+    if cell:
+        sheet.update_cell(cell.row, 7, status)
+    
+    # 2. If Rejected, perform the "Reverse" Operation
+    if status == "Rejected":
+        # We need the Origin ID to return the stock
+        origin_branch_raw = transfer_data['Origin']
+        origin_id = origin_branch_raw.split(" - ")[0]
+        
+        # Get the Origin Spreadsheet ID from your branch_map
+        origin_key = st.session_state.branch_map.get(origin_id)
+        
+        if origin_key:
+            origin_sh = client.open_by_key(origin_key)
+            ws_origin = origin_sh.worksheet("Stocks")
+            
+            # Use your existing prepare_batch_updates function
+            # To "Return" stock, we ADD it back to the Origin
+            # We treat the 'cart' as the items in the transfer
+            
+            # You'll need to parse the items/qty from the master sheet record
+            # Or pass the transfer_data dict directly
+            prepare_batch_updates(ws_origin, parse_transfer_items(transfer_data), "add")
+            st.success(f"Stock returned to {origin_branch_raw}")
+        else:
+            st.error("Could not find Origin branch to return stock.")
 def prepare_batch_updates(ws, cart, mode="subtract"):
     all_data = ws.get_all_values()
     if not all_data: return "Error: Sheet is empty"

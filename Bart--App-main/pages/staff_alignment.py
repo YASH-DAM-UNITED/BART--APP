@@ -134,34 +134,44 @@ with col3:
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 
-# Define the selectors
-r1, r2 = st.columns(2)
-with r1:
-    h1 = st.selectbox("Start Hour", range(1, 13), key="s_h")
-    m1 = st.selectbox("Start Min", range(0, 60, 5), key="s_m")
-    p1 = st.selectbox("Start Period", ["AM", "PM"], key="s_p")
-with r2:
-    h2 = st.selectbox("End Hour", range(1, 13), key="e_h")
-    m2 = st.selectbox("End Min", range(0, 60, 5), key="e_m")
-    p2 = st.selectbox("End Period", ["AM", "PM"], key="e_p")
+# Initialize session state so they are never undefined
+if "start_time_str" not in st.session_state: st.session_state.start_time_str = "12:00 AM"
+if "end_time_str" not in st.session_state: st.session_state.end_time_str = "11:59 PM"
 
-if st.button("🚀 Calculate Range"):
-    # Conversion logic
-    def to_min(h, m, p):
-        h = 0 if (h == 12 and p == "AM") else (h if p == "AM" else (h + 12 if h < 12 else 12))
-        return (h * 60) + m
+# Layout: 2 main columns for Start and End, plus a button column
+col_layout = st.columns([2, 2, 1])
 
-    st.session_state.start_min = to_min(h1, m1, p1)
-    st.session_state.end_min = to_min(h2, m2, p2)
-    
-    # Save the strings so the header doesn't crash
-    st.session_state.start_time_str = f"{h1:02}:{m1:02} {p1}"
-    st.session_state.end_time_str = f"{h2:02}:{m2:02} {p2}"
-    st.rerun()
+with col_layout[0]:
+    st.write("##### Start Time")
+    c1, c2 = st.columns(2)
+    with c1: start_val = st.text_input("Time", value="12:00", key="s_val")
+    with c2: start_period = st.selectbox("AM/PM", ["AM", "PM"], key="s_per")
 
-# --- ENSURE VARIABLES EXIST FOR THE REST OF THE APP ---
-start_input = st.session_state.get("start_time_str", "12:00 AM")
-end_input = st.session_state.get("end_time_str", "11:59 PM")
+with col_layout[1]:
+    st.write("##### End Time")
+    c3, c4 = st.columns(2)
+    with c3: end_val = st.text_input("Time", value="11:59", key="e_val")
+    with c4: end_period = st.selectbox("AM/PM", ["PM", "AM"], key="e_per")
+
+with col_layout[2]:
+    st.write(" ") # Spacer
+    st.write(" ") # Spacer
+    if st.button("🚀 Calculate", use_container_width=True):
+        def to_min(t_str, period):
+            h, m = map(int, t_str.split(":"))
+            h = 12 if h == 12 else h
+            if period == "PM": h += 12
+            return (h * 60) + m
+
+        st.session_state.start_min = to_min(start_val, start_period)
+        st.session_state.end_min = to_min(end_val, end_period)
+        st.session_state.start_time_str = f"{start_val} {start_period}"
+        st.session_state.end_time_str = f"{end_val} {end_period}"
+        st.rerun()
+
+# These ensure the variables exist for the rest of your app logic
+start_input = st.session_state.start_time_str
+end_input = st.session_state.end_time_str
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

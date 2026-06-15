@@ -130,27 +130,31 @@ with col2:
 with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
-
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
-if "start_time_str" not in st.session_state: st.session_state.start_time_str = "00:00"
-if "end_time_str" not in st.session_state: st.session_state.end_time_str = "23:59"
-if "start_min" not in st.session_state: st.session_state.start_min = 0
-if "end_min" not in st.session_state: st.session_state.end_min = 1439
+
+# Initialize session state with time objects if missing
+if "start_time" not in st.session_state: st.session_state.start_time = time(0, 0)
+if "end_time" not in st.session_state: st.session_state.end_time = time(23, 59)
 
 r_col1, r_col2, r_col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+
 with r_col1:
-    start_input = st.text_input("From (HH:MM)", value=st.session_state.start_time_str)
+    start_t = st.time_input("From", value=st.session_state.start_time)
 with r_col2:
-    end_input = st.text_input("To (HH:MM)", value=st.session_state.end_time_str)
+    end_t = st.time_input("To", value=st.session_state.end_time)
 with r_col3:
     if st.button("🚀 Calculate Range", use_container_width=True):
-        if re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", start_input) and re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", end_input):
-            st.session_state.start_time_str, st.session_state.end_time_str = start_input, end_input
-            h1, m1 = map(int, start_input.split(":")); h2, m2 = map(int, end_input.split(":"))
-            st.session_state.start_min = h1 * 60 + m1; st.session_state.end_min = h2 * 60 + m2
-            st.rerun()
-        else: st.error("Invalid format! Use HH:MM")
+        st.session_state.start_time = start_t
+        st.session_state.end_time = end_t
+        # Convert to minutes
+        st.session_state.start_min = start_t.hour * 60 + start_t.minute
+        st.session_state.end_min = end_t.hour * 60 + end_t.minute
+        st.rerun()
+
+# For displaying in subheaders, convert back to display string
+start_display = st.session_state.start_time.strftime("%I:%M %p")
+end_display = st.session_state.end_time.strftime("%I:%M %p")
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

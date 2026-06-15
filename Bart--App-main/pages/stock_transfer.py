@@ -7,6 +7,20 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import gspread.utils
 
+
+
+
+if "cached_sheets" not in st.session_state:
+    with st.spinner("Initializing connection..."):
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            st.secrets["GOOGLE_CREDS_JSON"], 
+            ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        )
+        client = gspread.authorize(creds)
+        # Store the client and the full list of sheets in session state
+        st.session_state.client = client
+        st.session_state.all_sheets = client.openall()
+
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Stock Transfer", layout="centered")
 
@@ -102,26 +116,25 @@ if st.session_state.transfer_cart:
         with st.spinner("Processing your transfer..."):
             try:
                 # 2. Setup client
-                creds = ServiceAccountCredentials.from_json_keyfile_dict(
-                    st.secrets["GOOGLE_CREDS_JSON"], 
-                    ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-                )
-                client = gspread.authorize(creds)
+               
+                client = st.session_state.client
                 
                 # 3. Identify Branch
                 origin_id = re.findall(r'\d+', st.session_state.selected_branch.split(" - ")[0])[0]
                 dest_id = re.findall(r'\d+', str(destination).split(" - ")[0])[0]
-                sh_origin = next(s for s in client.openall() if str(int(origin_id)) in s.title)
-                sh_dest = next(s for s in client.openall() if str(int(dest_id)) in s.title)
+                sh_origin = next((s for s in st.session_state.all_sheets if str(int(origin_id)) in s.title), None)
+                sh_dest = next((s for s in st.session_state.all_sheets if str(int(dest_id)) in s.title), None)
                 
                 
                 if not sh_origin or not sh_dest:
                     st.error("Could not find branch spreadsheet.")
                 else:
+                    ws_origin = sh_origin.worksheet("Stocks")
+                    ws_dest = sh_dest.worksheet("Stocks")
+                    res_sub = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, "subtract")
+                    res_add = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, "add")
                     
                     
-                    res_origin = prepare_batch_updates(sh_origin.worksheet("Stocks"), st.session_state.transfer_cart, "subtract")
-                    res_dest = prepare_batch_updates(sh_dest.worksheet("Stocks"), st.session_state.transfer_cart, "add")
                     
                     if res_sub == "Success" and res_add == "Success":
                         # 5. Log to Master
@@ -136,7 +149,7 @@ if st.session_state.transfer_cart:
                         st.session_state.transfer_cart = []
                         success_dialog(f"Transfer successful! ID: {transfer_id}")
                     else:
-                        st.error(result)
+                        st.error(f"Transfer Failed: Origin({res_sub}) | Destination({res_add})")
             except Exception as e:
                 st.error(f"Critical Error: {e}")
 

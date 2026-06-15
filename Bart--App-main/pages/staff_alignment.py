@@ -134,40 +134,37 @@ with col3:
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 
-# Initialize session state for format and values
-if "time_format" not in st.session_state: st.session_state.time_format = "12-Hour"
-if "start_time_str" not in st.session_state: st.session_state.start_time_str = "12:00 AM"
-if "end_time_str" not in st.session_state: st.session_state.end_time_str = "11:59 PM"
+# Helper to create time selectors
+def time_selector(label, key_prefix):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        hour = st.selectbox(f"{label} Hour", range(1, 13), key=f"{key_prefix}_h")
+    with col2:
+        minute = st.selectbox(f"{label} Min", [0, 15, 30, 45], key=f"{key_prefix}_m")
+    with col3:
+        period = st.selectbox(f"{label} Period", ["AM", "PM"], key=f"{key_prefix}_p")
+    return hour, minute, period
 
-# 1. Mode Selector
-time_format = st.radio("Select Time Input Format:", ["12-Hour", "24-Hour"], horizontal=True)
+# Define the input area
+r1, r2 = st.columns(2)
+with r1:
+    h1, m1, p1 = time_selector("Start", "start")
+with r2:
+    h2, m2, p2 = time_selector("End", "end")
 
-r_col1, r_col2, r_col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
+if st.button("🚀 Calculate Range", use_container_width=True):
+    # Conversion logic
+    def to_min(h, m, p):
+        h = 12 if h == 12 else h
+        if p == "PM": h += 12
+        return (h * 60) + m
 
-with r_col1:
-    start_input = st.text_input("From (e.g., 09:00 AM or 09:00)", value=st.session_state.start_time_str)
-with r_col2:
-    end_input = st.text_input("To (e.g., 05:00 PM or 17:00)", value=st.session_state.end_time_str)
-
-with r_col3:
-    if st.button("🚀 Calculate Range", use_container_width=True):
-        try:
-            if time_format == "12-Hour":
-                # Convert 12h format to minutes
-                s_min = datetime.strptime(start_input.strip(), "%I:%M %p").hour * 60 + datetime.strptime(start_input.strip(), "%I:%M %p").minute
-                e_min = datetime.strptime(end_input.strip(), "%I:%M %p").hour * 60 + datetime.strptime(end_input.strip(), "%I:%M %p").minute
-            else:
-                # Convert 24h format to minutes
-                h1, m1 = map(int, start_input.split(":"))
-                h2, m2 = map(int, end_input.split(":"))
-                s_min, e_min = h1 * 60 + m1, h2 * 60 + m2
-            
-            # Update state for logic
-            st.session_state.start_time_str, st.session_state.end_time_str = start_input, end_input
-            st.session_state.start_min, st.session_state.end_min = s_min, e_min
-            st.rerun()
-        except ValueError:
-            st.error(f"Format Error! Please use {'HH:MM AM/PM' if time_format == '12-Hour' else 'HH:MM (24h)'}")
+    st.session_state.start_min = to_min(h1, m1, p1)
+    st.session_state.end_min = to_min(h2, m2, p2)
+    # Update display strings for the UI headers
+    st.session_state.start_time_str = f"{h1:02}:{m1:02} {p1}"
+    st.session_state.end_time_str = f"{h2:02}:{m2:02} {p2}"
+    st.rerun()
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

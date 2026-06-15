@@ -134,37 +134,34 @@ with col3:
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 
-# Helper to create time selectors
-def time_selector(label, key_prefix):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        hour = st.selectbox(f"{label} Hour", range(1, 13), key=f"{key_prefix}_h")
-    with col2:
-        minute = st.selectbox(f"{label} Min", [0, 15, 30, 45], key=f"{key_prefix}_m")
-    with col3:
-        period = st.selectbox(f"{label} Period", ["AM", "PM"], key=f"{key_prefix}_p")
-    return hour, minute, period
-
-# Define the input area
+# Define the selectors
 r1, r2 = st.columns(2)
 with r1:
-    h1, m1, p1 = time_selector("Start", "start")
+    h1 = st.selectbox("Start Hour", range(1, 13), key="s_h")
+    m1 = st.selectbox("Start Min", range(0, 60, 5), key="s_m")
+    p1 = st.selectbox("Start Period", ["AM", "PM"], key="s_p")
 with r2:
-    h2, m2, p2 = time_selector("End", "end")
+    h2 = st.selectbox("End Hour", range(1, 13), key="e_h")
+    m2 = st.selectbox("End Min", range(0, 60, 5), key="e_m")
+    p2 = st.selectbox("End Period", ["AM", "PM"], key="e_p")
 
-if st.button("🚀 Calculate Range", use_container_width=True):
+if st.button("🚀 Calculate Range"):
     # Conversion logic
     def to_min(h, m, p):
-        h = 12 if h == 12 else h
-        if p == "PM": h += 12
+        h = 0 if (h == 12 and p == "AM") else (h if p == "AM" else (h + 12 if h < 12 else 12))
         return (h * 60) + m
 
     st.session_state.start_min = to_min(h1, m1, p1)
     st.session_state.end_min = to_min(h2, m2, p2)
-    # Update display strings for the UI headers
+    
+    # Save the strings so the header doesn't crash
     st.session_state.start_time_str = f"{h1:02}:{m1:02} {p1}"
     st.session_state.end_time_str = f"{h2:02}:{m2:02} {p2}"
     st.rerun()
+
+# --- ENSURE VARIABLES EXIST FOR THE REST OF THE APP ---
+start_input = st.session_state.get("start_time_str", "12:00 AM")
+end_input = st.session_state.get("end_time_str", "11:59 PM")
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

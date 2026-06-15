@@ -130,35 +130,27 @@ with col2:
 with col3:
     if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
+
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 if "start_time_str" not in st.session_state: st.session_state.start_time_str = "00:00"
 if "end_time_str" not in st.session_state: st.session_state.end_time_str = "23:59"
+if "start_min" not in st.session_state: st.session_state.start_min = 0
+if "end_min" not in st.session_state: st.session_state.end_min = 1439
 
 r_col1, r_col2, r_col3 = st.columns([2, 2, 1], vertical_alignment="bottom")
 with r_col1:
-    # Use the existing variable name to keep downstream logic alive
     start_input = st.text_input("From (HH:MM)", value=st.session_state.start_time_str)
 with r_col2:
     end_input = st.text_input("To (HH:MM)", value=st.session_state.end_time_str)
 with r_col3:
     if st.button("🚀 Calculate Range", use_container_width=True):
-        # Existing validation and logic remains untouched
         if re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", start_input) and re.match(r"^([01]?[0-9]|2[0-3]):([0-5][0-9])$", end_input):
             st.session_state.start_time_str, st.session_state.end_time_str = start_input, end_input
             h1, m1 = map(int, start_input.split(":")); h2, m2 = map(int, end_input.split(":"))
             st.session_state.start_min = h1 * 60 + m1; st.session_state.end_min = h2 * 60 + m2
             st.rerun()
         else: st.error("Invalid format! Use HH:MM")
-
-# --- MINIMAL DISPLAY HACK ---
-# This converts the HH:MM stored in session state to 12-hour format for the subheader
-def fmt(s): 
-    h, m = map(int, s.split(":"))
-    return f"{h%12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
-
-start_display = fmt(st.session_state.start_time_str)
-end_display = fmt(st.session_state.end_time_str)
 
 # --- CORE CALCULATION ---
 df_work = df_full.copy()

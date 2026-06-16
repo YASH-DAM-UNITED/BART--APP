@@ -305,8 +305,11 @@ components.html("""
 # -----------------------------
 st.markdown("## Enter Stock")
 
+# We use a helper function to update our master state whenever a box changes
+def sync_input(key):
+    st.session_state.all_stock_data[key] = st.session_state[key]
+
 with st.form("stock_form", clear_on_submit=False):
-    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
@@ -315,30 +318,31 @@ with st.form("stock_form", clear_on_submit=False):
                 item = item_data["name"]
                 key_name = f"{mode}_{item}_{item_data['row_idx']}"
                 
-                # Pre-fill the persistent state with existing values if available
-                initial_val = st.session_state.all_stock_data.get(key_name, "")
+                # Ensure the entry exists in our permanent storage
+                if key_name not in st.session_state.all_stock_data:
+                    st.session_state.all_stock_data[key_name] = ""
 
+                # We put the input in the form, but tie its value to our session store
                 col.text_input(
                     label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
                     placeholder="Enter quantity",
-                    key=key_name, # Use the unique ID as the key directly
-                    value=initial_val
+                    key=key_name, # By making key = key_name, Streamlit auto-syncs
+                    value=st.session_state.all_stock_data.get(key_name, "")
                 )
 
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Loop through all current keys in session state to capture form data
-        # We only care about keys that match our current mode
+        # Update our master storage with whatever is currently in the form fields
         for key in st.session_state.keys():
             if key.startswith(f"{mode}_"):
                 st.session_state.all_stock_data[key] = st.session_state[key]
         
-        # Now validate using the persistent data
+        # Validation
         data = st.session_state.all_stock_data
-        invalid_items = [k for k, v in data.items() if v and not v.isdigit()]
-        # Filter for items that actually belong to the current mode
         mode_data = {k: v for k, v in data.items() if k.startswith(f"{mode}_")}
+        
+        invalid_items = [k for k, v in mode_data.items() if v and not v.isdigit()]
         missing = [k for k, v in mode_data.items() if v == ""]
 
         if invalid_items:
@@ -350,7 +354,6 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
-
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

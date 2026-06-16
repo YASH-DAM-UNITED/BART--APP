@@ -305,51 +305,51 @@ components.html("""
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# CALLBACK FUNCTION: Saves data into the global dictionary immediately
-def update_stock_value(key):
-    st.session_state.all_stock_data[key] = st.session_state[f"w_{key}"]
-
 with st.form("stock_form", clear_on_submit=False):
+    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
             if i + j < len(filtered_items):
                 item_data = filtered_items[i + j]
                 item = item_data["name"]
-                # Define a unique, consistent key
                 key_name = f"{mode}_{item}_{item_data['row_idx']}"
                 
-                # Default to empty string if not in state yet
-                if key_name not in st.session_state.all_stock_data:
-                    st.session_state.all_stock_data[key_name] = ""
+                # Pre-fill the persistent state with existing values if available
+                initial_val = st.session_state.all_stock_data.get(key_name, "")
 
                 col.text_input(
                     label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
                     placeholder="Enter quantity",
-                    key=f"w_{key_name}",
-                    value=st.session_state.all_stock_data.get(key_name, ""),
-                    on_change=update_stock_value,
-                    args=(key_name,)
+                    key=key_name, # Use the unique ID as the key directly
+                    value=initial_val
                 )
 
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Use our persistent dictionary for validation and review
+        # Loop through all current keys in session state to capture form data
+        # We only care about keys that match our current mode
+        for key in st.session_state.keys():
+            if key.startswith(f"{mode}_"):
+                st.session_state.all_stock_data[key] = st.session_state[key]
+        
+        # Now validate using the persistent data
         data = st.session_state.all_stock_data
         invalid_items = [k for k, v in data.items() if v and not v.isdigit()]
-        missing = [k for k, v in data.items() if v == ""]
+        # Filter for items that actually belong to the current mode
+        mode_data = {k: v for k, v in data.items() if k.startswith(f"{mode}_")}
+        missing = [k for k, v in mode_data.items() if v == ""]
 
         if invalid_items:
             show_error_dialog("Only numbers are allowed.")
         elif missing:
             show_error_dialog("Please fill in all stock quantities.")
         else:
-            st.session_state.draft_data = data
+            st.session_state.draft_data = mode_data
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
-
 
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW

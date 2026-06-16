@@ -303,7 +303,13 @@ components.html("""
 # -----------------------------
 # INPUT FORM
 # -----------------------------
+st.markdown("## Enter Stock")
+
+# Initialize the dictionary before the form starts
+inputs = {}
+
 with st.form("stock_form", clear_on_submit=False):
+    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
@@ -314,16 +320,35 @@ with st.form("stock_form", clear_on_submit=False):
                 
                 label = f"{item} [{umo}]" if umo else item
 
-                value = col.text_input(
+                # The key must be unique and consistent
+                val = col.text_input(
                     label,
                     placeholder="Enter quantity",
                     key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
+                
+                # Store the result in our dictionary
+                inputs[item] = val.strip() if val.strip() else None
 
-                if value.strip():
-                    inputs[item] = value.strip()
-                else:
-                    inputs[item] = None
+    # THE SUBMIT BUTTON MUST BE INSIDE THE FORM
+    submitted = st.form_submit_button("🔍 Review Stock")
+
+    if submitted:
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
+
+        if invalid_items:
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        elif missing:
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+        else:
+            # All checks passed, move to review
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION

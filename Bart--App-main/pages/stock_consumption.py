@@ -247,64 +247,83 @@ if st.button("⬅ Back"):
     st.session_state.page = "mode_select"
     st.session_state.mode = None
     st.rerun()
+# -----------------------------
+# DATE & SEARCH SECTION
+# -----------------------------
+st.markdown("## Select Date & Search Items")
+
+col_left, col_right = st.columns([1, 2])
+
+with col_left:
+    yesterday = datetime.now().date() - timedelta(days=1)
+    date = st.date_input("Select Date", value=yesterday)
+    date_str = str(date)
+
+with col_right:
+    if "search_query" not in st.session_state:
+        st.session_state.search_query = ""
+    
+    search_bar = st.text_input(
+        "Search Items / SKU / UOM", 
+        value=st.session_state.search_query,
+        placeholder="Type to filter..."
+    )
+
+
+
 
 # -----------------------------
-# DATE
+# FILTER LOGIC
 # -----------------------------
+query = search_bar.lower()
+filtered_items = [
+    item for item in processed_items 
+    if query in item['name'].lower() or query in item['umo'].lower()
+]
 
-yesterday = datetime.now().date() - timedelta(days=1)
-date = st.date_input("Select Date", value=yesterday)
-date_str = str(date)
-
-
-
-
+st.info(f"Showing {len(filtered_items)} items")
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
-# This script targets all text inputs and forces them to show the number pad
-# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
     function setNumericKeypad() {
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
         inputs.forEach(function(input) {
-            input.setAttribute('inputmode', 'numeric');
-            input.setAttribute('pattern', '[0-9]*');
+            // Only apply numeric keypad to quantity inputs (identifiable by placeholder)
+            if (input.getAttribute('placeholder') === 'Enter quantity') {
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('pattern', '[0-9]*');
+            }
         });
     }
-    // Run after a short delay to ensure elements are rendered
     setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------
 # INPUT FORM
 # -----------------------------
-st.markdown("## Enter Stock")
-
-inputs = {}
-
 with st.form("stock_form", clear_on_submit=False):
-
-    for i in range(0, len(processed_items), 4):
+    for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
-
         for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
                 item = item_data["name"]
                 umo = item_data["umo"]
                 
                 label = f"{item} [{umo}]" if umo else item
 
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
                 value = col.text_input(
                     label,
                     placeholder="Enter quantity",
                     key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
 
-                inputs[item] = value.strip() if value.strip() else None
+                if value.strip():
+                    inputs[item] = value.strip()
+                else:
+                    inputs[item] = None
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION

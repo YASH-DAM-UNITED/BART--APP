@@ -45,19 +45,9 @@ div.stButton > button{
 # -----------------------------
 # SESSION INIT
 # -----------------------------
-
-
-
-
-# --- INITIALIZATION ---
-
-    
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
 
-
-if st.session_state.get("inventory_df") is None:
-st.session_state.setdefault("all_stock_data", {})
 st.session_state.setdefault("mode", None)
 st.session_state.setdefault("review_mode", False)
 st.session_state.setdefault("draft_data", {})
@@ -68,30 +58,6 @@ st.session_state.setdefault("tx_id", None)
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
 
-# -----------------------------
-# MASTER DF INITIALIZATION
-# -----------------------------
-if "inventory_df" not in st.session_state:
-    data = []
-    
-    # Determine indices based on the current mode
-    # We use a default 'daily' if it hasn't been set yet
-    current_mode = st.session_state.get("mode", "daily")
-    
-    start_idx = (daily_start + 1) if current_mode == "daily" else (weekly_start + 1)
-    end_idx = weekly_start if current_mode == "daily" else len(sheet_data)
-    
-    for idx in range(start_idx, end_idx):
-        if idx < len(sheet_data) and sheet_data[idx][0].strip():
-            # Only add if it's not a header
-            if sheet_data[idx][0].upper() not in ["DAILY ITEM", "WEEKLY ITEM"]:
-                data.append({
-                    "Name": sheet_data[idx][0].strip(), 
-                    "UOM": sheet_data[idx][2].strip() if len(sheet_data[idx]) > 2 else "", 
-                    "Qty": 0, 
-                    "Row": idx + 1
-                })
-    st.session_state.inventory_df = pd.DataFrame(data)
 # -----------------------------
 # SCROLL FUNCTION
 # -----------------------------
@@ -234,7 +200,6 @@ if st.session_state.page == "mode_select":
             show_duplicate_warning()
         else:
             st.session_state.mode = "daily"
-            st.session_state.inventory_df = None
             st.session_state.page = "stock_entry"
             st.rerun()
 
@@ -243,7 +208,6 @@ if st.session_state.page == "mode_select":
             show_duplicate_warning()
         else:
             st.session_state.mode = "weekly"
-            st.session_state.inventory_df = None
             st.session_state.page = "stock_entry"
             st.rerun()
 
@@ -283,123 +247,88 @@ if st.button("⬅ Back"):
     st.session_state.page = "mode_select"
     st.session_state.mode = None
     st.rerun()
-# -----------------------------
-# DATE & SEARCH SECTION
-# -----------------------------
-st.markdown("## Select Date & Search Items")
-
-col_left, col_right = st.columns([1, 2])
-
-with col_left:
-    yesterday = datetime.now().date() - timedelta(days=1)
-    date = st.date_input("Select Date", value=yesterday)
-    date_str = str(date)
-
-with col_right:
-    if "search_query" not in st.session_state:
-        st.session_state.search_query = ""
-    
-    search_bar = st.text_input(
-        "Search Items / SKU / UOM", 
-        value=st.session_state.search_query,
-        placeholder="Type to filter..."
-    )
-
-
-
 
 # -----------------------------
-# FILTER LOGIC
+# DATE
 # -----------------------------
-query = search_bar.lower()
-filtered_items = [
-    item for item in processed_items 
-    if query in item['name'].lower() or query in item['umo'].lower()
-]
 
-st.info(f"Showing {len(filtered_items)} items")
+yesterday = datetime.now().date() - timedelta(days=1)
+date = st.date_input("Select Date", value=yesterday)
+date_str = str(date)
+
+
+
+
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
+# This script targets all text inputs and forces them to show the number pad
+# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
     function setNumericKeypad() {
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
         inputs.forEach(function(input) {
-            // Only apply numeric keypad to quantity inputs (identifiable by placeholder)
-            if (input.getAttribute('placeholder') === 'Enter quantity') {
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('pattern', '[0-9]*');
-            }
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
         });
     }
+    // Run after a short delay to ensure elements are rendered
     setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------
-# SEARCH & ENTRY BLOCK
+# INPUT FORM
 # -----------------------------
-st.subheader("🔍 Inventory Search & Entry")
+st.markdown("## Enter Stock")
 
-# Multi-select to filter the list
-all_items = st.session_state.inventory_df["Name"].tolist()
-selected_items = st.multiselect("Search and select items:", all_items)
+inputs = {}
 
-if selected_items:
-    # Filter the Master DF to show only what the user selected
-    mask = st.session_state.inventory_df["Name"].isin(selected_items)
-    
-    # Render the Editor - changes here sync automatically to inventory_df
-    edited_df = st.data_editor(
-        st.session_state.inventory_df.loc[mask, ["Name", "UOM", "Qty"]],
-        column_config={"Qty": st.column_config.NumberColumn("Quantity", min_value=0, step=1)},
-        hide_index=True,
-        use_container_width=True,
-        key="data_editor_input"
-    )
+with st.form("stock_form", clear_on_submit=False):
 
-    # Sync: Write changes back to the master dataframe immediately
-    for idx, row in edited_df.iterrows():
-        st.session_state.inventory_df.loc[
-            st.session_state.inventory_df["Name"] == row["Name"], "Qty"
-        ] = row["Qty"]
-    
+    for i in range(0, len(processed_items), 4):
+        cols = st.columns(4)
+
+        for j, col in enumerate(cols):
+            if i + j < len(processed_items):
+                item_data = processed_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                label = f"{item} [{umo}]" if umo else item
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
+                    label,
+                    placeholder="Enter quantity",
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                )
+
+                inputs[item] = value.strip() if value.strip() else None
+
 # -----------------------------
-# REVIEW & SUBMIT
-# -----------------------------
-if st.button("🔍 Review Stock"):
-    # Filter for entries > 0
-    st.session_state.draft_df = st.session_state.inventory_df[st.session_state.inventory_df["Qty"] > 0].copy()
-    if st.session_state.draft_df.empty:
-        st.warning("Please enter quantities first!")
-    else:
-        st.session_state.review_mode = True
-        st.rerun()
+    # 3. VALIDATION & SUBMISSION
+    # -----------------------------
+    submitted = st.form_submit_button("🔍 Review Stock")
 
-if st.session_state.review_mode:
-    st.markdown("### 📋 Final Review")
-    st.dataframe(st.session_state.draft_df[["Name", "Qty"]], use_container_width=True)
-    
-    c1, c2 = st.columns(2)
-    if c1.button("⬅ Edit"):
-        st.session_state.review_mode = False
-        st.rerun()
-    if c2.button("✅ Confirm & Submit", type="primary"):
-        st.session_state.proceed_submit = True
-        st.rerun()
+    if submitted:
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
 
-# --- FINAL PROCESSING ---
-if st.session_state.proceed_submit:
-    # (Inside your existing try/except block, use this loop to update)
-    for _, row in st.session_state.draft_df.iterrows():
-        sheet.update_cell(int(row["Row"]), col_index, row["Qty"])
-    
-    # After submission, reset:
-    st.session_state.inventory_df["Qty"] = 0
-    st.session_state.review_mode = False
-    st.session_state.proceed_submit = False
-    st.session_state.show_success = True
-    st.rerun()
+        if invalid_items:
+            # Trigger the Dialog Popup
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        elif missing:
+            # Trigger the Dialog Popup
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+        else:
+            # All checks passed, move to review
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------
@@ -559,9 +488,7 @@ if st.session_state.show_success:
     st.toast(f"Submitted ✔ | TX: {st.session_state.tx_id}", icon="✔")
     time.sleep(6)
 
-    st.session_state.all_stock_data = {}
     st.session_state.page = "mode_select"
-    
     st.session_state.mode = None
     st.session_state.review_mode = False
     st.session_state.draft_data = {}

@@ -248,7 +248,7 @@ if st.button("⬅ Back"):
     st.session_state.mode = None
     st.rerun()
 # -----------------------------
-# DATE & SEARCH SECTION (UPDATED)
+# DATE & SEARCH SECTION
 # -----------------------------
 st.markdown("## Select Date & Search Items")
 
@@ -260,21 +260,22 @@ with col_left:
     date_str = str(date)
 
 with col_right:
-    # By using the key 'search_query', Streamlit automatically
-    # updates st.session_state.search_query on every keystroke.
-    # Because Streamlit reruns the whole script on input change,
-    # the filtering logic below will trigger instantly.
+    if "search_query" not in st.session_state:
+        st.session_state.search_query = ""
+    
     search_bar = st.text_input(
         "Search Items / SKU / UOM", 
-        key="search_query",
+        value=st.session_state.search_query,
         placeholder="Type to filter..."
     )
 
+
+
+
 # -----------------------------
-# FILTER LOGIC (Now reactive)
+# FILTER LOGIC
 # -----------------------------
-# This will now use the current value of st.session_state.search_query
-query = st.session_state.search_query.lower()
+query = search_bar.lower()
 filtered_items = [
     item for item in processed_items 
     if query in item['name'].lower() or query in item['umo'].lower()

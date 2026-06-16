@@ -47,7 +47,7 @@ div.stButton > button{
 # -----------------------------
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
-
+st.session_state.setdefault("all_stock_data", {})
 st.session_state.setdefault("mode", None)
 st.session_state.setdefault("review_mode", False)
 st.session_state.setdefault("draft_data", {})
@@ -305,47 +305,47 @@ components.html("""
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# Initialize the dictionary before the form starts
-inputs = {}
+# CALLBACK FUNCTION: Saves data into the global dictionary immediately
+def update_stock_value(key):
+    st.session_state.all_stock_data[key] = st.session_state[f"w_{key}"]
 
 with st.form("stock_form", clear_on_submit=False):
-    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
             if i + j < len(filtered_items):
                 item_data = filtered_items[i + j]
                 item = item_data["name"]
-                umo = item_data["umo"]
+                # Define a unique, consistent key
+                key_name = f"{mode}_{item}_{item_data['row_idx']}"
                 
-                label = f"{item} [{umo}]" if umo else item
+                # Default to empty string if not in state yet
+                if key_name not in st.session_state.all_stock_data:
+                    st.session_state.all_stock_data[key_name] = ""
 
-                # The key must be unique and consistent
-                val = col.text_input(
-                    label,
+                col.text_input(
+                    label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
                     placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                    key=f"w_{key_name}",
+                    value=st.session_state.all_stock_data.get(key_name, ""),
+                    on_change=update_stock_value,
+                    args=(key_name,)
                 )
-                
-                # Store the result in our dictionary
-                inputs[item] = val.strip() if val.strip() else None
 
-    # THE SUBMIT BUTTON MUST BE INSIDE THE FORM
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
+        # Use our persistent dictionary for validation and review
+        data = st.session_state.all_stock_data
+        invalid_items = [k for k, v in data.items() if v and not v.isdigit()]
+        missing = [k for k, v in data.items() if v == ""]
 
         if invalid_items:
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+            show_error_dialog("Only numbers are allowed.")
         elif missing:
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+            show_error_dialog("Please fill in all stock quantities.")
         else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
+            st.session_state.draft_data = data
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
@@ -510,7 +510,9 @@ if st.session_state.show_success:
     st.toast(f"Submitted ✔ | TX: {st.session_state.tx_id}", icon="✔")
     time.sleep(6)
 
+    st.session_state.all_stock_data = {}
     st.session_state.page = "mode_select"
+    
     st.session_state.mode = None
     st.session_state.review_mode = False
     st.session_state.draft_data = {}

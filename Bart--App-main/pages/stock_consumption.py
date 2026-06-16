@@ -54,6 +54,9 @@ div.stButton > button{
     
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
+
+
+if st.session_state.get("inventory_df") is None:
 st.session_state.setdefault("all_stock_data", {})
 st.session_state.setdefault("mode", None)
 st.session_state.setdefault("review_mode", False)
@@ -65,24 +68,29 @@ st.session_state.setdefault("tx_id", None)
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
 
-
 # -----------------------------
 # MASTER DF INITIALIZATION
 # -----------------------------
 if "inventory_df" not in st.session_state:
     data = []
-    # Use the same range logic as your filter logic
-    start_idx = (daily_start + 1) if st.session_state.mode == "daily" else (weekly_start + 1)
-    end_idx = weekly_start if st.session_state.mode == "daily" else len(sheet_data)
+    
+    # Determine indices based on the current mode
+    # We use a default 'daily' if it hasn't been set yet
+    current_mode = st.session_state.get("mode", "daily")
+    
+    start_idx = (daily_start + 1) if current_mode == "daily" else (weekly_start + 1)
+    end_idx = weekly_start if current_mode == "daily" else len(sheet_data)
     
     for idx in range(start_idx, end_idx):
         if idx < len(sheet_data) and sheet_data[idx][0].strip():
-            data.append({
-                "Name": sheet_data[idx][0].strip(), 
-                "UOM": sheet_data[idx][2].strip() if len(sheet_data[idx]) > 2 else "", 
-                "Qty": 0, 
-                "Row": idx + 1
-            })
+            # Only add if it's not a header
+            if sheet_data[idx][0].upper() not in ["DAILY ITEM", "WEEKLY ITEM"]:
+                data.append({
+                    "Name": sheet_data[idx][0].strip(), 
+                    "UOM": sheet_data[idx][2].strip() if len(sheet_data[idx]) > 2 else "", 
+                    "Qty": 0, 
+                    "Row": idx + 1
+                })
     st.session_state.inventory_df = pd.DataFrame(data)
 # -----------------------------
 # SCROLL FUNCTION
@@ -226,6 +234,7 @@ if st.session_state.page == "mode_select":
             show_duplicate_warning()
         else:
             st.session_state.mode = "daily"
+            st.session_state.inventory_df = None
             st.session_state.page = "stock_entry"
             st.rerun()
 
@@ -234,6 +243,7 @@ if st.session_state.page == "mode_select":
             show_duplicate_warning()
         else:
             st.session_state.mode = "weekly"
+            st.session_state.inventory_df = None
             st.session_state.page = "stock_entry"
             st.rerun()
 

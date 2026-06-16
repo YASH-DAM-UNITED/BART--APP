@@ -48,6 +48,8 @@ div.stButton > button{
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
 
+st.session_state.setdefault("all_stock_data", {})
+
 st.session_state.setdefault("mode", None)
 st.session_state.setdefault("review_mode", False)
 st.session_state.setdefault("draft_data", {})
@@ -305,33 +307,71 @@ components.html("""
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# Initialize the dictionary before the form starts
-inputs = {}
+# Define the callback function BEFORE the form
+def update_stock_value(key):
+    st.session_state.all_stock_data[key] = st.session_state[f"w_{key}"]
 
 with st.form("stock_form", clear_on_submit=False):
-    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
             if i + j < len(filtered_items):
                 item_data = filtered_items[i + j]
                 item = item_data["name"]
-                umo = item_data["umo"]
+                key_name = f"{mode}_{item}_{item_data['row_idx']}"
                 
-                label = f"{item} [{umo}]" if umo else item
+                # Ensure the key exists in our persistent storage
+                if key_name not in st.session_state.all_stock_data:
+                    st.session_state.all_stock_data[key_name] = ""
 
-                # The key must be unique and consistent
-                val = col.text_input(
-                    label,
+                col.text_input(
+                    label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
                     placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                    key=f"w_{key_name}", # Widget key
+                    value=st.session_state.all_stock_data.get(key_name, ""), # Persistent value
+                    on_change=update_stock_value,
+                    args=(key_name,)
                 )
-                
-                # Store the result in our dictionary
-                inputs[item] = val.strip() if val.strip() else None
 
-    # THE SUBMIT BUTTON MUST BE INSIDE THE FORM
     submitted = st.form_submit_button("🔍 Review Stock")
+    
+    if submitted:
+        # Now read from the persistent storage instead of form inputs
+        st.session_state.draft_data = st.session_state.all_stock_data
+        # ... (keep your existing validation logic here, but use st.session_state.draft_data)# -----------------------------
+# INPUT FORM
+# -----------------------------
+st.markdown("## Enter Stock")
+
+# Define the callback function BEFORE the form
+def update_stock_value(key):
+    st.session_state.all_stock_data[key] = st.session_state[f"w_{key}"]
+
+with st.form("stock_form", clear_on_submit=False):
+    for i in range(0, len(filtered_items), 4):
+        cols = st.columns(4)
+        for j, col in enumerate(cols):
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
+                item = item_data["name"]
+                key_name = f"{mode}_{item}_{item_data['row_idx']}"
+                
+                # Ensure the key exists in our persistent storage
+                if key_name not in st.session_state.all_stock_data:
+                    st.session_state.all_stock_data[key_name] = ""
+
+                col.text_input(
+                    label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
+                    placeholder="Enter quantity",
+                    key=f"w_{key_name}", # Widget key
+                    value=st.session_state.all_stock_data.get(key_name, ""), # Persistent value
+                    on_change=update_stock_value,
+                    args=(key_name,)
+                )
+
+    submitted = st.form_submit_button("🔍 Review Stock")
+    
+    
 
     if submitted:
         # Check for non-numeric characters

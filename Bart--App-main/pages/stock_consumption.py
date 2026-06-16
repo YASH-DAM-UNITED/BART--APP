@@ -67,19 +67,23 @@ st.session_state.setdefault("proceed_submit", False)
 
 
 # -----------------------------
-# SESSION INIT
+# MASTER DF INITIALIZATION
 # -----------------------------
-# ... existing init ...
-
 if "inventory_df" not in st.session_state:
-    # Build a DataFrame that holds your items and their current Qty
     data = []
-    for idx in range(daily_start + 1, len(sheet_data)): # Adjust based on mode
-        row = sheet_data[idx]
-        if row[0].strip():
-            data.append({"Name": row[0], "UOM": row[2] if len(row) > 2 else "", "Qty": 0, "Row": idx + 1})
+    # Use the same range logic as your filter logic
+    start_idx = (daily_start + 1) if st.session_state.mode == "daily" else (weekly_start + 1)
+    end_idx = weekly_start if st.session_state.mode == "daily" else len(sheet_data)
+    
+    for idx in range(start_idx, end_idx):
+        if idx < len(sheet_data) and sheet_data[idx][0].strip():
+            data.append({
+                "Name": sheet_data[idx][0].strip(), 
+                "UOM": sheet_data[idx][2].strip() if len(sheet_data[idx]) > 2 else "", 
+                "Qty": 0, 
+                "Row": idx + 1
+            })
     st.session_state.inventory_df = pd.DataFrame(data)
-
 # -----------------------------
 # SCROLL FUNCTION
 # -----------------------------
@@ -335,7 +339,7 @@ if selected_items:
     # Filter the Master DF to show only what the user selected
     mask = st.session_state.inventory_df["Name"].isin(selected_items)
     
-    # Render the Editor
+    # Render the Editor - changes here sync automatically to inventory_df
     edited_df = st.data_editor(
         st.session_state.inventory_df.loc[mask, ["Name", "UOM", "Qty"]],
         column_config={"Qty": st.column_config.NumberColumn("Quantity", min_value=0, step=1)},
@@ -349,32 +353,43 @@ if selected_items:
         st.session_state.inventory_df.loc[
             st.session_state.inventory_df["Name"] == row["Name"], "Qty"
         ] = row["Qty"]
-
-
-
-
     
 # -----------------------------
 # REVIEW & SUBMIT
 # -----------------------------
 if st.button("🔍 Review Stock"):
-    # Get only items where Qty > 0
-    st.session_state.draft_df = st.session_state.inventory_df[st.session_state.inventory_df["Qty"] > 0]
-    st.session_state.review_mode = True
-    st.rerun()
+    # Filter for entries > 0
+    st.session_state.draft_df = st.session_state.inventory_df[st.session_state.inventory_df["Qty"] > 0].copy()
+    if st.session_state.draft_df.empty:
+        st.warning("Please enter quantities first!")
+    else:
+        st.session_state.review_mode = True
+        st.rerun()
 
 if st.session_state.review_mode:
-    st.write("### Final Review", st.session_state.draft_df[["Name", "Qty"]])
+    st.markdown("### 📋 Final Review")
+    st.dataframe(st.session_state.draft_df[["Name", "Qty"]], use_container_width=True)
     
-    if st.button("✅ Confirm & Submit"):
-        # Just loop through the dataframe rows
-        for _, row in st.session_state.draft_df.iterrows():
-            sheet.update_cell(int(row["Row"]), col_index, row["Qty"])
-            
-        st.success("Submitted!")
-        # RESET FOR NEXT TIME
-        st.session_state.inventory_df["Qty"] = 0
+    c1, c2 = st.columns(2)
+    if c1.button("⬅ Edit"):
         st.session_state.review_mode = False
+        st.rerun()
+    if c2.button("✅ Confirm & Submit", type="primary"):
+        st.session_state.proceed_submit = True
+        st.rerun()
+
+# --- FINAL PROCESSING ---
+if st.session_state.proceed_submit:
+    # (Inside your existing try/except block, use this loop to update)
+    for _, row in st.session_state.draft_df.iterrows():
+        sheet.update_cell(int(row["Row"]), col_index, row["Qty"])
+    
+    # After submission, reset:
+    st.session_state.inventory_df["Qty"] = 0
+    st.session_state.review_mode = False
+    st.session_state.proceed_submit = False
+    st.session_state.show_success = True
+    st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

@@ -334,46 +334,16 @@ with st.form("stock_form", clear_on_submit=False):
                 )
 
     submitted = st.form_submit_button("🔍 Review Stock")
+
+        
+
     
+    
+
     if submitted:
-        # Now read from the persistent storage instead of form inputs
+
+
         st.session_state.draft_data = st.session_state.all_stock_data
-        # ... (keep your existing validation logic here, but use st.session_state.draft_data)# -----------------------------
-# INPUT FORM
-# -----------------------------
-st.markdown("## Enter Stock")
-
-# Define the callback function BEFORE the form
-def update_stock_value(key):
-    st.session_state.all_stock_data[key] = st.session_state[f"w_{key}"]
-
-with st.form("stock_form", clear_on_submit=False):
-    for i in range(0, len(filtered_items), 4):
-        cols = st.columns(4)
-        for j, col in enumerate(cols):
-            if i + j < len(filtered_items):
-                item_data = filtered_items[i + j]
-                item = item_data["name"]
-                key_name = f"{mode}_{item}_{item_data['row_idx']}"
-                
-                # Ensure the key exists in our persistent storage
-                if key_name not in st.session_state.all_stock_data:
-                    st.session_state.all_stock_data[key_name] = ""
-
-                col.text_input(
-                    label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
-                    placeholder="Enter quantity",
-                    key=f"w_{key_name}", # Widget key
-                    value=st.session_state.all_stock_data.get(key_name, ""), # Persistent value
-                    on_change=update_stock_value,
-                    args=(key_name,)
-                )
-
-    submitted = st.form_submit_button("🔍 Review Stock")
-    
-    
-
-    if submitted:
         # Check for non-numeric characters
         invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
         # Check for missing values

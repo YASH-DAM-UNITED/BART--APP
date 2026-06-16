@@ -45,6 +45,11 @@ div.stButton > button{
 # -----------------------------
 # SESSION INIT
 # -----------------------------
+
+
+if "all_stock_data" not in st.session_state:
+    st.session_state.all_stock_data = {}
+    
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
 st.session_state.setdefault("all_stock_data", {})
@@ -305,11 +310,8 @@ components.html("""
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# We use a helper function to update our master state whenever a box changes
-def sync_input(key):
-    st.session_state.all_stock_data[key] = st.session_state[key]
-
 with st.form("stock_form", clear_on_submit=False):
+    # Loop through filtered_items
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
@@ -318,38 +320,42 @@ with st.form("stock_form", clear_on_submit=False):
                 item = item_data["name"]
                 key_name = f"{mode}_{item}_{item_data['row_idx']}"
                 
-                # Ensure the entry exists in our permanent storage
+                # Ensure the entry exists in our persistent state
                 if key_name not in st.session_state.all_stock_data:
                     st.session_state.all_stock_data[key_name] = ""
 
-                # We put the input in the form, but tie its value to our session store
+                # Use the unique key_name as the widget key.
+                # Streamlit will automatically sync the user input into st.session_state[key_name]
                 col.text_input(
                     label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
                     placeholder="Enter quantity",
-                    key=key_name, # By making key = key_name, Streamlit auto-syncs
+                    key=key_name,
                     value=st.session_state.all_stock_data.get(key_name, "")
                 )
 
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Update our master storage with whatever is currently in the form fields
-        for key in st.session_state.keys():
-            if key.startswith(f"{mode}_"):
+        # 1. FORCE SYNC: Capture all current form values from the session state
+        # Because we used key=key_name, the form values are already in st.session_state[key_name]
+        for key in st.session_state.all_stock_data.keys():
+            if key in st.session_state:
                 st.session_state.all_stock_data[key] = st.session_state[key]
         
-        # Validation
+        # 2. VALIDATION: Check the now-updated persistent dictionary
         data = st.session_state.all_stock_data
+        # Filter only for the current mode
         mode_data = {k: v for k, v in data.items() if k.startswith(f"{mode}_")}
         
         invalid_items = [k for k, v in mode_data.items() if v and not v.isdigit()]
-        missing = [k for k, v in mode_data.items() if v == ""]
+        missing = [k for k, v in mode_data.items() if not v or v.strip() == ""]
 
         if invalid_items:
-            show_error_dialog("Only numbers are allowed.")
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
         elif missing:
-            show_error_dialog("Please fill in all stock quantities.")
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
         else:
+            # 3. PROCEED: Update draft_data and trigger rerun
             st.session_state.draft_data = mode_data
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True

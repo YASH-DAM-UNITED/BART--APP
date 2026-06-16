@@ -47,8 +47,10 @@ div.stButton > button{
 # -----------------------------
 
 
-if "all_stock_data" not in st.session_state:
-    st.session_state.all_stock_data = {}
+
+
+# --- INITIALIZATION ---
+
     
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
@@ -62,6 +64,21 @@ st.session_state.setdefault("tx_id", None)
 
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
+
+
+# -----------------------------
+# SESSION INIT
+# -----------------------------
+# ... existing init ...
+
+if "inventory_df" not in st.session_state:
+    # Build a DataFrame that holds your items and their current Qty
+    data = []
+    for idx in range(daily_start + 1, len(sheet_data)): # Adjust based on mode
+        row = sheet_data[idx]
+        if row[0].strip():
+            data.append({"Name": row[0], "UOM": row[2] if len(row) > 2 else "", "Qty": 0, "Row": idx + 1})
+    st.session_state.inventory_df = pd.DataFrame(data)
 
 # -----------------------------
 # SCROLL FUNCTION
@@ -306,66 +323,58 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# INPUT FORM
+# SEARCH & ENTRY BLOCK
 # -----------------------------
-st.markdown("## Enter Stock")
+st.subheader("🔍 Inventory Search & Entry")
 
-with st.form("stock_form", clear_on_submit=False):
-    # Loop through filtered_items
-    for i in range(0, len(filtered_items), 4):
-        cols = st.columns(4)
-        for j, col in enumerate(cols):
-            if i + j < len(filtered_items):
-                item_data = filtered_items[i + j]
-                item = item_data["name"]
-                # key_name MUST be unique and fixed for each item row
-                key_name = f"{mode}_{item}_{item_data['row_idx']}"
-                
-                # Ensure the entry exists in our permanent storage
-                if key_name not in st.session_state.all_stock_data:
-                    st.session_state.all_stock_data[key_name] = ""
+# Multi-select to filter the list
+all_items = st.session_state.inventory_df["Name"].tolist()
+selected_items = st.multiselect("Search and select items:", all_items)
 
-                # We use the key_name for the widget.
-                # When the form is submitted, Streamlit puts the current value 
-                # into st.session_state[key_name].
-                val = col.text_input(
-                    label=f"{item} [{item_data['umo']}]" if item_data['umo'] else item,
-                    placeholder="Enter quantity",
-                    key=key_name,
-                    value=st.session_state.all_stock_data.get(key_name, "")
-                )
-                
-                # PERSISTENCE: Immediately update our master store
-                # This ensures that even if you re-filter, the data is saved
-                st.session_state.all_stock_data[key_name] = val
+if selected_items:
+    # Filter the Master DF to show only what the user selected
+    mask = st.session_state.inventory_df["Name"].isin(selected_items)
+    
+    # Render the Editor
+    edited_df = st.data_editor(
+        st.session_state.inventory_df.loc[mask, ["Name", "UOM", "Qty"]],
+        column_config={"Qty": st.column_config.NumberColumn("Quantity", min_value=0, step=1)},
+        hide_index=True,
+        use_container_width=True,
+        key="data_editor_input"
+    )
 
-    # THE SUBMIT BUTTON
-    submitted = st.form_submit_button("🔍 Review Stock")
+    # Sync: Write changes back to the master dataframe immediately
+    for idx, row in edited_df.iterrows():
+        st.session_state.inventory_df.loc[
+            st.session_state.inventory_df["Name"] == row["Name"], "Qty"
+        ] = row["Qty"]
 
-    if submitted:
-        # 1. FINAL SYNC: Update master store with latest form values
-        for key in st.session_state.all_stock_data.keys():
-            if key in st.session_state:
-                st.session_state.all_stock_data[key] = st.session_state[key]
-        
-        # 2. VALIDATION
-        # Filter for the current mode
-        current_mode_data = {k: v for k, v in st.session_state.all_stock_data.items() 
-                             if k.startswith(f"{mode}_")}
-        
-        invalid_items = [k for k, v in current_mode_data.items() if v and not v.isdigit()]
-        missing = [k for k, v in current_mode_data.items() if not v or v.strip() == ""]
 
-        if invalid_items:
-            show_error_dialog("Only numbers are allowed.")
-        elif missing:
-            show_error_dialog("Please fill in all stock quantities.")
-        else:
-            # 3. PROCEED TO REVIEW
-            st.session_state.draft_data = current_mode_data
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
+
+
+    
+# -----------------------------
+# REVIEW & SUBMIT
+# -----------------------------
+if st.button("🔍 Review Stock"):
+    # Get only items where Qty > 0
+    st.session_state.draft_df = st.session_state.inventory_df[st.session_state.inventory_df["Qty"] > 0]
+    st.session_state.review_mode = True
+    st.rerun()
+
+if st.session_state.review_mode:
+    st.write("### Final Review", st.session_state.draft_df[["Name", "Qty"]])
+    
+    if st.button("✅ Confirm & Submit"):
+        # Just loop through the dataframe rows
+        for _, row in st.session_state.draft_df.iterrows():
+            sheet.update_cell(int(row["Row"]), col_index, row["Qty"])
+            
+        st.success("Submitted!")
+        # RESET FOR NEXT TIME
+        st.session_state.inventory_df["Qty"] = 0
+        st.session_state.review_mode = False
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

@@ -301,15 +301,33 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# INPUT FORM
-# -----------------------------
-st.markdown("## Enter Stock")
+# ========================================================
+# STOCK ENTRY & FILTERING BLOCK
+# ========================================================
 
-# Initialize the dictionary before the form starts
-inputs = {}
+# 1. Search Bar: Place this OUTSIDE the form. 
+# Streamlit will auto-rerun on every keystroke.
+st.markdown("## 📦 Stock Entry")
+search_query = st.text_input(
+    "Search Items / SKU / UOM", 
+    placeholder="Start typing to filter...",
+    key="search_bar"
+)
 
+# 2. Filtering Logic: Always operates on your master list
+query = search_query.lower()
+filtered_items = [
+    item for item in processed_items 
+    if query in item['name'].lower() or query in item['umo'].lower()
+]
+
+# 3. Form Container: Keeps the form stable
 with st.form("stock_form", clear_on_submit=False):
-    # Loop through filtered_items
+    
+    # Track inputs in a temporary dictionary
+    temp_inputs = {}
+    
+    # Loop through filtered results
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
@@ -317,39 +335,36 @@ with st.form("stock_form", clear_on_submit=False):
                 item_data = filtered_items[i + j]
                 item = item_data["name"]
                 umo = item_data["umo"]
-                
                 label = f"{item} [{umo}]" if umo else item
-
-                # The key must be unique and consistent
+                
+                # IMPORTANT: Use the static 'row_idx' in the key. 
+                # This ensures data persists even if the list is filtered.
                 val = col.text_input(
                     label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                    placeholder="Qty",
+                    key=f"input_{item_data['row_idx']}" 
                 )
-                
-                # Store the result in our dictionary
-                inputs[item] = val.strip() if val.strip() else None
+                temp_inputs[item] = val.strip() if val.strip() else None
 
-    # THE SUBMIT BUTTON MUST BE INSIDE THE FORM
-    submitted = st.form_submit_button("🔍 Review Stock")
+    # 4. Submission Button: Unique key per mode to prevent duplicate key errors
+    submitted = st.form_submit_button("🔍 Review Stock", key=f"submit_{mode}")
 
+    # 5. Validation Logic
     if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
+        # Filter temp_inputs to only include items currently shown (or use full logic)
+        invalid = [k for k, v in temp_inputs.items() if v and not v.isdigit()]
+        missing = [k for k, v in temp_inputs.items() if v is None]
 
-        if invalid_items:
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        if invalid:
+            show_error_dialog(f"Invalid characters in: {', '.join(invalid)}")
         elif missing:
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+            show_error_dialog("Please fill in all quantities.")
         else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
+            # Assign to persistent state
+            st.session_state.draft_data = temp_inputs
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
-
 
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW

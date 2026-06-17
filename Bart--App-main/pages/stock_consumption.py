@@ -261,21 +261,27 @@ date_str = str(date)
 
 
 # -----------------------------
-# FORCE NUMERIC KEYPAD ON MOBILE
+# FORCE NUMERIC KEYPAD ON MOBILE (Targeted)
 # -----------------------------
-# This script targets all text inputs and forces them to show the number pad
-# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
     function setNumericKeypad() {
-        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
-        inputs.forEach(function(input) {
-            input.setAttribute('inputmode', 'numeric');
-            input.setAttribute('pattern', '[0-9]*');
+        // Target all inputs that are NOT the search bar
+        // We look for inputs that DON'T have the search placeholder
+        var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
+        
+        allInputs.forEach(function(input) {
+            var placeholder = input.getAttribute('placeholder');
+            
+            // Only apply numeric keypad if it's a Qty input (based on placeholder)
+            if (placeholder === "Qty") {
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('pattern', '[0-9]*');
+            }
         });
     }
-    // Run after a short delay to ensure elements are rendered
-    setTimeout(setNumericKeypad, 500);
+    // Run after a short delay
+    setTimeout(setNumericKeypad, 1000);
 </script>
 """, height=0)
 # -----------------------------

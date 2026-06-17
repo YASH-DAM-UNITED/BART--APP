@@ -261,27 +261,30 @@ date_str = str(date)
 
 
 # -----------------------------
-# FORCE NUMERIC KEYPAD ON MOBILE (Targeted)
+# FORCE NUMERIC KEYPAD ONLY ON QUANTITY INPUTS
 # -----------------------------
 components.html("""
 <script>
     function setNumericKeypad() {
-        // Target all inputs that are NOT the search bar
-        // We look for inputs that DON'T have the search placeholder
-        var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
+        // Find all inputs on the page
+        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
         
-        allInputs.forEach(function(input) {
-            var placeholder = input.getAttribute('placeholder');
+        inputs.forEach(function(input) {
+            // Get the ID of the input (Streamlit maps the key to the ID/name)
+            var id = input.getAttribute('id');
             
-            // Only apply numeric keypad if it's a Qty input (based on placeholder)
-            if (placeholder === "Qty") {
+            // Only apply numeric keypad if the ID starts with 'input_'
+            // This excludes your search bar (which has a different key/id)
+            if (id && id.startsWith('input_')) {
                 input.setAttribute('inputmode', 'numeric');
                 input.setAttribute('pattern', '[0-9]*');
             }
         });
     }
-    // Run after a short delay
-    setTimeout(setNumericKeypad, 1000);
+
+    // Run the script periodically to catch re-renders when searching
+    // This is more robust than a single setTimeout
+    setInterval(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------

@@ -266,39 +266,42 @@ date_str = str(date)
 
 
 
-st.subheader("🔍 Global Inventory Search")
-selected_labels = st.multiselect(
-    "Select items to inspect (or search to add more):",
-    options=df["Search_Label"].unique(),
-    key="inventory_selector"
-)
+s# 1. Load Data
+sheet_data = sheet.get_all_values()
 
-# Filter the dataframe based on selection
-filtered_df = df[df["Search_Label"].isin(selected_labels)]
-
-
-
-
-sheet_data = sheet.get_all_values() 
-
-# Calculate these indices first
+# 2. Define Indices safely
 raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
 daily_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "DAILY ITEM"), None)
 weekly_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "WEEKLY ITEM"), None)
+
+# 3. Create 'df' here so it is available to the entire script
+import pandas as pd
+
 all_items_data = []
-# Skip header (row 0)
-for idx, row in enumerate(sheet_data[1:], start=2):
+for idx, row in enumerate(sheet_data):
+    if idx == 0 or idx == daily_start or idx == weekly_start:
+        continue
     if len(row) > 0 and row[0].strip():
         all_items_data.append({
             "name": row[0].strip(),
             "sku": row[1] if len(row) > 1 else "N/A",
             "umo": row[2] if len(row) > 2 else "",
-            "row_idx": idx,
-            "type": "Daily" if idx <= weekly_start else "Weekly"
+            "row_idx": idx + 1,
+            "type": "Daily" if (daily_start < idx < weekly_start) else "Weekly"
         })
 
 df = pd.DataFrame(all_items_data)
+# Add the label column immediately after creating the df
 df["Search_Label"] = df["sku"].astype(str) + " | " + df["name"] + " (" + df["umo"] + ") [" + df["type"] + "]"
+
+# --- Now you can safely use df below ---
+
+st.subheader("🔍 Global Inventory Search")
+selected_labels = st.multiselect(
+    "Select items to inspect (or search to add more):",
+    options=df["Search_Label"].unique(), # Now 'df' is definitely defined
+    key="inventory_selector"
+)
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------

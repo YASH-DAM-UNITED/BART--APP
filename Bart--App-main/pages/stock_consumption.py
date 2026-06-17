@@ -349,11 +349,6 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.scroll_to_review = True
             st.rerun()
 
-# -----------------------------
-# 5. REVIEW SECTION (Rendering of final data)
-# -----------------------------
-if st.session_state.review_mode:
-    # ... (Your existing review code)
 
 
 # -----------------------------

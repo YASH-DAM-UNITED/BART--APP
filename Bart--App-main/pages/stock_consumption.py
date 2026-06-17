@@ -271,21 +271,44 @@ if st.button("⬅ Back"):
 # -----------------------------
 # DATE
 # -----------------------------
-col1, col2 = st.columns([3, 1])
+# -----------------------------
+# DATE & SEARCH INPUT
+# -----------------------------
+st.markdown("## Enter Stock")
+
+# Initialize search state
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
+
+col1, col2, col3 = st.columns([2, 2, 1])
 
 with col1:
-    # Use session state for date to prevent it from resetting
+    # Your Date Picker
     if "selected_date" not in st.session_state:
         st.session_state.selected_date = datetime.now().date() - timedelta(days=1)
-    
     st.session_state.selected_date = st.date_input("Select Date", value=st.session_state.selected_date)
-    date_str = str(st.session_state.selected_date) # CRITICAL: This is your date string
 
 with col2:
+    # THE SEARCH INPUT: User types what they want to find here
+    st.session_state.search_query = st.text_input(
+        "Search Item/Category", 
+        value=st.session_state.search_query,
+        placeholder="e.g. Dairy, Fruits..."
+    )
+
+with col3:
     st.write("###") 
-    if st.button("🔍 Search/Fetch"):
-        sync_to_master() # Sync before any action
+    if st.button("🔍 Search"):
+        # This will trigger the app to re-filter processed_items based on the query
         st.rerun()
+
+# -----------------------------
+# FILTER LOGIC (Place this before the form)
+# -----------------------------
+# Filter processed_items based on the user's search query
+if st.session_state.search_query:
+    query = st.session_state.search_query.lower()
+    processed_items = [item for item in processed_items if query in item["name"].lower()]
 
 
 

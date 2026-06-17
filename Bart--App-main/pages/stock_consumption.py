@@ -278,17 +278,22 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# 1. INITIALIZE PERSISTENT STORAGE
+# 1. PERSISTENT STORAGE INIT
 # -----------------------------
 if "stock_inputs" not in st.session_state:
     st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
 
 # -----------------------------
-# 2. SEARCH BAR
+# 2. SYNC CALLBACK FUNCTION
 # -----------------------------
-# The search bar is OUTSIDE the form to prevent the form from re-running 
-# and potentially clearing data when you type.
-search_query = st.text_input("🔍 Search by SKU or UOM", placeholder="Search SKU or UOM...").lower()
+def update_val(item_name):
+    """Saves the input value to session_state immediately on change."""
+    st.session_state.stock_inputs[item_name] = str(st.session_state[f"input_{item_name}"]).strip()
+
+# -----------------------------
+# 3. SEARCH BAR
+# -----------------------------
+search_query = st.text_input("🔍 Search by SKU or UOM", placeholder="Type to filter...").lower()
 
 filtered_items = [
     item for item in processed_items 
@@ -296,59 +301,47 @@ filtered_items = [
 ]
 
 # -----------------------------
-# 3. INPUT FORM
+# 4. DYNAMIC INPUT FIELDS (NO FORM)
 # -----------------------------
 st.markdown("## Enter Stock")
 
-with st.form("stock_form", clear_on_submit=False):
-    # Dynamic grid layout
-    for i in range(0, len(filtered_items), 4):
-        cols = st.columns(4)
-        for j, col in enumerate(cols):
-            if i + j < len(filtered_items):
-                item_data = filtered_items[i + j]
-                item_name = item_data["name"]
-                
-                # Fetch persistent value from the dictionary
-                current_val = st.session_state.stock_inputs.get(item_name, "")
-                
-                # We use the item name as the key. 
-                # Because we are inside a form, we do NOT use on_change.
-                # When the user types, the widget updates automatically.
-                val = col.text_input(
-                    label=f"{item_name} [{item_data['umo']}]",
-                    value=current_val,
-                    key=f"input_{item_name}", 
-                    placeholder="Qty"
-                )
+# We use a container to organize the inputs
+for i in range(0, len(filtered_items), 4):
+    cols = st.columns(4)
+    for j, col in enumerate(cols):
+        if i + j < len(filtered_items):
+            item_data = filtered_items[i + j]
+            item_name = item_data["name"]
+            
+            # The key is fixed to the item name. 
+            # The value is pulled from our master dictionary.
+            col.text_input(
+                label=f"{item_name} [{item_data['umo']}]",
+                value=st.session_state.stock_inputs.get(item_name, ""),
+                key=f"input_{item_name}",
+                on_change=update_val,
+                args=(item_name,),
+                placeholder="Qty"
+            )
 
-    # 4. SUBMIT BUTTON
-    submitted = st.form_submit_button("🔍 Review Stock")
+# -----------------------------
+# 5. MANUAL SUBMIT BUTTON
+# -----------------------------
+if st.button("🔍 Review Stock", type="primary", use_container_width=True):
+    # Validation
+    invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
+    missing = [k for k, v in st.session_state.stock_inputs.items() if v == ""]
     
-    if submitted:
-        # SYNC: When submitted, we manually grab all values from the widgets 
-        # and lock them into our persistent dictionary.
-        for item in processed_items:
-            item_name = item["name"]
-            key_name = f"input_{item_name}"
-            # Only save if the widget key actually exists in session_state
-            if key_name in st.session_state:
-                st.session_state.stock_inputs[item_name] = str(st.session_state[key_name]).strip()
-
-        # VALIDATION
-        invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
-        missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
-        
-        if invalid:
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid)}. Only numbers are allowed.")
-        elif missing:
-            show_error_dialog("Please fill in all stock quantities.")
-        else:
-            # Move to Review
-            st.session_state.draft_data = st.session_state.stock_inputs
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
+    if invalid:
+        show_error_dialog(f"Invalid entry in: {', '.join(invalid)}. Only numbers are allowed.")
+    elif missing:
+        show_error_dialog("Please fill in all stock quantities.")
+    else:
+        # Save current snapshot to draft and trigger review mode
+        st.session_state.draft_data = st.session_state.stock_inputs
+        st.session_state.review_mode = True
+        st.session_state.scroll_to_review = True
+        st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

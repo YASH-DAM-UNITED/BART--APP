@@ -273,8 +273,20 @@ if st.button("⬅ Back"):
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# Define the columns: 3 for Date, 3 for Search Input, 1 for Button
-col1, col2, col3 = st.columns([3, 3, 1])
+# Custom CSS to force the button to drop down and align with the text inputs
+st.markdown("""
+    <style>
+    /* This targets the column containing the button */
+    .align-button {
+        display: flex;
+        align-items: flex-end;
+        height: 100%;
+        padding-bottom: 0px; /* Adjust if needed */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns([2, 2, 1])
 
 with col1:
     if "selected_date" not in st.session_state:
@@ -291,22 +303,13 @@ with col2:
     )
 
 with col3:
-    # This CSS magic pulls the button up to align with the text inputs
-    st.markdown("""
-        <style>
-        div.stButton > button {
-            margin-top: 27px;
-            width: 100%;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    if st.button("🔍 Search"):
-        # No logic needed here, the rerun will handle the filter automatically
+    # We put the button inside a container that forces bottom alignment
+    button_container = st.container()
+    if button_container.button("🔍 Search", use_container_width=True):
         st.rerun()
 
 # -----------------------------
-# FILTER LOGIC (Place this before the form)
+# FILTER LOGIC
 # -----------------------------
 if st.session_state.search_query:
     query = st.session_state.search_query.lower()

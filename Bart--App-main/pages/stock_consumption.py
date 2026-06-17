@@ -259,7 +259,9 @@ date_str = str(date)
 
 
 
-
+# -----------------------------
+# 2. THE AGGRESSIVE KEYPAD SCRIPT
+# -----------------------------
 components.html("""
 <script>
     function forceNumeric() {
@@ -267,29 +269,26 @@ components.html("""
         var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
         
         allInputs.forEach(function(input) {
-            // Get the container ID
-            var id = input.getAttribute('id');
+            // Find the label associated with this input
+            var label = input.closest('div').querySelector('label');
             
-            // Only force numeric if the key starts with 'input_'
-            // AND ensure it's not our search bar
-            if (id && id.startsWith('input_') && !id.includes('search_bar')) {
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('pattern', '[0-9]*');
+            if (label) {
+                var labelText = label.innerText;
+                
+                // LOGIC: 
+                // If label is "🔍 Search Items", it is the Search Bar -> Ignore
+                // If label contains data, it's a Qty input -> Force Numeric
+                if (labelText !== "🔍 Search Items") {
+                    input.setAttribute('inputmode', 'numeric');
+                    input.setAttribute('pattern', '[0-9]*');
+                }
             }
         });
     }
 
-    // Use MutationObserver to watch for any changes to the DOM
-    var observer = new MutationObserver(function(mutations) {
-        forceNumeric();
-    });
-
-    observer.observe(window.parent.document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    // Run once on load
+    // Observe DOM changes to catch inputs as they are filtered/rendered
+    var observer = new MutationObserver(forceNumeric);
+    observer.observe(window.parent.document.body, {childList: true, subtree: true});
     forceNumeric();
 </script>
 """, height=0)
@@ -311,9 +310,8 @@ def update_val(item_name):
 # -----------------------------
 # We use st.session_state.search_clear to allow the code to force-clear the UI
 search_query = st.text_input(
-    "🔍 Search by SKU or UOM", 
+    "🔍 Search Items",  # Label does NOT contain 'Qty'
     value=st.session_state.search_clear,
-    key="search_bar_main",  # Explicitly naming this keeps it separate
     placeholder="Type SKU or UOM..."
 ).lower()
 

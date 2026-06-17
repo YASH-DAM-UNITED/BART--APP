@@ -269,47 +269,48 @@ if st.button("⬅ Back"):
     st.rerun()
 
 # -----------------------------
-# DATE
-# -----------------------------
-# -----------------------------
-# DATE & SEARCH INPUT
+# DATE & SEARCH ALIGNMENT
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# Initialize search state
-if "search_query" not in st.session_state:
-    st.session_state.search_query = ""
-
-col1, col2, col3 = st.columns([2, 2, 1])
+# Define the columns: 3 for Date, 3 for Search Input, 1 for Button
+col1, col2, col3 = st.columns([3, 3, 1])
 
 with col1:
-    # Your Date Picker
     if "selected_date" not in st.session_state:
         st.session_state.selected_date = datetime.now().date() - timedelta(days=1)
     st.session_state.selected_date = st.date_input("Select Date", value=st.session_state.selected_date)
 
 with col2:
-    # THE SEARCH INPUT: User types what they want to find here
+    if "search_query" not in st.session_state:
+        st.session_state.search_query = ""
     st.session_state.search_query = st.text_input(
-        "Search Item/Category", 
+        "Search Item", 
         value=st.session_state.search_query,
-        placeholder="e.g. Dairy, Fruits..."
+        placeholder="Search..."
     )
 
 with col3:
-    st.write("###") 
+    # This CSS magic pulls the button up to align with the text inputs
+    st.markdown("""
+        <style>
+        div.stButton > button {
+            margin-top: 27px;
+            width: 100%;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
     if st.button("🔍 Search"):
-        # This will trigger the app to re-filter processed_items based on the query
+        # No logic needed here, the rerun will handle the filter automatically
         st.rerun()
 
 # -----------------------------
 # FILTER LOGIC (Place this before the form)
 # -----------------------------
-# Filter processed_items based on the user's search query
 if st.session_state.search_query:
     query = st.session_state.search_query.lower()
     processed_items = [item for item in processed_items if query in item["name"].lower()]
-
 
 
 # -----------------------------

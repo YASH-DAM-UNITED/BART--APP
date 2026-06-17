@@ -299,9 +299,10 @@ filtered_items = [
 ]
 
 # -----------------------------
-# 3. DYNAMIC FORM
+# 3. DYNAMIC FORM (FIXED)
 # -----------------------------
 st.markdown("## Enter Stock")
+
 with st.form("stock_form", clear_on_submit=False):
     # Display only filtered items
     for i in range(0, len(filtered_items), 4):
@@ -312,21 +313,77 @@ with st.form("stock_form", clear_on_submit=False):
                 item_name = item_data["name"]
                 
                 # Fetch existing value from persistent session_state
+                # We use the key as the identifier
                 current_val = st.session_state.stock_inputs.get(item_name, "")
                 
+                # REMOVED: on_change and args
                 col.text_input(
                     label=f"{item_name} [{item_data['umo']}]",
                     value=current_val,
-                    key=f"input_{item_name}",
-                    on_change=update_stock_val,
-                    args=(item_name,),
+                    key=f"input_{item_name}", 
                     placeholder="Qty"
                 )
 
+    # This button MUST be inside the form
     submitted = st.form_submit_button("🔍 Review Stock")
     
     if submitted:
-        # Use st.session_state.stock_inputs for validation
+        # After submit, loop through all inputs to update our session_state storage
+        for item in processed_items:
+            item_name = item["name"]
+            # Get the current value from the text_input widget via its key
+            val = st.session_state[f"input_{item_name}"]
+            st.session_state.stock_inputs[item_name] = val.strip()
+
+        # Perform validation on the updated dictionary
+        invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
+        missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
+        
+        if invalid:
+            show_error_dialog(f"Invalid entries: {', '.join(invalid)}")
+        elif missing:
+            show_error_dialog("Please fill in all quantities.")
+        else:
+            st.session_state.draft_data = st.session_state.stock_inputs
+            st.session_state.review_mode = True
+            st.rerun()# -----------------------------
+# 3. DYNAMIC FORM (FIXED)
+# -----------------------------
+st.markdown("## Enter Stock")
+
+with st.form("stock_form", clear_on_submit=False):
+    # Display only filtered items
+    for i in range(0, len(filtered_items), 4):
+        cols = st.columns(4)
+        for j, col in enumerate(cols):
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
+                item_name = item_data["name"]
+                
+                # Fetch existing value from persistent session_state
+                # We use the key as the identifier
+                current_val = st.session_state.stock_inputs.get(item_name, "")
+                
+                # REMOVED: on_change and args
+                col.text_input(
+                    label=f"{item_name} [{item_data['umo']}]",
+                    value=current_val,
+                    key=f"input_{item_name}", 
+                    placeholder="Qty"
+                )
+
+    # This button MUST be inside the form
+    submitted = st.form_submit_button("🔍 Review Stock")
+    
+    if submitted:
+        # After submit, loop through all inputs to update our session_state storage
+        for item in processed_items:
+            item_name = item["name"]
+            # Get the current value from the text_input widget via its key
+            val = st.session_state[f"input_{item_name}"]
+            st.session_state.stock_inputs[item_name] = val.strip()
+
+        # Perform validation on the updated dictionary
         invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
         missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
         

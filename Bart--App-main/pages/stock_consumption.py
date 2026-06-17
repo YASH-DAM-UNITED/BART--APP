@@ -259,37 +259,23 @@ date_str = str(date)
 
 
 
+
+# -----------------------------
+# FORCE NUMERIC KEYPAD ON MOBILE
+# -----------------------------
+# This script targets all text inputs and forces them to show the number pad
+# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
-    function forceNumeric() {
-        // Find all inputs on the page
-        var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
-        
-        allInputs.forEach(function(input) {
-            // Get the container ID
-            var id = input.getAttribute('id');
-            
-            // Only force numeric if the key starts with 'input_'
-            // AND ensure it's not our search bar
-            if (id && id.startsWith('input_') && !id.includes('search_bar')) {
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('pattern', '[0-9]*');
-            }
+    function setNumericKeypad() {
+        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
+        inputs.forEach(function(input) {
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
         });
     }
-
-    // Use MutationObserver to watch for any changes to the DOM
-    var observer = new MutationObserver(function(mutations) {
-        forceNumeric();
-    });
-
-    observer.observe(window.parent.document.body, {
-        childList: true,
-        subtree: true
-    });
-
-    // Run once on load
-    forceNumeric();
+    // Run after a short delay to ensure elements are rendered
+    setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------
@@ -312,7 +298,6 @@ def update_val(item_name):
 search_query = st.text_input(
     "🔍 Search by SKU or UOM", 
     value=st.session_state.search_clear,
-    key="search_bar_main",  # Explicitly naming this keeps it separate
     placeholder="Type SKU or UOM..."
 ).lower()
 

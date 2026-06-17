@@ -311,17 +311,37 @@ filtered_items = [
 # -----------------------------
 # 4. CUSTOM WARNING DIALOG
 # -----------------------------
+# -----------------------------
+# 4. CUSTOM WARNING DIALOG (UPDATED TO WARNING)
+# -----------------------------
 @st.dialog("⚠️ Pending Items")
 def show_missing_warning():
-    st.warning("Some items are still empty! Clear the search to see the full list.")
-    st.write("Missing quantities for:")
-    # Show subset of missing items
-    st.error(", ".join(st.session_state.get("pending_items", [])[:10]) + "...")
+    # Changed from st.warning/st.error to be more descriptive
+    st.markdown("### 📋 Action Required")
+    st.warning("Some items are still empty. Please clear the search to see the full list and fill in all quantities.")
     
-    if st.button("Clear Search & View All"):
+    st.write("#### Missing quantities for:")
+    # Using st.warning instead of st.error for the list of items
+    st.warning(", ".join(st.session_state.get("pending_items", [])[:10]) + ("..." if len(st.session_state.get("pending_items", [])) > 10 else ""))
+    
+    if st.button("Clear Search & View All", type="primary"):
+        st.session_state.search_clear = "" # This forces the search bar to empty
+        st.rerun()# -----------------------------
+# 4. CUSTOM WARNING DIALOG (UPDATED TO WARNING)
+# -----------------------------
+@st.dialog("⚠️ Pending Items")
+def show_missing_warning():
+    # Changed from st.warning/st.error to be more descriptive
+    st.markdown("### 📋 Action Required")
+    st.warning("Some items are still empty. Please clear the search to see the full list and fill in all quantities.")
+    
+    st.write("#### Missing quantities for:")
+    # Using st.warning instead of st.error for the list of items
+    st.warning(", ".join(st.session_state.get("pending_items", [])[:10]) + ("..." if len(st.session_state.get("pending_items", [])) > 10 else ""))
+    
+    if st.button("Clear Search & View All", type="primary"):
         st.session_state.search_clear = "" # This forces the search bar to empty
         st.rerun()
-
 # -----------------------------
 # 5. DYNAMIC INPUT FIELDS (NO FORM)
 # -----------------------------

@@ -3,7 +3,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import uuid
-from background import set_background
+
+
 from gspread import Cell
 from datetime import datetime, timedelta
 import smtplib

@@ -263,19 +263,28 @@ date_str = str(date)
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
-# This script targets all text inputs and forces them to show the number pad
-# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
-    function setNumericKeypad() {
+    function setInputModes() {
+        // Get all input elements on the page
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
+        
         inputs.forEach(function(input) {
-            input.setAttribute('inputmode', 'numeric');
-            input.setAttribute('pattern', '[0-9]*');
+            // Check if this input belongs to the Search bar
+            // Streamlit sets the 'aria-label' to the label provided in the code
+            if (input.getAttribute('aria-label') === '🔍 Search by SKU or UOM') {
+                // FORCE TEXT MODE for Search
+                input.setAttribute('inputmode', 'text');
+                input.removeAttribute('pattern');
+            } else {
+                // KEEP NUMERIC MODE for everything else (your stock fields)
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('pattern', '[0-9]*');
+            }
         });
     }
-    // Run after a short delay to ensure elements are rendered
-    setTimeout(setNumericKeypad, 500);
+    // Run this logic after the page renders
+    setTimeout(setInputModes, 1000);
 </script>
 """, height=0)
 # -----------------------------

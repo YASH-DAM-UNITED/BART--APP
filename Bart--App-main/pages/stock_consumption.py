@@ -273,6 +273,19 @@ if st.button("⬅ Back"):
 # -----------------------------
 
 
+# Custom CSS to force the button to drop down and align with the text inputs
+st.markdown("""
+    <style>
+    /* This targets the column containing the button */
+    .align-button {
+        display: flex;
+        align-items: flex-end;
+        height: 100%;
+        padding-bottom: 0px; /* Adjust if needed */
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 col1, col2, col3 = st.columns([2, 2, 1])
 
 with col1:
@@ -290,18 +303,9 @@ with col2:
     )
 
 with col3:
-    # We use a custom class to target the button without affecting other buttons
-    st.markdown("""
-        <style>
-        .stButton button {
-            margin-top: 27px;
-            width: 100%;
-            height: 42px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-    
-    if st.button("🔍 Search"):
+    # We put the button inside a container that forces bottom alignment
+    button_container = st.container()
+    if button_container.button("🔍 Search", use_container_width=True):
         st.rerun()
 
 # -----------------------------

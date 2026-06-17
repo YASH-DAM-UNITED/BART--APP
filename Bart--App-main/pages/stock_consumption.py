@@ -10,6 +10,13 @@ import smtplib
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
 
+
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo # Standard in Python 3.9+
+
+
+
+jeddah_tz = ZoneInfo("Asia/Riyadh")
 # -----------------------------
 # UI SETUP
 # -----------------------------
@@ -162,6 +169,9 @@ def show_duplicate_warning():
 # -----------------------------
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
+
+
+    now_jeddah = datetime.now(jeddah_tz)
     
     yesterday = datetime.now().date() - timedelta(days=1)
     selected_date = st.date_input("Select Date", value=yesterday)
@@ -391,7 +401,7 @@ if st.session_state.proceed_submit:
         with st.spinner("Saving stock..."):
             # Headers configuration remain unchanged
             headers = sheet_data[0]
-            submission_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            submission_time = datetime.now(jeddah_tz).strftime("%Y-%m-%d %H:%M:%S")
 
             if not st.session_state.tx_id:
                 st.session_state.tx_id = str(uuid.uuid4())[:8]

@@ -259,32 +259,37 @@ date_str = str(date)
 
 
 
-
-# -----------------------------
-# FORCE NUMERIC KEYPAD ONLY ON QUANTITY INPUTS
-# -----------------------------
 components.html("""
 <script>
-    function setNumericKeypad() {
+    function forceNumeric() {
         // Find all inputs on the page
-        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
+        var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
         
-        inputs.forEach(function(input) {
-            // Get the ID of the input (Streamlit maps the key to the ID/name)
+        allInputs.forEach(function(input) {
+            // Get the container ID
             var id = input.getAttribute('id');
             
-            // Only apply numeric keypad if the ID starts with 'input_'
-            // This excludes your search bar (which has a different key/id)
-            if (id && id.startsWith('input_')) {
+            // Only force numeric if the key starts with 'input_'
+            // AND ensure it's not our search bar
+            if (id && id.startsWith('input_') && !id.includes('search_bar')) {
                 input.setAttribute('inputmode', 'numeric');
                 input.setAttribute('pattern', '[0-9]*');
             }
         });
     }
 
-    // Run the script periodically to catch re-renders when searching
-    // This is more robust than a single setTimeout
-    setInterval(setNumericKeypad, 500);
+    // Use MutationObserver to watch for any changes to the DOM
+    var observer = new MutationObserver(function(mutations) {
+        forceNumeric();
+    });
+
+    observer.observe(window.parent.document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // Run once on load
+    forceNumeric();
 </script>
 """, height=0)
 # -----------------------------
@@ -307,6 +312,7 @@ def update_val(item_name):
 search_query = st.text_input(
     "🔍 Search by SKU or UOM", 
     value=st.session_state.search_clear,
+    key="search_bar_main",  # Explicitly naming this keeps it separate
     placeholder="Type SKU or UOM..."
 ).lower()
 

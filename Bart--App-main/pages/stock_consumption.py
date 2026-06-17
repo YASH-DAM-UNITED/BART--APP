@@ -10,13 +10,6 @@ import smtplib
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
 
-
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo # Standard in Python 3.9+
-
-
-
-jeddah_tz = ZoneInfo("Asia/Riyadh")
 # -----------------------------
 # UI SETUP
 # -----------------------------
@@ -65,19 +58,9 @@ st.session_state.setdefault("tx_id", None)
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
 
-
-
 # -----------------------------
 # SCROLL FUNCTION
 # -----------------------------
-
-def sync_to_master():
-    """Saves form values into persistent storage."""
-    for key, value in st.session_state.items():
-        if key.startswith("input_stock_"):
-            item_name = key.replace("input_stock_", "")
-            if value and value.strip():
-                st.session_state.master_data[item_name] = value.strip()
 def scroll_to_review():
     """Uses a dedicated component to force the browser to scroll."""
     js_code = """
@@ -179,9 +162,6 @@ def show_duplicate_warning():
 # -----------------------------
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
-
-
-    now_jeddah = datetime.now(jeddah_tz)
     
     yesterday = datetime.now().date() - timedelta(days=1)
     selected_date = st.date_input("Select Date", value=yesterday)
@@ -269,51 +249,14 @@ if st.button("⬅ Back"):
     st.rerun()
 
 # -----------------------------
-# DATE & SEARCH ALIGNMENT
+# DATE
 # -----------------------------
 
+yesterday = datetime.now().date() - timedelta(days=1)
+date = st.date_input("Select Date", value=yesterday)
+date_str = str(date)
 
-# Custom CSS to force the button to drop down and align with the text inputs
-st.markdown("""
-    <style>
-    /* This targets the column containing the button */
-    .align-button {
-        display: flex;
-        align-items: flex-end;
-        height: 100%;
-        padding-bottom: 0px; /* Adjust if needed */
-    }
-    </style>
-""", unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns([2, 2, 1])
-
-with col1:
-    if "selected_date" not in st.session_state:
-        st.session_state.selected_date = datetime.now().date() - timedelta(days=1)
-    st.session_state.selected_date = st.date_input("Select Date", value=st.session_state.selected_date)
-
-with col2:
-    if "search_query" not in st.session_state:
-        st.session_state.search_query = ""
-    st.session_state.search_query = st.text_input(
-        "Search Item", 
-        value=st.session_state.search_query,
-        placeholder="Search..."
-    )
-
-with col3:
-    # We put the button inside a container that forces bottom alignment
-    button_container = st.container()
-    if button_container.button("🔍 Search", use_container_width=True):
-        st.rerun()
-
-# -----------------------------
-# FILTER LOGIC
-# -----------------------------
-if st.session_state.search_query:
-    query = st.session_state.search_query.lower()
-    processed_items = [item for item in processed_items if query in item["name"].lower()]
 
 
 # -----------------------------
@@ -335,17 +278,12 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# 1. INITIALIZE MASTER STORAGE (Add this at the top of your script)
-# -----------------------------
-if "master_data" not in st.session_state:
-    st.session_state.master_data = {}
-
-# -----------------------------
 # INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-# We don't use 'inputs' dictionary anymore; we use st.session_state.master_data
+inputs = {}
+
 with st.form("stock_form", clear_on_submit=False):
 
     for i in range(0, len(processed_items), 4):
@@ -358,25 +296,15 @@ with st.form("stock_form", clear_on_submit=False):
                 umo = item_data["umo"]
                 
                 label = f"{item} [{umo}]" if umo else item
-                
-                # KEY: Use your existing key logic
-                input_key = f"{mode}_{item}_{item_data['row_idx']}"
-                
-                # PERSISTENCE: Get the value from master_data if it exists
-                default_value = st.session_state.master_data.get(item, "")
-                
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
                 value = col.text_input(
                     label,
-                    value=default_value,
                     placeholder="Enter quantity",
-                    key=input_key
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
                 )
-                
-                # Update master_data whenever the form is submitted
-                if value.strip():
-                    st.session_state.master_data[item] = value.strip()
-                elif item in st.session_state.master_data:
-                    del st.session_state.master_data[item]
+
+                inputs[item] = value.strip() if value.strip() else None
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION
@@ -384,19 +312,20 @@ with st.form("stock_form", clear_on_submit=False):
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Check for non-numeric characters in master_data
-        invalid_items = [item for item, val in st.session_state.master_data.items() if val and not val.isdigit()]
-        
-        # Check for missing values (only for the currently processed items)
-        missing = [item_data["name"] for item_data in processed_items if item_data["name"] not in st.session_state.master_data]
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
 
         if invalid_items:
+            # Trigger the Dialog Popup
             show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
         elif missing:
+            # Trigger the Dialog Popup
             show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
         else:
             # All checks passed, move to review
-            st.session_state.draft_data = st.session_state.master_data
+            st.session_state.draft_data = inputs
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
@@ -462,7 +391,7 @@ if st.session_state.proceed_submit:
         with st.spinner("Saving stock..."):
             # Headers configuration remain unchanged
             headers = sheet_data[0]
-            submission_time = datetime.now(jeddah_tz).strftime("%Y-%m-%d %H:%M:%S")
+            submission_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
             if not st.session_state.tx_id:
                 st.session_state.tx_id = str(uuid.uuid4())[:8]

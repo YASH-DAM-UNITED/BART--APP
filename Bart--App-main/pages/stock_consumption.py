@@ -271,7 +271,7 @@ if st.button("⬅ Back"):
 # -----------------------------
 # DATE & SEARCH ALIGNMENT
 # -----------------------------
-st.markdown("## Enter Stock")
+
 
 col1, col2, col3 = st.columns([2, 2, 1])
 

@@ -3,7 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import uuid
-
+import streamlit.components.v1 as components
 
 from gspread import Cell
 from datetime import datetime, timedelta
@@ -264,32 +264,36 @@ date_str = str(date)
 # -----------------------------
 components.html("""
 <script>
-    function forceNumeric() {
-        // Find all inputs on the page
-        var allInputs = window.parent.document.querySelectorAll('input[type="text"]');
+    function forceKeypad() {
+        // Get all input fields
+        var inputs = window.parent.document.querySelectorAll('input[type="text"]');
         
-        allInputs.forEach(function(input) {
-            // Find the label associated with this input
-            var label = input.closest('div').querySelector('label');
-            
-            if (label) {
-                var labelText = label.innerText;
-                
-                // LOGIC: 
-                // If label is "🔍 Search Items", it is the Search Bar -> Ignore
-                // If label contains data, it's a Qty input -> Force Numeric
-                if (labelText !== "🔍 Search Items") {
-                    input.setAttribute('inputmode', 'numeric');
-                    input.setAttribute('pattern', '[0-9]*');
-                }
+        inputs.forEach(function(input) {
+            // Find the label text associated with the input
+            // Streamlit structure: div > label (contains text)
+            var parentDiv = input.closest('div');
+            var label = parentDiv ? parentDiv.querySelector('label') : null;
+            var labelText = label ? label.innerText : "";
+
+            // Check if it is the Search Bar (by label text)
+            var isSearchBar = labelText.includes("Search");
+
+            if (!isSearchBar) {
+                // Force input to be numeric/number type
+                input.setAttribute('type', 'number');
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('pattern', '[0-9]*');
+            } else {
+                // Ensure search bar stays as text
+                input.setAttribute('type', 'text');
             }
         });
     }
 
-    // Observe DOM changes to catch inputs as they are filtered/rendered
-    var observer = new MutationObserver(forceNumeric);
+    // Observe changes and run
+    var observer = new MutationObserver(forceKeypad);
     observer.observe(window.parent.document.body, {childList: true, subtree: true});
-    forceNumeric();
+    forceKeypad();
 </script>
 """, height=0)
 # -----------------------------

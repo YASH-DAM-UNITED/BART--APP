@@ -18,6 +18,14 @@ st.set_page_config(
 )
 
 # --- CONFIGURATION & STATE ---
+
+
+
+# --- INITIALIZATION ---
+if "start_min" not in st.session_state:
+    st.session_state.start_min = 0  # 12:00 AM
+if "end_min" not in st.session_state:
+    st.session_state.end_min = 1439  # 11:59 PM
 if "data_refresh_token" not in st.session_state:
     st.session_state.data_refresh_token = 0
 

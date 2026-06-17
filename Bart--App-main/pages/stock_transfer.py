@@ -35,7 +35,32 @@ def success_dialog(message):
     st.write(message)
     if st.button("Close", key="close_dialog"):
         st.switch_page("pages/staff_dashboard.py")
+
+
+
+def get_client():
+    if "client" not in st.session_state:
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            st.secrets["GOOGLE_CREDS_JSON"], 
+            ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        )
+        client = gspread.authorize(creds)
+        st.session_state.client = client
         
+        # Load Branch Map if not already loaded
+        if "branch_map" not in st.session_state:
+            master_sh = client.open("MASTERBRANCHSHEET")
+            branch_ws = master_sh.worksheet("Branches")
+            data = branch_ws.get_all_values()[1:]
+            st.session_state.branch_map = {row[0]: row[1] for row in data}
+    return st.session_state.client
+
+# Call it immediately to ensure it exists
+try:
+    client = get_client()
+except Exception as e:
+    st.error(f"Failed to connect to Google Sheets: {e}")
+    st.stop()
         
 
 def prepare_batch_updates(ws, cart, mode="subtract"):
@@ -83,20 +108,27 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
     category = st.radio("Select Item Category", ["Daily Items", "Weekly Items"], horizontal=True, key="cat_radio")
     target_list = st.session_state.current_stocks['daily'] if category == "Daily Items" else st.session_state.current_stocks['weekly']
     
-    item_names = [row['Item'] for row in target_list]
-    selected_item = st.selectbox("Select Item", item_names, key="item_sel")
-    
-    selected_row = next(row for row in target_list if row['Item'] == selected_item)
-    uom_display = selected_row.get('DATE->  UOM', 'units') 
-    
-    col1, col2 = st.columns([3, 1])
-    qty = col1.number_input("Quantity", min_value=1, step=1, key="qty_input")
-    col2.markdown("<br>", unsafe_allow_html=True) 
-    col2.write(f"**{uom_display}**")
-    
-    if st.button("Add to List", key="add_btn"):
-        st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
-        st.success(f"Added {selected_item} to cart!")
+    # ADDED: Check if list is empty
+    if not target_list:
+        st.warning(f"No items available in {category}.")
+    else:
+        item_names = [list(row.values())[0] for row in target_list]
+        selected_item = st.selectbox("Select Item", item_names, key="item_sel")
+
+        # Now only perform lookups if target_list actually had items
+        selected_row = next(row for row in target_list if list(row.values())[0] == selected_item)
+        uom_display = selected_row.get('DATE-> UOM', 'units') 
+        
+        col1, col2 = st.columns([3, 1])
+        qty = col1.number_input("Quantity", min_value=1, step=1, key="qty_input")
+        col2.markdown("<br>", unsafe_allow_html=True) 
+        col2.write(f"**{uom_display}**")
+        
+        if st.button("Add to List", key="add_btn"):
+            st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
+            st.success(f"Added {selected_item} to cart!")
+
+
 
 # 2. CART AND DESTINATION SECTION
 if st.session_state.transfer_cart:

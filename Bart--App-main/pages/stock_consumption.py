@@ -3,7 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import uuid
-import streamlit.components.v1 as components
+
 
 from gspread import Cell
 from datetime import datetime, timedelta
@@ -259,41 +259,23 @@ date_str = str(date)
 
 
 
+
 # -----------------------------
-# 2. THE AGGRESSIVE KEYPAD SCRIPT
+# FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
+# This script targets all text inputs and forces them to show the number pad
+# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
-    function forceKeypad() {
-        // Get all input fields
+    function setNumericKeypad() {
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
-        
         inputs.forEach(function(input) {
-            // Find the label text associated with the input
-            // Streamlit structure: div > label (contains text)
-            var parentDiv = input.closest('div');
-            var label = parentDiv ? parentDiv.querySelector('label') : null;
-            var labelText = label ? label.innerText : "";
-
-            // Check if it is the Search Bar (by label text)
-            var isSearchBar = labelText.includes("Search");
-
-            if (!isSearchBar) {
-                // Force input to be numeric/number type
-                input.setAttribute('type', 'number');
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('pattern', '[0-9]*');
-            } else {
-                // Ensure search bar stays as text
-                input.setAttribute('type', 'text');
-            }
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
         });
     }
-
-    // Observe changes and run
-    var observer = new MutationObserver(forceKeypad);
-    observer.observe(window.parent.document.body, {childList: true, subtree: true});
-    forceKeypad();
+    // Run after a short delay to ensure elements are rendered
+    setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------
@@ -314,7 +296,7 @@ def update_val(item_name):
 # -----------------------------
 # We use st.session_state.search_clear to allow the code to force-clear the UI
 search_query = st.text_input(
-    "🔍 Search Items",  # Label does NOT contain 'Qty'
+    "🔍 Search by SKU or UOM", 
     value=st.session_state.search_clear,
     placeholder="Type SKU or UOM..."
 ).lower()

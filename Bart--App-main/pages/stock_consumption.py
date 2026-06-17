@@ -280,7 +280,7 @@ st.markdown("""
     .align-button {
         display: flex;
         align-items: flex-end;
-        height: 100%;
+        height: 80%;
         padding-bottom: 0px; /* Adjust if needed */
     }
     </style>

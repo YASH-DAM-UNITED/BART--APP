@@ -286,8 +286,9 @@ if "stock_inputs" not in st.session_state:
 # -----------------------------
 # 2. SEARCH BAR
 # -----------------------------
-# Search matches both SKU (name) and UOM
-search_query = st.text_input("🔍 Search by SKU or UOM", placeholder="Type SKU or UOM...").lower()
+# The search bar is OUTSIDE the form to prevent the form from re-running 
+# and potentially clearing data when you type.
+search_query = st.text_input("🔍 Search by SKU or UOM", placeholder="Search SKU or UOM...").lower()
 
 filtered_items = [
     item for item in processed_items 
@@ -308,33 +309,33 @@ with st.form("stock_form", clear_on_submit=False):
                 item_data = filtered_items[i + j]
                 item_name = item_data["name"]
                 
-                # Fetch persistent value (stored in session_state, not lost on search)
+                # Fetch persistent value from the dictionary
                 current_val = st.session_state.stock_inputs.get(item_name, "")
                 
-                # Input Field
+                # We use the item name as the key. 
+                # Because we are inside a form, we do NOT use on_change.
+                # When the user types, the widget updates automatically.
                 val = col.text_input(
                     label=f"{item_name} [{item_data['umo']}]",
                     value=current_val,
                     key=f"input_{item_name}", 
                     placeholder="Qty"
                 )
-                
-                # Update temporary storage immediately
-                st.session_state.stock_inputs[item_name] = val
 
     # 4. SUBMIT BUTTON
     submitted = st.form_submit_button("🔍 Review Stock")
     
     if submitted:
-        # Sync values from widget keys to our dictionary
+        # SYNC: When submitted, we manually grab all values from the widgets 
+        # and lock them into our persistent dictionary.
         for item in processed_items:
             item_name = item["name"]
             key_name = f"input_{item_name}"
-            # Only update if the widget exists (even if filtered out, state is preserved)
+            # Only save if the widget key actually exists in session_state
             if key_name in st.session_state:
                 st.session_state.stock_inputs[item_name] = str(st.session_state[key_name]).strip()
 
-        # Validation Logic
+        # VALIDATION
         invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
         missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
         
@@ -343,14 +344,11 @@ with st.form("stock_form", clear_on_submit=False):
         elif missing:
             show_error_dialog("Please fill in all stock quantities.")
         else:
-            # Move to Review State
+            # Move to Review
             st.session_state.draft_data = st.session_state.stock_inputs
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
-
-
-
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

@@ -283,24 +283,25 @@ components.html("""
 if "stock_inputs" not in st.session_state:
     st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
 
-# -----------------------------
+if "search_clear" not in st.session_state:
+    st.session_state.search_clear = ""
+
 # 2. SYNC CALLBACK FUNCTION
-# -----------------------------
 def update_val(item_name):
     st.session_state.stock_inputs[item_name] = str(st.session_state[f"input_{item_name}"]).strip()
 
 # -----------------------------
-# 3. SEARCH BAR (With State Control)
+# 3. SEARCH BAR
 # -----------------------------
-# If we need to force clear the search, we can use a session state variable
-if "search_clear" not in st.session_state:
-    st.session_state.search_clear = ""
-
+# We use st.session_state.search_clear to allow the code to force-clear the UI
 search_query = st.text_input(
     "🔍 Search by SKU or UOM", 
     value=st.session_state.search_clear,
-    placeholder="Type to filter..."
+    placeholder="Type SKU or UOM..."
 ).lower()
+
+# Update state if the user types manually
+st.session_state.search_clear = search_query
 
 filtered_items = [
     item for item in processed_items 
@@ -308,7 +309,21 @@ filtered_items = [
 ]
 
 # -----------------------------
-# 4. DYNAMIC INPUT FIELDS
+# 4. CUSTOM WARNING DIALOG
+# -----------------------------
+@st.dialog("⚠️ Pending Items")
+def show_missing_warning():
+    st.warning("Some items are still empty! Clear the search to see the full list.")
+    st.write("Missing quantities for:")
+    # Show subset of missing items
+    st.error(", ".join(st.session_state.get("pending_items", [])[:10]) + "...")
+    
+    if st.button("Clear Search & View All"):
+        st.session_state.search_clear = "" # This forces the search bar to empty
+        st.rerun()
+
+# -----------------------------
+# 5. DYNAMIC INPUT FIELDS (NO FORM)
 # -----------------------------
 st.markdown("## Enter Stock")
 
@@ -319,6 +334,7 @@ for i in range(0, len(filtered_items), 4):
             item_data = filtered_items[i + j]
             item_name = item_data["name"]
             
+            # Persistent value pulled from master dictionary
             col.text_input(
                 label=f"{item_name} [{item_data['umo']}]",
                 value=st.session_state.stock_inputs.get(item_name, ""),
@@ -329,20 +345,18 @@ for i in range(0, len(filtered_items), 4):
             )
 
 # -----------------------------
-# 5. REVIEW BUTTON & HARD VALIDATION
+# 6. MANUAL SUBMIT BUTTON
 # -----------------------------
 if st.button("🔍 Review Stock", type="primary", use_container_width=True):
-    # HARD VALIDATION: Check the ENTIRE dictionary, not just visible items
+    # Validation against the Master Dictionary
     missing = [name for name, val in st.session_state.stock_inputs.items() if not val]
     invalid = [name for name, val in st.session_state.stock_inputs.items() if val and not val.isdigit()]
     
     if invalid:
-        show_error_dialog(f"Invalid characters in: {', '.join(invalid)}. Only numbers allowed.")
+        show_error_dialog(f"Invalid numbers in: {', '.join(invalid)}")
     elif missing:
-        # If items are missing, clear the search and show error
-        st.session_state.search_clear = "" # This forces the search bar to clear
-        show_error_dialog(f"You have empty fields. Please fill: {', '.join(missing[:3])}...")
-        st.rerun() # Refresh to clear search and show the missing items
+        st.session_state.pending_items = missing
+        show_missing_warning()
     else:
         # Move to Review
         st.session_state.draft_data = st.session_state.stock_inputs

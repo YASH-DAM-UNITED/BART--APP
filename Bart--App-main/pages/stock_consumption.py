@@ -281,7 +281,7 @@ st.markdown("""
         display: flex;
         align-items: flex-end;
         height: 80%;
-        padding-bottom: 0px; /* Adjust if needed */
+        padding-bottom: 10px; /* Adjust if needed */
     }
     </style>
 """, unsafe_allow_html=True)

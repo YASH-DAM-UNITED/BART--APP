@@ -9,6 +9,23 @@ from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
+import pandas as pd
+
+
+all_items_data = []
+# Skip header (row 0)
+for idx, row in enumerate(sheet_data[1:], start=2):
+    if len(row) > 0 and row[0].strip():
+        all_items_data.append({
+            "name": row[0].strip(),
+            "sku": row[1] if len(row) > 1 else "N/A",
+            "umo": row[2] if len(row) > 2 else "",
+            "row_idx": idx,
+            "type": "Daily" if idx <= weekly_start else "Weekly"
+        })
+
+df = pd.DataFrame(all_items_data)
+df["Search_Label"] = df["sku"].astype(str) + " | " + df["name"] + " (" + df["umo"] + ") [" + df["type"] + "]"
 
 # -----------------------------
 # UI SETUP
@@ -258,6 +275,16 @@ date_str = str(date)
 
 
 
+st.subheader("🔍 Global Inventory Search")
+selected_labels = st.multiselect(
+    "Select items to inspect (or search to add more):",
+    options=df["Search_Label"].unique(),
+    key="inventory_selector"
+)
+
+# Filter the dataframe based on selection
+filtered_df = df[df["Search_Label"].isin(selected_labels)]
+
 
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
@@ -278,33 +305,27 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# INPUT FORM
+# 3. INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
-
 inputs = {}
 
-with st.form("stock_form", clear_on_submit=False):
-
-    for i in range(0, len(processed_items), 4):
-        cols = st.columns(4)
-
-        for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
-                
-                label = f"{item} [{umo}]" if umo else item
-
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
-                    label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
-                )
-
-                inputs[item] = value.strip() if value.strip() else None
+if not selected_labels:
+    st.info("Please select items from the search bar above to begin.")
+else:
+    with st.form("stock_form", clear_on_submit=False):
+        # We display inputs for selected items
+        for _, row in filtered_df.iterrows():
+            item_name = row["name"]
+            # Unique key uses the spreadsheet row index to ensure persistence
+            key = f"{row['type']}_{item_name}_{row['row_idx']}"
+            
+            value = st.text_input(
+                f"{item_name} [{row['umo']}]",
+                placeholder="Enter quantity",
+                key=key
+            )
+            inputs[item_name] = value.strip() if value.strip() else None
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION

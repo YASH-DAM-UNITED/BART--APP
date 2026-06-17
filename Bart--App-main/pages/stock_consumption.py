@@ -12,6 +12,16 @@ import streamlit.components.v1 as components
 import pandas as pd
 
 
+
+
+
+
+sheet_data = sheet.get_all_values() 
+
+# Calculate these indices first
+raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
+daily_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "DAILY ITEM"), None)
+weekly_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "WEEKLY ITEM"), None)
 all_items_data = []
 # Skip header (row 0)
 for idx, row in enumerate(sheet_data[1:], start=2):

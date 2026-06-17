@@ -278,56 +278,65 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# INPUT FORM
+# 1. INITIALIZE PERSISTENT STORAGE
+# -----------------------------
+if "stock_inputs" not in st.session_state:
+    st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
+
+def update_stock_val(item_name):
+    # This captures the value whenever the user types/changes a field
+    st.session_state.stock_inputs[item_name] = st.session_state[f"input_{item_name}"]
+
+# -----------------------------
+# 2. SEARCH BAR
+# -----------------------------
+search_query = st.text_input("🔍 Search Items", placeholder="Type to filter...").lower()
+
+# Filter items based on search
+filtered_items = [
+    item for item in processed_items 
+    if search_query in item["name"].lower()
+]
+
+# -----------------------------
+# 3. DYNAMIC FORM
 # -----------------------------
 st.markdown("## Enter Stock")
-
-inputs = {}
-
 with st.form("stock_form", clear_on_submit=False):
-
-    for i in range(0, len(processed_items), 4):
+    # Display only filtered items
+    for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
-
         for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
+            if i + j < len(filtered_items):
+                item_data = filtered_items[i + j]
+                item_name = item_data["name"]
                 
-                label = f"{item} [{umo}]" if umo else item
-
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
-                    label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                # Fetch existing value from persistent session_state
+                current_val = st.session_state.stock_inputs.get(item_name, "")
+                
+                col.text_input(
+                    label=f"{item_name} [{item_data['umo']}]",
+                    value=current_val,
+                    key=f"input_{item_name}",
+                    on_change=update_stock_val,
+                    args=(item_name,),
+                    placeholder="Qty"
                 )
 
-                inputs[item] = value.strip() if value.strip() else None
-
-# -----------------------------
-    # 3. VALIDATION & SUBMISSION
-    # -----------------------------
     submitted = st.form_submit_button("🔍 Review Stock")
-
+    
     if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
-
-        if invalid_items:
-            # Trigger the Dialog Popup
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        # Use st.session_state.stock_inputs for validation
+        invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
+        missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
+        
+        if invalid:
+            show_error_dialog(f"Invalid entries: {', '.join(invalid)}")
         elif missing:
-            # Trigger the Dialog Popup
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+            show_error_dialog("Please fill in all quantities.")
         else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
+            st.session_state.draft_data = st.session_state.stock_inputs
             st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
             st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW

@@ -283,28 +283,24 @@ components.html("""
 if "stock_inputs" not in st.session_state:
     st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
 
-def update_stock_val(item_name):
-    # This captures the value whenever the user types/changes a field
-    st.session_state.stock_inputs[item_name] = st.session_state[f"input_{item_name}"]
-
 # -----------------------------
 # 2. SEARCH BAR
 # -----------------------------
-search_query = st.text_input("🔍 Search Items", placeholder="Type to filter...").lower()
+# Search matches both SKU (name) and UOM
+search_query = st.text_input("🔍 Search by SKU or UOM", placeholder="Type SKU or UOM...").lower()
 
-# Filter items based on search
 filtered_items = [
     item for item in processed_items 
-    if search_query in item["name"].lower()
+    if search_query in item["name"].lower() or search_query in item["umo"].lower()
 ]
 
 # -----------------------------
-# 3. DYNAMIC FORM (FIXED)
+# 3. INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
 with st.form("stock_form", clear_on_submit=False):
-    # Display only filtered items
+    # Dynamic grid layout
     for i in range(0, len(filtered_items), 4):
         cols = st.columns(4)
         for j, col in enumerate(cols):
@@ -312,42 +308,52 @@ with st.form("stock_form", clear_on_submit=False):
                 item_data = filtered_items[i + j]
                 item_name = item_data["name"]
                 
-                # Fetch existing value from persistent session_state
-                # We use the key as the identifier
+                # Fetch persistent value (stored in session_state, not lost on search)
                 current_val = st.session_state.stock_inputs.get(item_name, "")
                 
-                # REMOVED: on_change and args
-                col.text_input(
+                # Input Field
+                val = col.text_input(
                     label=f"{item_name} [{item_data['umo']}]",
                     value=current_val,
                     key=f"input_{item_name}", 
                     placeholder="Qty"
                 )
+                
+                # Update temporary storage immediately
+                st.session_state.stock_inputs[item_name] = val
 
-    # This button MUST be inside the form
+    # 4. SUBMIT BUTTON
     submitted = st.form_submit_button("🔍 Review Stock")
     
     if submitted:
-        # After submit, loop through all inputs to update our session_state storage
+        # Sync values from widget keys to our dictionary
         for item in processed_items:
             item_name = item["name"]
-            # Get the current value from the text_input widget via its key
-            val = st.session_state[f"input_{item_name}"]
-            st.session_state.stock_inputs[item_name] = val.strip()
+            key_name = f"input_{item_name}"
+            # Only update if the widget exists (even if filtered out, state is preserved)
+            if key_name in st.session_state:
+                st.session_state.stock_inputs[item_name] = str(st.session_state[key_name]).strip()
 
-        # Perform validation on the updated dictionary
+        # Validation Logic
         invalid = [k for k, v in st.session_state.stock_inputs.items() if v and not v.isdigit()]
         missing = [k for k, v in st.session_state.stock_inputs.items() if not v]
         
         if invalid:
-            show_error_dialog(f"Invalid entries: {', '.join(invalid)}")
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid)}. Only numbers are allowed.")
         elif missing:
-            show_error_dialog("Please fill in all quantities.")
+            show_error_dialog("Please fill in all stock quantities.")
         else:
+            # Move to Review State
             st.session_state.draft_data = st.session_state.stock_inputs
             st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
             st.rerun()
-            
+
+# -----------------------------
+# 5. REVIEW SECTION (Rendering of final data)
+# -----------------------------
+if st.session_state.review_mode:
+    # ... (Your existing review code)
 
 
 # -----------------------------

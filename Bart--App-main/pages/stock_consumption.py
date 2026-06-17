@@ -65,9 +65,19 @@ st.session_state.setdefault("tx_id", None)
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
 
+
+
 # -----------------------------
 # SCROLL FUNCTION
 # -----------------------------
+
+def sync_to_master():
+    """Saves form values into persistent storage."""
+    for key, value in st.session_state.items():
+        if key.startswith("input_stock_"):
+            item_name = key.replace("input_stock_", "")
+            if value and value.strip():
+                st.session_state.master_data[item_name] = value.strip()
 def scroll_to_review():
     """Uses a dedicated component to force the browser to scroll."""
     js_code = """
@@ -261,11 +271,21 @@ if st.button("⬅ Back"):
 # -----------------------------
 # DATE
 # -----------------------------
+col1, col2 = st.columns([3, 1])
 
-yesterday = datetime.now().date() - timedelta(days=1)
-date = st.date_input("Select Date", value=yesterday)
-date_str = str(date)
+with col1:
+    # Use session state for date to prevent it from resetting
+    if "selected_date" not in st.session_state:
+        st.session_state.selected_date = datetime.now().date() - timedelta(days=1)
+    
+    st.session_state.selected_date = st.date_input("Select Date", value=st.session_state.selected_date)
+    date_str = str(st.session_state.selected_date) # CRITICAL: This is your date string
 
+with col2:
+    st.write("###") 
+    if st.button("🔍 Search/Fetch"):
+        sync_to_master() # Sync before any action
+        st.rerun()
 
 
 
@@ -288,12 +308,17 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
+# 1. INITIALIZE MASTER STORAGE (Add this at the top of your script)
+# -----------------------------
+if "master_data" not in st.session_state:
+    st.session_state.master_data = {}
+
+# -----------------------------
 # INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-inputs = {}
-
+# We don't use 'inputs' dictionary anymore; we use st.session_state.master_data
 with st.form("stock_form", clear_on_submit=False):
 
     for i in range(0, len(processed_items), 4):
@@ -306,15 +331,25 @@ with st.form("stock_form", clear_on_submit=False):
                 umo = item_data["umo"]
                 
                 label = f"{item} [{umo}]" if umo else item
-
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                
+                # KEY: Use your existing key logic
+                input_key = f"{mode}_{item}_{item_data['row_idx']}"
+                
+                # PERSISTENCE: Get the value from master_data if it exists
+                default_value = st.session_state.master_data.get(item, "")
+                
                 value = col.text_input(
                     label,
+                    value=default_value,
                     placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                    key=input_key
                 )
-
-                inputs[item] = value.strip() if value.strip() else None
+                
+                # Update master_data whenever the form is submitted
+                if value.strip():
+                    st.session_state.master_data[item] = value.strip()
+                elif item in st.session_state.master_data:
+                    del st.session_state.master_data[item]
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION
@@ -322,20 +357,19 @@ with st.form("stock_form", clear_on_submit=False):
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
+        # Check for non-numeric characters in master_data
+        invalid_items = [item for item, val in st.session_state.master_data.items() if val and not val.isdigit()]
+        
+        # Check for missing values (only for the currently processed items)
+        missing = [item_data["name"] for item_data in processed_items if item_data["name"] not in st.session_state.master_data]
 
         if invalid_items:
-            # Trigger the Dialog Popup
             show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
         elif missing:
-            # Trigger the Dialog Popup
             show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
         else:
             # All checks passed, move to review
-            st.session_state.draft_data = inputs
+            st.session_state.draft_data = st.session_state.master_data
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()

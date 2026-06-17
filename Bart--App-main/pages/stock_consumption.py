@@ -9,14 +9,6 @@ from datetime import datetime, timedelta
 import smtplib
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
-import pandas as pd
-
-
-
-
-
-
-
 
 # -----------------------------
 # UI SETUP
@@ -267,13 +259,6 @@ date_str = str(date)
 
 
 
-
-st.subheader("🔍 Global Inventory Search")
-selected_labels = st.multiselect(
-    "Select items to inspect (or search to add more):",
-    options=df["Search_Label"].unique(), # Now 'df' is definitely defined
-    key="inventory_selector"
-)
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
@@ -293,27 +278,33 @@ components.html("""
 </script>
 """, height=0)
 # -----------------------------
-# 3. INPUT FORM
+# INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
+
 inputs = {}
 
-if not selected_labels:
-    st.info("Please select items from the search bar above to begin.")
-else:
-    with st.form("stock_form", clear_on_submit=False):
-        # We display inputs for selected items
-        for _, row in filtered_df.iterrows():
-            item_name = row["name"]
-            # Unique key uses the spreadsheet row index to ensure persistence
-            key = f"{row['type']}_{item_name}_{row['row_idx']}"
-            
-            value = st.text_input(
-                f"{item_name} [{row['umo']}]",
-                placeholder="Enter quantity",
-                key=key
-            )
-            inputs[item_name] = value.strip() if value.strip() else None
+with st.form("stock_form", clear_on_submit=False):
+
+    for i in range(0, len(processed_items), 4):
+        cols = st.columns(4)
+
+        for j, col in enumerate(cols):
+            if i + j < len(processed_items):
+                item_data = processed_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                label = f"{item} [{umo}]" if umo else item
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
+                    label,
+                    placeholder="Enter quantity",
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                )
+
+                inputs[item] = value.strip() if value.strip() else None
 
 # -----------------------------
     # 3. VALIDATION & SUBMISSION
@@ -506,39 +497,3 @@ if st.session_state.show_success:
     st.session_state.tx_id = None
 
     st.switch_page("pages/staff_dashboard.py")
-
-
-
-
-
-
-
-s# 1. Load Data
-sheet_data = sheet.get_all_values()
-
-# 2. Define Indices safely
-raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
-daily_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "DAILY ITEM"), None)
-weekly_start = next((i for i, v in enumerate(raw_col_a) if v.upper() == "WEEKLY ITEM"), None)
-
-# 3. Create 'df' here so it is available to the entire script
-
-
-all_items_data = []
-for idx, row in enumerate(sheet_data):
-    if idx == 0 or idx == daily_start or idx == weekly_start:
-        continue
-    if len(row) > 0 and row[0].strip():
-        all_items_data.append({
-            "name": row[0].strip(),
-            "sku": row[1] if len(row) > 1 else "N/A",
-            "umo": row[2] if len(row) > 2 else "",
-            "row_idx": idx + 1,
-            "type": "Daily" if (daily_start < idx < weekly_start) else "Weekly"
-        })
-
-df = pd.DataFrame(all_items_data)
-# Add the label column immediately after creating the df
-df["Search_Label"] = df["sku"].astype(str) + " | " + df["name"] + " (" + df["umo"] + ") [" + df["type"] + "]"
-
-# --- Now you can safely use df below ---

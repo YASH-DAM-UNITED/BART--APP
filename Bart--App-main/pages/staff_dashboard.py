@@ -521,78 +521,79 @@ if st.session_state.authenticated:
 
 # ========================================================
 # STOCK VIEW SECTION
+# ========================================================# ========================================================
+# STOCK VIEW SECTION (NO SPINNER, SMOOTH UPDATE)
 # ========================================================
 
+@st.fragment
+def render_stock_view(branch_info):
+    """Isolated fragment to display stock data without a disruptive spinner."""
+    try:
+        client = get_gs_client()
+        sheet = client.open_by_key(branch_info["SheetID"])
+        ws = sheet.worksheet("Stocks")
+        data = ws.get_all_values()
+        
+        headers = data[0]
+        date_columns = headers[1:]
+        daily, weekly = [], []
+        current_section = None
+
+        # Data Parsing Logic
+        for row in data:
+            row_text = " ".join(row).strip().lower()
+            if "daily item" in row_text:
+                current_section = "daily"
+                continue
+            if "weekly item" in row_text:
+                current_section = "weekly"
+                continue
+            if current_section is None or not row or not row[0]:
+                continue
+            
+            item = row[0].strip()
+            row_values = row[1:]
+            padding_needed = len(date_columns) - len(row_values)
+            values = row_values + ([""] * max(0, padding_needed))
+            
+            cleaned, total = [], 0
+            for i, v in enumerate(values):
+                if i < 2:
+                    cleaned.append(v)
+                    continue
+                try:
+                    num = float(v) if v != "" else 0
+                except:
+                    num = 0
+                cleaned.append(num)
+                total += num
+            
+            row_dict = {"Item": item}
+            for i, col in enumerate(date_columns):
+                row_dict[col] = cleaned[i]
+            row_dict["Total"] = total
+            
+            if current_section == "daily":
+                daily.append(row_dict)
+            else:
+                weekly.append(row_dict)
+
+        st.subheader("📦 Daily Items Stock")
+        st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
+        
+        st.subheader("📦 Weekly Items Stock")
+        st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
+        
+        st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+    except Exception as e:
+        st.error(f"Error fetching stock data: {e}")
+
+# Trigger the fragment if the toggle is True
 if st.session_state.get("show_stock_view", False):
     if branch_info is not None:
-        with st.spinner("Fetching live stock data..."):
-            try:
-                # Fetching data using the branch_info identified earlier with rotating credentials
-                client = get_gs_client()
-                sheet = client.open_by_key(branch_info["SheetID"])
-                ws = sheet.worksheet("Stocks")
-                data = ws.get_all_values()
-                
-                headers = data[0]
-                date_columns = headers[1:]
-                daily, weekly = [], []
-                current_section = None
-
-                # Data Parsing Logic
-                for row in data:
-                    row_text = " ".join(row).strip().lower()
-                    if "daily item" in row_text:
-                        current_section = "daily"
-                        continue
-                    if "weekly item" in row_text:
-                        current_section = "weekly"
-                        continue
-                    if current_section is None or not row or not row[0]:
-                        continue
-                    
-                    item = row[0].strip()
-                    row_values = row[1:]
-                    padding_needed = len(date_columns) - len(row_values)
-                    values = row_values + ([""] * max(0, padding_needed))
-                    
-                    cleaned, total = [], 0
-                    for i, v in enumerate(values):
-                        if i < 2:
-                            cleaned.append(v)
-                            continue
-                        
-                        try:
-                            num = float(v) if v != "" else 0
-                        except:
-                            num = 0
-                        
-                        cleaned.append(num)
-                        total += num
-                    
-                    row_dict = {"Item": item}
-                    for i, col in enumerate(date_columns):
-                        row_dict[col] = cleaned[i]
-                    row_dict["Total"] = total
-                    
-                    if current_section == "daily":
-                        daily.append(row_dict)
-                    else:
-                        weekly.append(row_dict)
-
-                st.subheader("📦 Daily Items Stock")
-                st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-                
-                st.subheader("📦 Weekly Items Stock")
-                st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
-                
-                # Save to session state for other pages
-                st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
-            except Exception as e:
-                st.error(f"Error fetching stock data: {e}")
+        render_stock_view(branch_info)
     else:
-        # If user logs out while view is open, force close the view
         st.session_state.show_stock_view = False
-        st.rerun()
 
 # ========================================================
 # BACK

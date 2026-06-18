@@ -3,8 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import time
 import uuid
-
-
+from background import set_background
 from gspread import Cell
 from datetime import datetime, timedelta
 import smtplib
@@ -263,136 +262,73 @@ date_str = str(date)
 # -----------------------------
 # FORCE NUMERIC KEYPAD ON MOBILE
 # -----------------------------
+# This script targets all text inputs and forces them to show the number pad
+# without changing the visual appearance or functionality of the input box.
 components.html("""
 <script>
-    function setInputModes() {
-        // Get all input elements on the page
+    function setNumericKeypad() {
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
-        
         inputs.forEach(function(input) {
-            // Check if this input belongs to the Search bar
-            // Streamlit sets the 'aria-label' to the label provided in the code
-            if (input.getAttribute('aria-label') === '🔍 Search by SKU or UOM') {
-                // FORCE TEXT MODE for Search
-                input.setAttribute('inputmode', 'text');
-                input.removeAttribute('pattern');
-            } else {
-                // KEEP NUMERIC MODE for everything else (your stock fields)
-                input.setAttribute('inputmode', 'numeric');
-                input.setAttribute('pattern', '[0-9]*');
-            }
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
         });
     }
-    // Run this logic after the page renders
-    setTimeout(setInputModes, 1000);
+    // Run after a short delay to ensure elements are rendered
+    setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
 # -----------------------------
-# 1. PERSISTENT STORAGE INIT
-# -----------------------------
-if "stock_inputs" not in st.session_state:
-    st.session_state.stock_inputs = {item["name"]: "" for item in processed_items}
-
-if "search_clear" not in st.session_state:
-    st.session_state.search_clear = ""
-
-# 2. SYNC CALLBACK FUNCTION
-def update_val(item_name):
-    st.session_state.stock_inputs[item_name] = str(st.session_state[f"input_{item_name}"]).strip()
-
-# -----------------------------
-# 3. SEARCH BAR
-# -----------------------------
-# We use st.session_state.search_clear to allow the code to force-clear the UI
-search_query = st.text_input(
-    "🔍 Search by SKU or UOM", 
-    value=st.session_state.search_clear,
-    placeholder="Type SKU or UOM..."
-).lower()
-
-# Update state if the user types manually
-st.session_state.search_clear = search_query
-
-filtered_items = [
-    item for item in processed_items 
-    if search_query in item["name"].lower() or search_query in item["umo"].lower()
-]
-
-# -----------------------------
-# 4. CUSTOM WARNING DIALOG
-# -----------------------------
-# -----------------------------
-# 4. CUSTOM WARNING DIALOG (UPDATED TO WARNING)
-# -----------------------------
-@st.dialog("⚠️ Pending Items")
-def show_missing_warning():
-    # Changed from st.warning/st.error to be more descriptive
-    st.markdown("### 📋 Action Required")
-    st.warning("Some items are still empty. Please clear the search to see the full list and fill in all quantities.")
-    
-    st.write("#### Missing quantities for:")
-    # Using st.warning instead of st.error for the list of items
-    st.warning(", ".join(st.session_state.get("pending_items", [])[:10]) + ("..." if len(st.session_state.get("pending_items", [])) > 10 else ""))
-    
-    if st.button("Clear Search & View All", type="primary"):
-        st.session_state.search_clear = "" # This forces the search bar to empty
-        st.rerun()# -----------------------------
-# 4. CUSTOM WARNING DIALOG (UPDATED TO WARNING)
-# -----------------------------
-@st.dialog("⚠️ Pending Items")
-def show_missing_warning():
-    # Changed from st.warning/st.error to be more descriptive
-    st.markdown("### 📋 Action Required")
-    st.warning("Some items are still empty. Please clear the search to see the full list and fill in all quantities.")
-    
-    st.write("#### Missing quantities for:")
-    # Using st.warning instead of st.error for the list of items
-    st.warning(", ".join(st.session_state.get("pending_items", [])[:10]) + ("..." if len(st.session_state.get("pending_items", [])) > 10 else ""))
-    
-    if st.button("Clear Search & View All", type="primary"):
-        st.session_state.search_clear = "" # This forces the search bar to empty
-        st.rerun()
-# -----------------------------
-# 5. DYNAMIC INPUT FIELDS (NO FORM)
+# INPUT FORM
 # -----------------------------
 st.markdown("## Enter Stock")
 
-for i in range(0, len(filtered_items), 4):
-    cols = st.columns(4)
-    for j, col in enumerate(cols):
-        if i + j < len(filtered_items):
-            item_data = filtered_items[i + j]
-            item_name = item_data["name"]
-            
-            # Persistent value pulled from master dictionary
-            col.text_input(
-                label=f"{item_name} [{item_data['umo']}]",
-                value=st.session_state.stock_inputs.get(item_name, ""),
-                key=f"input_{item_name}",
-                on_change=update_val,
-                args=(item_name,),
-                placeholder="Qty"
-            )
+inputs = {}
+
+with st.form("stock_form", clear_on_submit=False):
+
+    for i in range(0, len(processed_items), 4):
+        cols = st.columns(4)
+
+        for j, col in enumerate(cols):
+            if i + j < len(processed_items):
+                item_data = processed_items[i + j]
+                item = item_data["name"]
+                umo = item_data["umo"]
+                
+                label = f"{item} [{umo}]" if umo else item
+
+                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
+                value = col.text_input(
+                    label,
+                    placeholder="Enter quantity",
+                    key=f"{mode}_{item}_{item_data['row_idx']}"
+                )
+
+                inputs[item] = value.strip() if value.strip() else None
 
 # -----------------------------
-# 6. MANUAL SUBMIT BUTTON
-# -----------------------------
-if st.button("🔍 Review Stock", type="primary", use_container_width=True):
-    # Validation against the Master Dictionary
-    missing = [name for name, val in st.session_state.stock_inputs.items() if not val]
-    invalid = [name for name, val in st.session_state.stock_inputs.items() if val and not val.isdigit()]
-    
-    if invalid:
-        show_error_dialog(f"Invalid numbers in: {', '.join(invalid)}")
-    elif missing:
-        st.session_state.pending_items = missing
-        show_missing_warning()
-    else:
-        # Move to Review
-        st.session_state.draft_data = st.session_state.stock_inputs
-        st.session_state.review_mode = True
-        st.session_state.scroll_to_review = True
-        st.rerun()
+    # 3. VALIDATION & SUBMISSION
+    # -----------------------------
+    submitted = st.form_submit_button("🔍 Review Stock")
+
+    if submitted:
+        # Check for non-numeric characters
+        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
+        # Check for missing values
+        missing = [item for item, val in inputs.items() if val is None]
+
+        if invalid_items:
+            # Trigger the Dialog Popup
+            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
+        elif missing:
+            # Trigger the Dialog Popup
+            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
+        else:
+            # All checks passed, move to review
+            st.session_state.draft_data = inputs
+            st.session_state.review_mode = True
+            st.session_state.scroll_to_review = True
+            st.rerun()
 # -----------------------------
 # 5-COLUMN COMPACT REVIEW
 # -----------------------------

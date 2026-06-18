@@ -52,6 +52,9 @@ def get_gs_client():
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
+# ========================================================
+# LOAD BRANCH MAP ON STARTUP
+# ========================================================
 
 if "branch_map" not in st.session_state:
     with st.spinner("Initializing connection..."):
@@ -60,14 +63,20 @@ if "branch_map" not in st.session_state:
             
             # Load the Branch Map from the Master Sheet
             master_sh = client.open("MASTERBRANCHSHEET")
-            branch_ws = master_sh.worksheet("Branches")  # Ensure this tab exists
-            data = branch_ws.get_all_values()[1:]  # Skip header
+            branch_ws = master_sh.worksheet("Branches")
+            data = branch_ws.get_all_values()[1:]
             
             # Create a dictionary: {'B001': '1VF7g...', 'B002': '1cEku...', ...}
             st.session_state.branch_map = {row[0]: row[1] for row in data}
+            
+            # --- ADD THIS LINE TO INITIALIZE THE LIST ---
+            # Assuming row[0] is ID and row[2] is Branch Name, adjust index as needed
+            st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+            
         except Exception as e:
             st.error(f"Failed to initialize: {e}")
             st.session_state.branch_map = {}
+            st.session_state.branch_list = [] # Initialize empty list to prevent crash
 
 # ========================================================
 # PAGE CONFIG

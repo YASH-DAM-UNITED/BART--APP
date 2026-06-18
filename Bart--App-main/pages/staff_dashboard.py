@@ -10,21 +10,68 @@ import json
 from pathlib import Path
 import pandas as pd
 import time
+import threading
 
+# ========================================================
+# DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
+# ========================================================
+
+client_lock = threading.Lock()
+
+def get_gs_client():
+    """
+    Round-robin client pool manager with dual credential keys.
+    Uses threading lock to prevent race conditions in multi-threaded environments.
+    """
+    if "client_pool" not in st.session_state:
+        # Load your keys from secrets
+        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"]  # Add more as needed
+        pool = []
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        
+        for k in keys:
+            if k in st.secrets:
+                try:
+                    creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
+                    pool.append(gspread.authorize(creds))
+                except Exception as e:
+                    st.error(f"Failed to load credentials for {k}: {e}")
+        
+        if not pool:
+            st.error("No Google credentials found in secrets!")
+            return None
+            
+        st.session_state.client_pool = pool
+        st.session_state.client_index = 0
+    
+    # Use the lock to prevent threads from grabbing the same index
+    with client_lock:
+        idx = st.session_state.client_index
+        # Rotate index
+        st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
+        client = st.session_state.client_pool[idx]
+    
+    return client
+
+# ========================================================
+# INITIALIZE GOOGLE CLIENT
+# ========================================================
 
 if "gs_client" not in st.session_state:
-    creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=[
-        "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"
-    ])
-    st.session_state.gs_client = gspread.authorize(creds)
+    st.session_state.gs_client = get_gs_client()
 
-# ---------------- PAGE CONFIG ----------------
+# ========================================================
+# PAGE CONFIG
+# ========================================================
+
 st.set_page_config(layout="wide", page_title="BART Staff Dashboard")
 
 SESSION_TIMEOUT = 30 * 60
 
-# ---------------- CLEAN UI STYLE ----------------
+# ========================================================
+# CLEAN UI STYLE
+# ========================================================
+
 st.markdown("""
 <style>
 #MainMenu {visibility:hidden;}
@@ -49,7 +96,10 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- HEADER ----------------
+# ========================================================
+# HEADER
+# ========================================================
+
 st.markdown("""
 <div style="
     background: linear-gradient(90deg, #1f1f2e, #4b6cb7);
@@ -63,7 +113,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---------------- PASSWORD FILE ----------------
+# ========================================================
+# PASSWORD FILE
+# ========================================================
+
 FILE_NAME = Path(__file__).parent / "passwords.json"
 
 def init_file():
@@ -77,7 +130,10 @@ def load_admin():
 
 init_file()
 
-# ---------------- SESSION STATE ----------------
+# ========================================================
+# SESSION STATE
+# ========================================================
+
 defaults = {
     "authenticated": False,
     "auth_branch": None,
@@ -91,17 +147,23 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 
-
-
 # Load the Branch Map so "Reject" logic knows where to send stock back
 if "branch_map" not in st.session_state:
-    master_sh = st.session_state.gs_client.open("MASTERBRANCHSHEET")
-    branch_ws = master_sh.worksheet("Branches")
-    data = branch_ws.get_all_values()[1:]
-    st.session_state.branch_map = {row[0]: row[1] for row in data}
+    try:
+        client = get_gs_client()
+        master_sh = client.open("MASTERBRANCHSHEET")
+        branch_ws = master_sh.worksheet("Branches")
+        data = branch_ws.get_all_values()[1:]
+        st.session_state.branch_map = {row[0]: row[1] for row in data}
+    except Exception as e:
+        st.error(f"Error loading branch map: {e}")
+        st.session_state.branch_map = {}
 
 
-# --- HELPER FUNCTIONS FOR NOTIFICATIONS ---
+# ========================================================
+# HELPER FUNCTIONS FOR NOTIFICATIONS
+# ========================================================
+
 @st.dialog("📦 New Transfer Received")
 def show_transfer_dialog(transfer):
     st.write(f"### Transfer ID: `{transfer['ID']}`")
@@ -123,6 +185,7 @@ def show_transfer_dialog(transfer):
     if col2.button("❌ Reject", use_container_width=True):
         update_transfer_status(transfer['ID'], "Rejected", transfer)
         st.rerun()
+
 def parse_transfer_items(transfer_data):
     # Ensure we get strings, even if the data is None or empty
     items_str = str(transfer_data.get('Items', ""))
@@ -146,19 +209,22 @@ def parse_transfer_items(transfer_data):
     return cart
 
 
-
-
 def update_transfer_status(transfer_id, status, transfer_data):
-    client = st.session_state.gs_client
-    sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-    cell = sheet.find(transfer_id)
-    if cell:
-        sheet.update_cell(cell.row, 7, status)
+    """Update transfer status with dual credential support"""
+    client = get_gs_client()
+    try:
+        sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        cell = sheet.find(transfer_id)
+        if cell:
+            sheet.update_cell(cell.row, 7, status)
+    except Exception as e:
+        st.error(f"Error updating transfer status: {e}")
+        return
     
     # 2. If Rejected, perform the "Reverse" Operation on BOTH branches
     if status == "Rejected":
         origin_branch_raw = transfer_data['Origin']
-        dest_branch_raw = transfer_data['Destination'] # Grab destination from data
+        dest_branch_raw = transfer_data['Destination']
         
         origin_id = origin_branch_raw.split(" - ")[0]
         dest_id = dest_branch_raw.split(" - ")[0]
@@ -169,64 +235,87 @@ def update_transfer_status(transfer_id, status, transfer_data):
         cart = parse_transfer_items(transfer_data)
         
         if origin_key and dest_key:
-            # Open both sheets
-            origin_sh = client.open_by_key(origin_key)
-            dest_sh = client.open_by_key(dest_key)
-            
-            # Add back to Origin
-            ws_origin = origin_sh.worksheet("Stocks")
-            prepare_batch_updates(ws_origin, cart, "add")
-            
-            # Subtract from Destination
-            ws_dest = dest_sh.worksheet("Stocks")
-            prepare_batch_updates(ws_dest, cart, "subtract")
-            
-            st.success(f"Rejected: Stock returned to {origin_branch_raw} and removed from {dest_branch_raw}")
+            try:
+                # Open both sheets with rotating credentials
+                origin_sh = client.open_by_key(origin_key)
+                dest_sh = client.open_by_key(dest_key)
+                
+                # Add back to Origin
+                ws_origin = origin_sh.worksheet("Stocks")
+                prepare_batch_updates(ws_origin, cart, "add")
+                
+                # Subtract from Destination
+                ws_dest = dest_sh.worksheet("Stocks")
+                prepare_batch_updates(ws_dest, cart, "subtract")
+                
+                st.success(f"Rejected: Stock returned to {origin_branch_raw} and removed from {dest_branch_raw}")
+            except Exception as e:
+                st.error(f"Error processing reversal: {e}")
         else:
             st.error("Could not find branch map IDs to complete the reversal.")
+
 def prepare_batch_updates(ws, cart, mode="subtract"):
-    all_data = ws.get_all_values()
-    if not all_data: return "Error: Sheet is empty"
-    
-    # Identify item column and stock column
-    items_column = [row[0] for row in all_data]
-    # Assuming last column is the stock column
-    col_index = len(all_data[0]) - 1 
-    
-    batch_list = []
-    for entry in cart:
-        if entry['item'] in items_column:
-            row_idx = items_column.index(entry['item'])
-            current_val = all_data[row_idx][col_index]
-            current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
-            
-            if mode == "subtract":
-                new_val = current_num - int(entry['qty'])
-            else:
-                new_val = current_num + int(entry['qty'])
+    """Batch update with error handling"""
+    try:
+        all_data = ws.get_all_values()
+        if not all_data: 
+            return "Error: Sheet is empty"
+        
+        # Identify item column and stock column
+        items_column = [row[0] for row in all_data]
+        # Assuming last column is the stock column
+        col_index = len(all_data[0]) - 1 
+        
+        batch_list = []
+        for entry in cart:
+            if entry['item'] in items_column:
+                row_idx = items_column.index(entry['item'])
+                current_val = all_data[row_idx][col_index]
+                current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
                 
-            cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
-            batch_list.append({"range": cell_address, "values": [[new_val]]})
-            
-    if batch_list:
-        ws.batch_update(batch_list)
-        return "Success"
-    return "Error: Items not found"
+                if mode == "subtract":
+                    new_val = current_num - int(entry['qty'])
+                else:
+                    new_val = current_num + int(entry['qty'])
+                    
+                cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+                batch_list.append({"range": cell_address, "values": [[new_val]]})
+                
+        if batch_list:
+            ws.batch_update(batch_list)
+            return "Success"
+        return "Error: Items not found"
+    except Exception as e:
+        st.error(f"Error in batch update: {e}")
+        return f"Error: {str(e)}"
+
 def check_for_pending_transfers():
-    sheet = st.session_state.gs_client.open("MASTERBRANCHSHEET").worksheet("Transfers")
-    records = sheet.get_all_records()
-    my_branch = st.session_state.selected_branch
-    
-    # Filter for pending transfers where current branch is the destination
-    pending = [r for r in records if r['Destination'] == my_branch and r['Status'] == 'Pending']
-    
-    for transfer in pending:
-        show_transfer_dialog(transfer)
-# ---------------- ACTIVITY ----------------
+    """Check pending transfers with error handling"""
+    try:
+        client = get_gs_client()
+        sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
+        records = sheet.get_all_records()
+        my_branch = st.session_state.selected_branch
+        
+        # Filter for pending transfers where current branch is the destination
+        pending = [r for r in records if r['Destination'] == my_branch and r['Status'] == 'Pending']
+        
+        for transfer in pending:
+            show_transfer_dialog(transfer)
+    except Exception as e:
+        st.error(f"Error checking transfers: {e}")
+
+# ========================================================
+# ACTIVITY MANAGEMENT
+# ========================================================
+
 def refresh_activity():
     st.session_state.last_activity = time.time()
 
-# ---------------- TIMEOUT ----------------
+# ========================================================
+# TIMEOUT CHECK
+# ========================================================
+
 def check_timeout():
     if st.session_state.authenticated and st.session_state.last_activity:
         if time.time() - st.session_state.last_activity > SESSION_TIMEOUT:
@@ -237,42 +326,28 @@ def check_timeout():
 
 check_timeout()
 
-# ---------------- SELF-HEALING GOOGLE CONNECTION ----------------
-def get_fresh_client():
-    creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    # Always create a fresh credential object to avoid stale token issues
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    return gspread.authorize(creds)
+# ========================================================
+# LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED)
+# ========================================================
 
-# Ensure client exists and is fresh
-if "gs_client" not in st.session_state:
-    st.session_state.gs_client = get_fresh_client()
-# ---------------- LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED) ----------------
-@st.cache_data(ttl=3000)  # Use a numeric TTL (seconds) instead of None
+@st.cache_data(ttl=3000)
 def load_master_branch_data():
-    # Access the client from session state instead of a global 'client' variable
-    client = st.session_state.gs_client 
-    sheet = client.open("MASTERBRANCHSHEET").sheet1
-    records = sheet.get_all_records()
-    
-    # Pre-map a password dictionary
-    passwords = {"admin": load_admin()["admin"]}
-    for row in records:
-        key = f"{row['BranchCode']} - {row['BranchName']}"
-        passwords[key] = row.get("Password", "")
+    """Load branch data with dual credential pool support"""
+    client = get_gs_client()
+    try:
+        sheet = client.open("MASTERBRANCHSHEET").sheet1
+        records = sheet.get_all_records()
         
-    return records, passwords
-# Fetch data securely and instantly from memory
-branch_data, passwords = load_master_branch_data()
-branches = [f"{b['BranchCode']} - {b['BranchName']}" for b in branch_data]
-
-# ONLY set this if it isn't already there to avoid unnecessary processing
-if "branch_list" not in st.session_state:
-    st.session_state.branch_list = branches
+        # Pre-map a password dictionary
+        passwords = {"admin": load_admin()["admin"]}
+        for row in records:
+            key = f"{row['BranchCode']} - {row['BranchName']}"
+            passwords[key] = row.get("Password", "")
+            
+        return records, passwords
+    except Exception as e:
+        st.error(f"Error loading branch data: {e}")
+        return [], {"admin": load_admin()["admin"]}
 
 # Fetch data securely and instantly from memory
 branch_data, passwords = load_master_branch_data()
@@ -280,19 +355,27 @@ branches = [f"{b['BranchCode']} - {b['BranchName']}" for b in branch_data]
 branch_options = ["-- Select Branch --"] + branches
 
 def save_passwords(branch_key, new_password):
-    sheet = client.open("MASTERBRANCHSHEET").sheet1
-    records = sheet.get_all_records()
+    """Save password with dual credential support"""
+    client = get_gs_client()
+    try:
+        sheet = client.open("MASTERBRANCHSHEET").sheet1
+        records = sheet.get_all_records()
 
-    for idx, row in enumerate(records, start=2):
-        key = f"{row['BranchCode']} - {row['BranchName']}"
-        if key == branch_key:
-            col_index = list(row.keys()).index("Password") + 1
-            sheet.update_cell(idx, col_index, new_password)
-            # Clear cache so the new password takes effect immediately
-            load_master_branch_data.clear()
-            return
+        for idx, row in enumerate(records, start=2):
+            key = f"{row['BranchCode']} - {row['BranchName']}"
+            if key == branch_key:
+                col_index = list(row.keys()).index("Password") + 1
+                sheet.update_cell(idx, col_index, new_password)
+                # Clear cache so the new password takes effect immediately
+                load_master_branch_data.clear()
+                return
+    except Exception as e:
+        st.error(f"Error saving password: {e}")
 
-# ---------------- PIN FIRST 3 COLUMNS ----------------
+# ========================================================
+# PIN FIRST 3 COLUMNS
+# ========================================================
+
 st.markdown("""
 <style>
 div[data-testid="stDataFrame"] thead th:nth-child(1),
@@ -321,7 +404,10 @@ div[data-testid="stDataFrame"] tbody td:nth-child(3) {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- BRANCH SELECT ----------------
+# ========================================================
+# BRANCH SELECT
+# ========================================================
+
 st.subheader("Select Branch")
 
 if st.session_state.selected_branch == "-- Select Branch --":
@@ -339,7 +425,7 @@ if st.session_state.selected_branch == "-- Select Branch --":
 else:
     st.success(f"Selected Branch: {st.session_state.selected_branch}")
 
-    col1, col2= st.columns(2)
+    col1, col2 = st.columns(2)
 
     if col1.button("🔄 Logout "):
         st.session_state.selected_branch = "-- Select Branch --"
@@ -349,22 +435,24 @@ else:
         st.rerun()
     if col2.button("🔄 Refresh "):
         st.rerun()
-    
 
+# ========================================================
+# BRANCH INFO
+# ========================================================
 
-
-
-
-# ---------------- BRANCH INFO ----------------
 branch_info = None
 
 if st.session_state.selected_branch != "-- Select Branch --":
     branch_info = next(
-        b for b in branch_data
-        if f"{b['BranchCode']} - {b['BranchName']}" == st.session_state.selected_branch
+        (b for b in branch_data
+        if f"{b['BranchCode']} - {b['BranchName']}" == st.session_state.selected_branch),
+        None
     )
 
-# ---------------- MAIN ----------------
+# ========================================================
+# MAIN
+# ========================================================
+
 if st.session_state.selected_branch != "-- Select Branch --":
 
     if not st.session_state.authenticated:
@@ -378,9 +466,10 @@ if st.session_state.selected_branch != "-- Select Branch --":
                         st.session_state.authenticated = True
                         st.session_state.auth_branch = st.session_state.selected_branch
                         st.session_state.last_activity = time.time()
-                        st.session_state.sheet_id = branch_info["SheetID"]
-                        st.session_state.tab_name = "Stocks"
-                        st.session_state.branch_info = branch_info
+                        if branch_info:
+                            st.session_state.sheet_id = branch_info["SheetID"]
+                            st.session_state.tab_name = "Stocks"
+                            st.session_state.branch_info = branch_info
                         st.rerun()
                     else:
                         st.error("Incorrect password")
@@ -388,7 +477,10 @@ if st.session_state.selected_branch != "-- Select Branch --":
             if st.button("Reset Password"):
                 st.session_state.reset_mode = True
 
-    # ---------------- RESET PASSWORD ----------------
+    # ========================================================
+    # RESET PASSWORD
+    # ========================================================
+
     if st.session_state.reset_mode:
         st.subheader("Reset Password")
         admin_pass = st.text_input("Admin Password", type="password")
@@ -401,7 +493,10 @@ if st.session_state.selected_branch != "-- Select Branch --":
             else:
                 st.error("Wrong admin password")
 
-# ---------------- AFTER LOGIN ----------------
+# ========================================================
+# AFTER LOGIN
+# ========================================================
+
 if st.session_state.authenticated:
     st.success(f"Logged in: {st.session_state.selected_branch}")
     check_for_pending_transfers()
@@ -419,96 +514,89 @@ if st.session_state.authenticated:
     if col4.button("📦 Stock Transfer Internal "):
         st.switch_page("pages/stock_transfer.py")
 
-    # CORRECTED: Indentation fixed here
-    if col3.button("🔍Stock View"):
+    if col3.button("🔍 Stock View"):
         st.session_state.show_stock_view = not st.session_state.get("show_stock_view", False)
         refresh_activity()
         st.rerun()
 
-    
+# ========================================================
+# STOCK VIEW SECTION
+# ========================================================
 
-
-
-
-    
-
-
-# ---------------- STOCK VIEW SECTION ----------------
-# Only execute if the toggle is active AND we have a valid branch loaded
 if st.session_state.get("show_stock_view", False):
     if branch_info is not None:
         with st.spinner("Fetching live stock data..."):
-            # Fetching data using the branch_info identified earlier
-            sheet = st.session_state.gs_client.open_by_key(branch_info["SheetID"])
-            ws = sheet.worksheet("Stocks")
-            data = ws.get_all_values()
-            
-            headers = data[0]
-            date_columns = headers[1:]
-            daily, weekly = [], []
-            current_section = None
+            try:
+                # Fetching data using the branch_info identified earlier with rotating credentials
+                client = get_gs_client()
+                sheet = client.open_by_key(branch_info["SheetID"])
+                ws = sheet.worksheet("Stocks")
+                data = ws.get_all_values()
+                
+                headers = data[0]
+                date_columns = headers[1:]
+                daily, weekly = [], []
+                current_section = None
 
-            # Data Parsing Logic
-            for row in data:
-                row_text = " ".join(row).strip().lower()
-                if "daily item" in row_text:
-                    current_section = "daily"
-                    continue
-                if "weekly item" in row_text:
-                    current_section = "weekly"
-                    continue
-                if current_section is None or not row or not row[0]:
-                    continue
-                
-                item = row[0].strip()
-                row_values = row[1:]
-                padding_needed = len(date_columns) - len(row_values)
-                values = row_values + ([""] * max(0, padding_needed))
-                
-                cleaned, total = [], 0
-                for i, v in enumerate(values):
-                    # Logic: Skip index 0 (Item) and 1 (Category/Secondary info)
-                    # This allows index 2 (the 3rd column) and index 3 (the 4th column) 
-                    # and onwards to be treated as numbers for the total.
-                    if i < 2:
-                        cleaned.append(v)
+                # Data Parsing Logic
+                for row in data:
+                    row_text = " ".join(row).strip().lower()
+                    if "daily item" in row_text:
+                        current_section = "daily"
+                        continue
+                    if "weekly item" in row_text:
+                        current_section = "weekly"
+                        continue
+                    if current_section is None or not row or not row[0]:
                         continue
                     
-                    try:
-                        num = float(v) if v != "" else 0
-                    except:
-                        num = 0
+                    item = row[0].strip()
+                    row_values = row[1:]
+                    padding_needed = len(date_columns) - len(row_values)
+                    values = row_values + ([""] * max(0, padding_needed))
                     
-                    cleaned.append(num)
-                    total += num
-                
-                row_dict = {"Item": item}
-                for i, col in enumerate(date_columns):
-                    row_dict[col] = cleaned[i]
-                row_dict["Total"] = total
-                
-                if current_section == "daily":
-                    daily.append(row_dict)
-                else:
-                    weekly.append(row_dict)
+                    cleaned, total = [], 0
+                    for i, v in enumerate(values):
+                        if i < 2:
+                            cleaned.append(v)
+                            continue
+                        
+                        try:
+                            num = float(v) if v != "" else 0
+                        except:
+                            num = 0
+                        
+                        cleaned.append(num)
+                        total += num
+                    
+                    row_dict = {"Item": item}
+                    for i, col in enumerate(date_columns):
+                        row_dict[col] = cleaned[i]
+                    row_dict["Total"] = total
+                    
+                    if current_section == "daily":
+                        daily.append(row_dict)
+                    else:
+                        weekly.append(row_dict)
 
-            st.subheader("📦 Daily Items Stock")
-            st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
-            
-            st.subheader("📦 Weekly Items Stock")
-            st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
-            
-            # Save to session state for other pages
-            st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+                st.subheader("📦 Daily Items Stock")
+                st.dataframe(pd.DataFrame(daily), use_container_width=True, height=400)
+                
+                st.subheader("📦 Weekly Items Stock")
+                st.dataframe(pd.DataFrame(weekly), use_container_width=True, height=400)
+                
+                # Save to session state for other pages
+                st.session_state.current_stocks = {"daily": daily, "weekly": weekly}
+            except Exception as e:
+                st.error(f"Error fetching stock data: {e}")
     else:
         # If user logs out while view is open, force close the view
         st.session_state.show_stock_view = False
         st.rerun()
 
+# ========================================================
+# BACK
+# ========================================================
 
-
-
-
-# ---------------- BACK ----------------
 if st.button("⬅ Back"):
     st.switch_page("app.py")

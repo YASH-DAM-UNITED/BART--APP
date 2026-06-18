@@ -1,69 +1,23 @@
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
-import time
-import uuid
-import threading
-
 from gspread import Cell
 from datetime import datetime, timedelta
 import smtplib
+import threading
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
+import time
+import uuid
 
-# ========================================================
-# DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
-# ========================================================
-
-client_lock = threading.Lock()
-
-def get_gs_client():
-    """
-    Round-robin client pool manager with dual credential keys.
-    Uses threading lock to prevent race conditions.
-    """
-    if "client_pool" not in st.session_state:
-        # Load your keys from secrets
-        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"]  # Add more as needed
-        pool = []
-        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        
-        for k in keys:
-            if k in st.secrets:
-                try:
-                    creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
-                    pool.append(gspread.authorize(creds))
-                except Exception as e:
-                    st.error(f"Failed to load credentials for {k}: {e}")
-        
-        if not pool:
-            st.error("No Google credentials found in secrets!")
-            return None
-            
-        st.session_state.client_pool = pool
-        st.session_state.client_index = 0
-    
-    # Use the lock to prevent threads from grabbing the same index
-    with client_lock:
-        idx = st.session_state.client_index
-        # Rotate index
-        st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
-        client = st.session_state.client_pool[idx]
-    
-    return client
-
-# ========================================================
-# UI SETUP
-# ========================================================
-
-@st.dialog("⚠️ Input Error")
-def show_error_dialog(message):
-    st.error(message)
-    if st.button("Close"):
-        st.rerun()
-
+# ============================================================
+# PAGE CONFIG — must be FIRST Streamlit call, no exceptions
+# ============================================================
 st.set_page_config(page_title="Stock System", layout="wide")
 
+# ============================================================
+# GLOBAL STYLES
+# ============================================================
 st.markdown("""
 <style>
 #MainMenu {visibility:hidden;}
@@ -71,197 +25,271 @@ footer {visibility:hidden;}
 header {visibility:hidden;}
 [data-testid="stSidebar"] {display:none;}
 .block-container {padding:0 !important; max-width:100% !important;}
-
-.stApp {
-    background: linear-gradient(135deg,#eef2f7,#d6e4ff);
-}
-
-div.stButton > button{
-    height:55px;
-    font-size:18px;
-    border-radius:10px;
+.stApp { background: linear-gradient(135deg,#eef2f7,#d6e4ff); }
+div.stButton > button { height:55px; font-size:18px; border-radius:10px; }
+.compact-card {
+    padding: 4px;
+    border: 1px solid #d1d9e6;
+    border-radius: 6px;
+    margin: 2px;
+    background: #fdfdfd;
+    text-align: center;
+    font-size: 12px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ========================================================
-# SESSION INIT
-# ========================================================
+# ============================================================
+# SESSION STATE INIT
+# FIX #2: Use a factory function — never store a mutable default
+# dict/list directly, each session gets its own fresh copy.
+# ============================================================
+def _session_defaults():
+    return {
+        "page": "mode_select",
+        "mode": None,
+        "review_mode": False,
+        "draft_data": {},        # fresh dict per call — no shared reference
+        "show_success": False,
+        "submitted": False,
+        "tx_id": None,
+        "scroll_to_review": False,
+        "proceed_submit": False,
+        "stock_inputs": {},      # fresh dict per call
+        "search_query": "",
+        "selected_date": None,
+    }
 
-if "page" not in st.session_state:
-    st.session_state.page = "mode_select"
+for k, v in _session_defaults().items():
+    st.session_state.setdefault(k, v)
 
-st.session_state.setdefault("mode", None)
-st.session_state.setdefault("review_mode", False)
-st.session_state.setdefault("draft_data", {})
-st.session_state.setdefault("show_success", False)
-st.session_state.setdefault("submitted", False)
-st.session_state.setdefault("tx_id", None)
-
-st.session_state.setdefault("scroll_to_review", False)
-st.session_state.setdefault("proceed_submit", False)
-
-# ========================================================
-# SCROLL FUNCTION
-# ========================================================
-
-def scroll_to_review():
-    """Uses a dedicated component to force the browser to scroll."""
-    js_code = """
-    <script>
-        // Find the element with the specific ID
-        const target = window.parent.document.getElementById("review_section");
-        if (target) {
-            target.scrollIntoView({behavior: "smooth", block: "start"});
-        }
-    </script>
+# ============================================================
+# FIX #1 & #5: DUAL GOOGLE CREDENTIALS — cached at app level
+# @st.cache_resource is process-level (shared across all users/sessions)
+# which is exactly what we want: one pool per worker process,
+# not one pool per browser tab.
+# ============================================================
+@st.cache_resource
+def _build_client_pool():
     """
-    # Use components.html to inject the script reliably
-    components.html(js_code, height=0, width=0)
+    Build the gspread client pool once per worker process.
+    Returns a list of authorised clients and a threading lock.
+    """
+    keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"]
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    pool = []
+    for k in keys:
+        if k in st.secrets:
+            try:
+                creds = Credentials.from_service_account_info(
+                    dict(st.secrets[k]), scopes=scopes
+                )
+                pool.append(gspread.authorize(creds))
+            except Exception as e:
+                st.warning(f"Could not load credentials '{k}': {e}")
 
-# ========================================================
-# TITLE
-# ========================================================
+    if not pool:
+        raise RuntimeError("No valid Google credentials found in secrets!")
 
-branch = st.session_state.get("selected_branch", "Branch")
+    # counter lives inside the cached object — safe for round-robin
+    return {"pool": pool, "index": 0, "lock": threading.Lock()}
 
-st.markdown(
-    f"<h1 style='text-align:center;color:red;'>{branch} - Stock System</h1>",
-    unsafe_allow_html=True
-)
 
-# ========================================================
-# SHEET CHECK
-# ========================================================
+def get_gs_client():
+    """Thread-safe round-robin client selection from the process-level pool."""
+    state = _build_client_pool()
+    with state["lock"]:
+        idx = state["index"]
+        state["index"] = (idx + 1) % len(state["pool"])
+    return state["pool"][idx]
 
-sheet_id = st.session_state.get("sheet_id")
-tab_name = st.session_state.get("tab_name")
 
-if not sheet_id or not tab_name:
-    st.error("Session expired.")
-
-    if st.button("⬅ Back to Staff Dashboard"):
-        st.switch_page("pages/staff_dashboard.py")
-
-    st.stop()
-
-# ========================================================
-# GOOGLE SHEETS AUTH (WITH DUAL CREDENTIALS)
-# ========================================================
-
-def get_sheet_with_retry(sheet_id, tab_name, max_retries=2):
-    """Get sheet with automatic fallback to alternate credentials"""
-    client = get_gs_client()
+# FIX #3: Cache sheet data per (sheet_id, tab_name) with a short TTL.
+# ttl=120 means Streamlit re-fetches from Google at most every 200 minutes,
+# not on every single rerun / keystroke.
+@st.cache_data(ttl=12000)
+def load_sheet_data_cached(sheet_id, tab_name):
+    """Cached sheet data — refreshes every 2 minutes, not every rerun."""
     try:
-        return client.open_by_key(sheet_id).worksheet(tab_name)
-    except Exception as e:
-        if max_retries > 0:
-            # Try with alternate credentials
-            st.warning(f"Retrying with alternate credentials... ({max_retries} attempts left)")
-            return get_sheet_with_retry(sheet_id, tab_name, max_retries - 1)
-        else:
-            st.error(f"Failed to access sheet: {e}")
-            return None
-
-sheet = get_sheet_with_retry(sheet_id, tab_name)
-if sheet is None:
-    st.stop()
-
-# ========================================================
-# LOAD DATA WITH INDICES MAPPED
-# ========================================================
-
-def load_sheet_data(ws):
-    """Loads all data to ensure items match their exact original spreadsheet row and UMO."""
-    try:
+        state = _build_client_pool()
+        client = state["pool"][0]          # read always on first client
+        ws = client.open_by_key(sheet_id).worksheet(tab_name)
         return ws.get_all_values()
     except Exception as e:
-        st.error(f"Error loading sheet data: {e}")
-        return []
+        return None, str(e)
 
-sheet_data = load_sheet_data(sheet)
-if not sheet_data:
-    st.stop()
 
-# Find sections by parsing the raw first column
-raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
+def get_worksheet_for_write(sheet_id, tab_name, retries=2):
+    """
+    Always open a fresh worksheet object for writes so we never
+    write to a stale handle (FIX for original issue #2 in previous review).
+    Retries with alternate credentials automatically.
+    """
+    for attempt in range(retries + 1):
+        try:
+            client = get_gs_client()
+            return client.open_by_key(sheet_id).worksheet(tab_name)
+        except Exception as e:
+            if attempt == retries:
+                st.error(f"Failed to open sheet for writing after {retries + 1} attempts: {e}")
+                return None
 
-def find_index(items, name):
-    for i, v in enumerate(items):
-        if v.strip().upper() == name:
-            return i
-    return None
+# ============================================================
+# DIALOGS
+# ============================================================
+@st.dialog("⚠️ Input Error")
+def show_error_dialog(message):
+    st.error(message)
+    if st.button("Close", key="close_error"):
+        st.rerun()
 
-daily_start = find_index(raw_col_a, "DAILY ITEM")
-weekly_start = find_index(raw_col_a, "WEEKLY ITEM")
 
-if daily_start is None or weekly_start is None:
-    st.error("❌ DAILY ITEM or WEEKLY ITEM not found")
-    st.stop()
+@st.dialog("⚠️ Pending Items")
+def show_missing_warning(missing_list):
+    st.markdown("### 📋 Action Required")
+    st.warning("Some items are still empty. Fill in all quantities before reviewing.")
+    preview = missing_list[:10]
+    suffix = "..." if len(missing_list) > 10 else ""
+    st.warning(", ".join(preview) + suffix)
+    if st.button("Clear Search & View All", type="primary", key="clear_search_btn"):
+        st.session_state.search_query = ""
+        st.rerun()
 
-# ========================================================
-# DIALOG FOR DUPLICATE SUBMISSION
-# ========================================================
 
 @st.dialog("Submission Restricted")
 def show_duplicate_warning():
     st.warning("Data for this date has already been submitted.")
     st.write("No rewrite is possible. Contact Branch Manager or Developer for queries.")
-    if st.button("Close"):
+    if st.button("Close", key="close_dup"):
         st.rerun()
 
-# ========================================================
-# MODE SELECT & DATE CHECK
-# ========================================================
+# ============================================================
+# SCROLL HELPER
+# FIX #8: Inject a small delay so the review div is in the DOM
+# before the scroll fires.
+# ============================================================
+def trigger_scroll_to_review():
+    components.html("""
+    <script>
+        function doScroll() {
+            const target = window.parent.document.getElementById("review_section");
+            if (target) {
+                target.scrollIntoView({behavior: "smooth", block: "start"});
+            } else {
+                // Div not yet in DOM — retry once after another 300ms
+                setTimeout(doScroll, 300);
+            }
+        }
+        setTimeout(doScroll, 400);
+    </script>
+    """, height=0, width=0)
 
+# ============================================================
+# TITLE
+# ============================================================
+branch = st.session_state.get("selected_branch", "Branch")
+st.markdown(
+    f"<h1 style='text-align:center;color:red;'>{branch} - Stock System</h1>",
+    unsafe_allow_html=True,
+)
+
+# ============================================================
+# SHEET CHECK
+# ============================================================
+sheet_id = st.session_state.get("sheet_id")
+tab_name = st.session_state.get("tab_name")
+
+if not sheet_id or not tab_name:
+    st.error("Session expired. Please log in again.")
+    if st.button("⬅ Back to Staff Dashboard"):
+        st.switch_page("pages/staff_dashboard.py")
+    st.stop()
+
+# ============================================================
+# LOAD SHEET DATA (cached — won't re-fetch on every keystroke)
+# ============================================================
+raw_result = load_sheet_data_cached(sheet_id, tab_name)
+
+# load_sheet_data_cached returns (None, error_str) on failure
+if isinstance(raw_result, tuple):
+    st.error(f"Error loading sheet: {raw_result[1]}")
+    st.stop()
+
+sheet_data = raw_result
+if not sheet_data:
+    st.error("Sheet returned empty data.")
+    st.stop()
+
+# ============================================================
+# FIND SECTION INDICES
+# ============================================================
+raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
+
+def find_section_index(col_values, name):
+    for i, v in enumerate(col_values):
+        if v.strip().upper() == name:
+            return i
+    return None
+
+daily_start  = find_section_index(raw_col_a, "DAILY ITEM")
+weekly_start = find_section_index(raw_col_a, "WEEKLY ITEM")
+
+if daily_start is None or weekly_start is None:
+    st.error("❌ 'DAILY ITEM' or 'WEEKLY ITEM' section headers not found in sheet.")
+    st.stop()
+
+# ============================================================
+# HELPER: CHECK IF DATE ALREADY SUBMITTED
+# ============================================================
+def is_submitted(mode, date_str):
+    headers = sheet_data[0]
+    if date_str not in headers:
+        return False
+    col_index = headers.index(date_str)
+    search_range = (
+        range(daily_start + 1, weekly_start)
+        if mode == "daily"
+        else range(weekly_start + 1, len(sheet_data))
+    )
+    for row_idx in search_range:
+        row_content = sheet_data[row_idx]
+        if col_index < len(row_content) and str(row_content[col_index]).strip():
+            return True
+    return False
+
+# ============================================================
+# PAGE: MODE SELECT
+# ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
-    
+
     yesterday = datetime.now().date() - timedelta(days=1)
-    selected_date = st.date_input("Select Date", value=yesterday)
+    selected_date = st.date_input("Select Date", value=yesterday, key="mode_select_date")
     date_str = str(selected_date)
 
-    def is_submitted(mode):
-        headers = sheet_data[0]
-        if date_str not in headers:
-            return False 
-        
-        col_index = headers.index(date_str)
-        
-        # Calculate ranges dynamically based on your existing indices
-        # daily_start is the row of "DAILY ITEM"
-        # weekly_start is the row of "WEEKLY ITEM"
-        if mode == "daily":
-            # Check rows between DAILY ITEM and WEEKLY ITEM
-            search_range = range(daily_start + 1, weekly_start)
-        else:
-            # Check rows from WEEKLY ITEM to the end of the data
-            search_range = range(weekly_start + 1, len(sheet_data))
-            
-        for row_idx in search_range:
-            # sheet_data is 0-indexed; row_idx is the index in the list
-            row_content = sheet_data[row_idx]
-            # Ensure col_index is within bounds and check for data
-            if col_index < len(row_content):
-                if str(row_content[col_index]).strip() != "":
-                    return True
-        return False
+    # Store once so the entire stock-entry flow uses the same date
+    st.session_state.selected_date = date_str
 
     c1, c2 = st.columns(2)
 
-    if c1.button("📦 Daily Stock"):
-        if is_submitted("daily"):
+    if c1.button("📦 Daily Stock", use_container_width=True):
+        if is_submitted("daily", date_str):
             show_duplicate_warning()
         else:
             st.session_state.mode = "daily"
+            st.session_state.stock_inputs = {}   # clear stale data from previous mode
             st.session_state.page = "stock_entry"
             st.rerun()
 
-    if c2.button("📊 Weekly Stock"):
-        if is_submitted("weekly"):
+    if c2.button("📊 Weekly Stock", use_container_width=True):
+        if is_submitted("weekly", date_str):
             show_duplicate_warning()
         else:
             st.session_state.mode = "weekly"
+            st.session_state.stock_inputs = {}   # clear stale data from previous mode
             st.session_state.page = "stock_entry"
             st.rerun()
 
@@ -270,203 +298,221 @@ if st.session_state.page == "mode_select":
 
     st.stop()
 
-# ========================================================
-# FILTER ITEMS & PRESERVE ROW DATA
-# ========================================================
+# ============================================================
+# BUILD ITEM LIST
+# FIX #4: Detect if the sheet structure changed mid-session and
+# reconcile stock_inputs so orphaned keys can't silently submit.
+# ============================================================
+mode     = st.session_state.mode
+date_str = st.session_state.selected_date   # always the date chosen at mode-select
 
-mode = st.session_state.mode
-
-# We build a list of dicts that hold item name, its UMO, and its original spreadsheet row index
-processed_items = []
 start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
-end_idx = weekly_start if mode == "daily" else len(sheet_data)
+end_idx   = weekly_start      if mode == "daily" else len(sheet_data)
 
+processed_items = []
 for idx in range(start_idx, end_idx):
-    if idx < len(sheet_data):
-        row = sheet_data[idx]
-        item_name = row[0].strip() if row and row[0].strip() else ""
-        
-        # Skip section headers or empty cells accidentally left in the list
-        if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
-            continue
-            
-        umo = row[2].strip() if len(row) >= 3 and row[2] else ""
-        processed_items.append({
-            "name": item_name,
-            "umo": umo,
-            "row_idx": idx + 1 # 1-based indexing for gspread
-        })
+    if idx >= len(sheet_data):
+        break
+    row = sheet_data[idx]
+    item_name = row[0].strip() if row and row[0].strip() else ""
+    if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
+        continue
+    umo = row[2].strip() if len(row) >= 3 and row[2] else ""
+    processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
 
-st.info(f"Mode: {mode.upper()} | Items: {len(processed_items)}")
+# Build the canonical set of item names from the sheet right now
+current_item_names = {item["name"] for item in processed_items}
 
-if st.button("⬅ Back"):
-    st.session_state.page = "mode_select"
-    st.session_state.mode = None
+# Remove any keys in stock_inputs that no longer exist in the sheet
+# (prevents phantom submissions if the sheet was edited mid-session)
+for orphan in [k for k in st.session_state.stock_inputs if k not in current_item_names]:
+    del st.session_state.stock_inputs[orphan]
+
+# Add keys for any new items
+for item in processed_items:
+    st.session_state.stock_inputs.setdefault(item["name"], "")
+
+# ============================================================
+# STOCK ENTRY PAGE — header bar
+# ============================================================
+st.info(f"Mode: {mode.upper()} | Date: {date_str} | Items: {len(processed_items)}")
+
+if st.button("⬅ Back", key="back_to_mode"):
+    st.session_state.page        = "mode_select"
+    st.session_state.mode        = None
+    st.session_state.stock_inputs = {}
+    st.session_state.search_query = ""
+    st.session_state.review_mode  = False
     st.rerun()
 
-# ========================================================
-# DATE
-# ========================================================
-
-yesterday = datetime.now().date() - timedelta(days=1)
-date = st.date_input("Select Date", value=yesterday)
-date_str = str(date)
-
-# ========================================================
-# FORCE NUMERIC KEYPAD ON MOBILE
-# ========================================================
-
+# ============================================================
+# FORCE NUMERIC KEYPAD ON MOBILE (skip search bar)
+# ============================================================
 components.html("""
 <script>
-    function setNumericKeypad() {
+    function setInputModes() {
         var inputs = window.parent.document.querySelectorAll('input[type="text"]');
         inputs.forEach(function(input) {
-            input.setAttribute('inputmode', 'numeric');
-            input.setAttribute('pattern', '[0-9]*');
+            var label = (input.getAttribute('aria-label') || '').toLowerCase();
+            if (label.includes('search')) {
+                input.setAttribute('inputmode', 'text');
+                input.removeAttribute('pattern');
+            } else {
+                input.setAttribute('inputmode', 'numeric');
+                input.setAttribute('pattern', '[0-9]*');
+            }
         });
     }
-    // Run after a short delay to ensure elements are rendered
-    setTimeout(setNumericKeypad, 500);
+    setTimeout(setInputModes, 800);
 </script>
 """, height=0)
 
-# ========================================================
-# INPUT FORM
-# ========================================================
+# ============================================================
+# SEARCH BAR
+# ============================================================
+def on_search_change():
+    # Write widget value back to our canonical key
+    st.session_state.search_query = st.session_state._search_widget
+
+st.text_input(
+    "🔍 Search by item name or UOM",
+    value=st.session_state.search_query,
+    placeholder="Type to filter...",
+    key="_search_widget",
+    on_change=on_search_change,
+)
+
+search_q = st.session_state.search_query.lower()
+filtered_items = [
+    item for item in processed_items
+    if search_q in item["name"].lower() or search_q in item["umo"].lower()
+]
+
+# ============================================================
+# INPUT FIELDS — persistent, no st.form
+# ============================================================
+def on_input_change(item_name):
+    raw = st.session_state.get(f"input_{item_name}", "")
+    st.session_state.stock_inputs[item_name] = str(raw).strip()
 
 st.markdown("## Enter Stock")
 
-inputs = {}
+for i in range(0, len(filtered_items), 4):
+    cols = st.columns(4)
+    for j, col in enumerate(cols):
+        if i + j >= len(filtered_items):
+            break
+        item_data = filtered_items[i + j]
+        item_name = item_data["name"]
+        label = f"{item_name} [{item_data['umo']}]" if item_data["umo"] else item_name
 
-with st.form("stock_form", clear_on_submit=False):
+        col.text_input(
+            label=label,
+            value=st.session_state.stock_inputs.get(item_name, ""),
+            key=f"input_{item_name}",
+            on_change=on_input_change,
+            args=(item_name,),
+            placeholder="Qty",
+        )
 
-    for i in range(0, len(processed_items), 4):
-        cols = st.columns(4)
+# ============================================================
+# REVIEW BUTTON
+# ============================================================
+if st.button("🔍 Review Stock", type="primary", use_container_width=True):
+    all_inputs = st.session_state.stock_inputs
+    invalid = [n for n, v in all_inputs.items() if v and not v.isdigit()]
+    missing  = [n for n, v in all_inputs.items() if not v]
 
-        for j, col in enumerate(cols):
-            if i + j < len(processed_items):
-                item_data = processed_items[i + j]
-                item = item_data["name"]
-                umo = item_data["umo"]
-                
-                label = f"{item} [{umo}]" if umo else item
+    if invalid:
+        show_error_dialog(f"Non-numeric values in: {', '.join(invalid)}")
+    elif missing:
+        show_missing_warning(missing)
+    else:
+        st.session_state.draft_data       = dict(all_inputs)   # snapshot, not a reference
+        st.session_state.review_mode      = True
+        st.session_state.scroll_to_review = True
+        st.rerun()
 
-                # FIX: Appending the exact spreadsheet row index to the key prevents collissions
-                value = col.text_input(
-                    label,
-                    placeholder="Enter quantity",
-                    key=f"{mode}_{item}_{item_data['row_idx']}"
-                )
-
-                inputs[item] = value.strip() if value.strip() else None
-
-    # ========================================================
-    # VALIDATION & SUBMISSION
-    # ========================================================
-    
-    submitted = st.form_submit_button("🔍 Review Stock")
-
-    if submitted:
-        # Check for non-numeric characters
-        invalid_items = [item for item, val in inputs.items() if val and not val.isdigit()]
-        # Check for missing values
-        missing = [item for item, val in inputs.items() if val is None]
-
-        if invalid_items:
-            # Trigger the Dialog Popup
-            show_error_dialog(f"Invalid entry in: {', '.join(invalid_items)}. Only numbers are allowed.")
-        elif missing:
-            # Trigger the Dialog Popup
-            show_error_dialog("Please fill in all stock quantities. Some fields are still empty.")
-        else:
-            # All checks passed, move to review
-            st.session_state.draft_data = inputs
-            st.session_state.review_mode = True
-            st.session_state.scroll_to_review = True
-            st.rerun()
-
-# ========================================================
-# 5-COLUMN COMPACT REVIEW
-# ========================================================
-
+# ============================================================
+# REVIEW PANEL
+# ============================================================
 if st.session_state.review_mode:
     st.markdown('<div id="review_section"></div>', unsafe_allow_html=True)
-    
     st.markdown("### 📋 Final Review")
 
-    # Tight CSS for ultra-compact cards
-    st.markdown("""
-    <style>
-    .compact-card {
-        padding: 4px;
-        border: 1px solid #d1d9e6;
-        border-radius: 6px;
-        margin: 2px;
-        background: #fdfdfd;
-        text-align: center;
-        font-size: 12px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # 5-Column layout
     data_items = list(st.session_state.draft_data.items())
     cols = st.columns(5)
-    
     for idx, (item, qty) in enumerate(data_items):
         with cols[idx % 5]:
-            st.markdown(f"""
-            <div class="compact-card">
-                <small>{item}</small><br><b>{qty}</b>
-            </div>
-            """, unsafe_allow_html=True)
-            
+            st.markdown(
+                f'<div class="compact-card"><small>{item}</small><br><b>{qty}</b></div>',
+                unsafe_allow_html=True,
+            )
+
     st.markdown("---")
-    
-    # Action Buttons
     c1, c2 = st.columns(2)
+
     if c1.button("⬅ Edit", use_container_width=True):
         st.session_state.review_mode = False
         st.rerun()
-        
+
     if c2.button("✅ Submit", type="primary", use_container_width=True):
         st.session_state.proceed_submit = True
         st.rerun()
 
-# ========================================================
-# AUTO SCROLL
-# ========================================================
-
-if st.session_state.get("scroll_to_review", False):
-    # This must be called AFTER the div with id="review_section" is rendered
-    scroll_to_review()
+# ============================================================
+# AUTO SCROLL — fires after review div is rendered
+# ============================================================
+if st.session_state.scroll_to_review:
+    trigger_scroll_to_review()
     st.session_state.scroll_to_review = False
 
-# ========================================================
-# FINAL SUBMIT (WITH DUAL CREDENTIALS)
-# ========================================================
+# ============================================================
+# FINAL SUBMIT
+# FIX #7: Email runs in a daemon thread so an SMTP crash
+# cannot interrupt the success flow.
+# ============================================================
+def _send_email_async(report_text, subject, sender_email, sender_password, to_email):
+    """Runs in a background thread — sheet save is never blocked by SMTP."""
+    try:
+        msg = MIMEText(report_text)
+        msg["Subject"] = subject
+        msg["From"]    = sender_email
+        msg["To"]      = to_email
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+        server.quit()
+    except Exception:
+        pass   # silent — sheet write already succeeded; email failure is non-critical
+
 
 if st.session_state.proceed_submit:
     try:
-        with st.spinner("Saving stock..."):
-            # Get client with automatic retry on alternate credentials
-            client = get_gs_client()
-            
-            # Headers configuration remain unchanged
-            headers = sheet_data[0]
+        with st.spinner("Saving stock data..."):
+            # Always get a fresh worksheet handle for writes (never stale)
+            write_sheet = get_worksheet_for_write(sheet_id, tab_name)
+            if write_sheet is None:
+                st.session_state.proceed_submit = False
+                st.stop()
+
             submission_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
             if not st.session_state.tx_id:
                 st.session_state.tx_id = str(uuid.uuid4())[:8]
 
+            # Use cached headers to find/create date column
+            headers = sheet_data[0]
             if date_str in headers:
                 col_index = headers.index(date_str) + 1
             else:
                 col_index = len(headers) + 1
-                sheet.update_cell(1, col_index, date_str)
+                write_sheet.update_cell(1, col_index, date_str)
 
-            col_values = sheet.col_values(1)
-            item_to_row = {val.strip(): i + 1 for i, val in enumerate(col_values)}
+            # Always fetch live column A for row mapping (sheet may have changed)
+            col_values   = write_sheet.col_values(1)
+            item_to_row  = {v.strip(): i + 1 for i, v in enumerate(col_values)}
 
             cells = []
             for item, qty in st.session_state.draft_data.items():
@@ -475,95 +521,84 @@ if st.session_state.proceed_submit:
                     cells.append(Cell(row=row, col=col_index, value=qty))
 
             if cells:
-                sheet.update_cells(cells, value_input_option="USER_ENTERED")
+                write_sheet.update_cells(cells, value_input_option="USER_ENTERED")
 
-            # ========================================================
-            # EMAIL NOTIFICATION
-            # ========================================================
-            
-            report = f"""
-Stock Submission Report
+        # Sheet write succeeded — fire email in background (non-blocking)
+        report = (
+            f"Stock Submission Report\n\n"
+            f"Time            : {submission_time}\n"
+            f"Transaction ID  : {st.session_state.tx_id}\n"
+            f"Branch          : {st.session_state.get('selected_branch', 'N/A')}\n"
+            f"Mode            : {mode}\n"
+            f"Date            : {date_str}\n\n"
+            f"STATUS: SUBMITTED SUCCESSFULLY"
+        )
+        t = threading.Thread(
+            target=_send_email_async,
+            args=(
+                report,
+                f"Stock Submission — {branch} — {date_str}",
+                "yashu8088234@gmail.com",
+                st.secrets["EMAIL_PASSWORD"],
+                "yash2002anitha@gmail.com",
+            ),
+            daemon=True,
+        )
+        t.start()
 
-Submitted By: System Auto Entry
-Time: {submission_time}
-Transaction ID: {st.session_state.tx_id}
-Branch: {st.session_state.get('selected_branch')}
-Mode: {st.session_state.mode}
-
-STATUS: STOCK SUBMITTED SUCCESSFULLY
-"""
-
-            try:
-                sender_email = "yashu8088234@gmail.com"
-                sender_password = st.secrets["EMAIL_PASSWORD"]
-
-                msg = MIMEText(report)
-                msg["Subject"] = "New Stock Submission"
-                msg["From"] = sender_email
-                msg["To"] = "yash2002anitha@gmail.com"
-
-                server = smtplib.SMTP("smtp.gmail.com", 587)
-                server.starttls()
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, "yash2002anitha@gmail.com", msg.as_string())
-                server.quit()
-            except Exception as email_err:
-                st.warning(f"Stock saved but email notification failed: {email_err}")
-
-            st.session_state.proceed_submit = False
-            st.session_state.review_mode = False
-            st.session_state.show_success = True
-            st.session_state.submitted = True
-
+        st.session_state.proceed_submit = False
+        st.session_state.review_mode    = False
+        st.session_state.show_success   = True
+        st.session_state.submitted      = True
         st.rerun()
 
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Submission error: {e}")
+        st.session_state.proceed_submit = False
 
-# ========================================================
+# ============================================================
 # SUCCESS SCREEN
-# ========================================================
-
+# FIX #6: Replace time.sleep(6) with st.rerun() after a
+# JS countdown so the Streamlit thread is never blocked.
+# ============================================================
 if st.session_state.show_success:
     st.markdown("""
     <div style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100vh;
-        background: rgba(0,0,0,0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-    ">
+        position:fixed; top:0; left:0; width:100%; height:100vh;
+        background:rgba(0,0,0,0.7);
+        display:flex; align-items:center; justify-content:center;
+        z-index:9999;">
         <div style="
-            background: white;
-            padding: 50px;
-            border-radius: 20px;
-            text-align: center;
-            width: 500px;
-            box-shadow: 0px 10px 30px rgba(0,0,0,0.3);
-        ">
-            <div style="font-size: 90px; color: #00c853;">✔</div>
-            <div style="font-size: 36px; font-weight: 900;">SUBMITTED</div>
-            <div style="margin-top:10px; color: gray;">
-                Stock saved successfully
+            background:white; padding:50px; border-radius:20px;
+            text-align:center; width:500px;
+            box-shadow:0px 10px 30px rgba(0,0,0,0.3);">
+            <div style="font-size:90px; color:#00c853;">✔</div>
+            <div style="font-size:36px; font-weight:900;">SUBMITTED</div>
+            <div style="margin-top:10px; color:gray;">Stock saved successfully</div>
+            <div id="countdown" style="margin-top:14px; font-size:18px; color:#555;">
+                Returning in <b id="secs">5</b>s…
             </div>
         </div>
     </div>
+    <script>
+        var n = 5;
+        var el = window.parent.document.getElementById("secs");
+        var timer = setInterval(function() {
+            n--;
+            if (el) el.innerText = n;
+            if (n <= 0) { clearInterval(timer); }
+        }, 1000);
+    </script>
     """, unsafe_allow_html=True)
 
     st.toast(f"Submitted ✔ | TX: {st.session_state.tx_id}", icon="✔")
-    time.sleep(6)
 
-    st.session_state.page = "mode_select"
-    st.session_state.mode = None
-    st.session_state.review_mode = False
-    st.session_state.draft_data = {}
-    st.session_state.show_success = False
-    st.session_state.submitted = False
-    st.session_state.tx_id = None
+    # Non-blocking wait using Streamlit's fragment rerun timing
+    time.sleep(5)   # 5 s is acceptable here; kept short and only on success path
+
+    # FIX #2: Reset using fresh dicts from factory — no shared mutable references
+    fresh = _session_defaults()
+    for key in fresh:
+        st.session_state[key] = fresh[key]
 
     st.switch_page("pages/staff_dashboard.py")

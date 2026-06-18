@@ -11,7 +11,9 @@ import plotly.express as px
 from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 import gspread
-
+import threading
+ 
+ 
 
 
 import hashlib
@@ -108,25 +110,36 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
+client_lock = threading.Lock()
+
 def get_gs_client():
+    global client_lock
+    
     if "client_pool" not in st.session_state:
         # Load your keys from secrets
-        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"] # Add more as needed
+        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"] 
         pool = []
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         
         for k in keys:
             if k in st.secrets:
-                creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
-                pool.append(gspread.authorize(creds))
+                try:
+                    creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
+                    pool.append(gspread.authorize(creds))
+                except Exception as e:
+                    st.error(f"Failed to load credentials for {k}: {e}")
         
         st.session_state.client_pool = pool
         st.session_state.client_index = 0
     
-    # Round-Robin Rotation
-    idx = st.session_state.client_index
-    st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
-    return st.session_state.client_pool[idx]
+    # Use the lock to prevent threads from grabbing the same index
+    with client_lock:
+        idx = st.session_state.client_index
+        # Rotate index
+        st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
+        client = st.session_state.client_pool[idx]
+        
+    return client
 
 
 # Definition now expects TWO arguments: report_data and date_str

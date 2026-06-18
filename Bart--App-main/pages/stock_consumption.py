@@ -1,8 +1,9 @@
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import time
 import uuid
+import threading
 
 from gspread import Cell
 from datetime import datetime, timedelta
@@ -10,16 +11,57 @@ import smtplib
 from email.mime.text import MIMEText
 import streamlit.components.v1 as components
 
-# -----------------------------
-# UI SETUP
-# -----------------------------
+# ========================================================
+# DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
+# ========================================================
 
+client_lock = threading.Lock()
+
+def get_gs_client():
+    """
+    Round-robin client pool manager with dual credential keys.
+    Uses threading lock to prevent race conditions.
+    """
+    if "client_pool" not in st.session_state:
+        # Load your keys from secrets
+        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"]  # Add more as needed
+        pool = []
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        
+        for k in keys:
+            if k in st.secrets:
+                try:
+                    creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
+                    pool.append(gspread.authorize(creds))
+                except Exception as e:
+                    st.error(f"Failed to load credentials for {k}: {e}")
+        
+        if not pool:
+            st.error("No Google credentials found in secrets!")
+            return None
+            
+        st.session_state.client_pool = pool
+        st.session_state.client_index = 0
+    
+    # Use the lock to prevent threads from grabbing the same index
+    with client_lock:
+        idx = st.session_state.client_index
+        # Rotate index
+        st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
+        client = st.session_state.client_pool[idx]
+    
+    return client
+
+# ========================================================
+# UI SETUP
+# ========================================================
 
 @st.dialog("⚠️ Input Error")
 def show_error_dialog(message):
     st.error(message)
     if st.button("Close"):
         st.rerun()
+
 st.set_page_config(page_title="Stock System", layout="wide")
 
 st.markdown("""
@@ -42,9 +84,10 @@ div.stButton > button{
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
+# ========================================================
 # SESSION INIT
-# -----------------------------
+# ========================================================
+
 if "page" not in st.session_state:
     st.session_state.page = "mode_select"
 
@@ -58,9 +101,10 @@ st.session_state.setdefault("tx_id", None)
 st.session_state.setdefault("scroll_to_review", False)
 st.session_state.setdefault("proceed_submit", False)
 
-# -----------------------------
+# ========================================================
 # SCROLL FUNCTION
-# -----------------------------
+# ========================================================
+
 def scroll_to_review():
     """Uses a dedicated component to force the browser to scroll."""
     js_code = """
@@ -75,9 +119,10 @@ def scroll_to_review():
     # Use components.html to inject the script reliably
     components.html(js_code, height=0, width=0)
 
-# -----------------------------
+# ========================================================
 # TITLE
-# -----------------------------
+# ========================================================
+
 branch = st.session_state.get("selected_branch", "Branch")
 
 st.markdown(
@@ -85,9 +130,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# -----------------------------
+# ========================================================
 # SHEET CHECK
-# -----------------------------
+# ========================================================
+
 sheet_id = st.session_state.get("sheet_id")
 tab_name = st.session_state.get("tab_name")
 
@@ -99,37 +145,43 @@ if not sheet_id or not tab_name:
 
     st.stop()
 
-# -----------------------------
-# GOOGLE SHEETS AUTH
-# -----------------------------
-creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
+# ========================================================
+# GOOGLE SHEETS AUTH (WITH DUAL CREDENTIALS)
+# ========================================================
 
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+def get_sheet_with_retry(sheet_id, tab_name, max_retries=2):
+    """Get sheet with automatic fallback to alternate credentials"""
+    client = get_gs_client()
+    try:
+        return client.open_by_key(sheet_id).worksheet(tab_name)
+    except Exception as e:
+        if max_retries > 0:
+            # Try with alternate credentials
+            st.warning(f"Retrying with alternate credentials... ({max_retries} attempts left)")
+            return get_sheet_with_retry(sheet_id, tab_name, max_retries - 1)
+        else:
+            st.error(f"Failed to access sheet: {e}")
+            return None
 
-@st.cache_resource
-def get_client():
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    return gspread.authorize(creds)
+sheet = get_sheet_with_retry(sheet_id, tab_name)
+if sheet is None:
+    st.stop()
 
-client = get_client()
-
-@st.cache_resource
-def get_sheet(sheet_id, tab_name):
-    return client.open_by_key(sheet_id).worksheet(tab_name)
-
-sheet = get_sheet(sheet_id, tab_name)
-
-# -----------------------------
+# ========================================================
 # LOAD DATA WITH INDICES MAPPED
-# -----------------------------
+# ========================================================
+
 def load_sheet_data(ws):
     """Loads all data to ensure items match their exact original spreadsheet row and UMO."""
-    return ws.get_all_values()
+    try:
+        return ws.get_all_values()
+    except Exception as e:
+        st.error(f"Error loading sheet data: {e}")
+        return []
 
 sheet_data = load_sheet_data(sheet)
+if not sheet_data:
+    st.stop()
 
 # Find sections by parsing the raw first column
 raw_col_a = [row[0].strip() if row else "" for row in sheet_data]
@@ -147,9 +199,10 @@ if daily_start is None or weekly_start is None:
     st.error("❌ DAILY ITEM or WEEKLY ITEM not found")
     st.stop()
 
-# -----------------------------
+# ========================================================
 # DIALOG FOR DUPLICATE SUBMISSION
-# -----------------------------
+# ========================================================
+
 @st.dialog("Submission Restricted")
 def show_duplicate_warning():
     st.warning("Data for this date has already been submitted.")
@@ -157,9 +210,10 @@ def show_duplicate_warning():
     if st.button("Close"):
         st.rerun()
 
-# -----------------------------
-# MODE SELECT & DATE CHECK (FIXED)
-# -----------------------------
+# ========================================================
+# MODE SELECT & DATE CHECK
+# ========================================================
+
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
     
@@ -215,9 +269,11 @@ if st.session_state.page == "mode_select":
         st.switch_page("pages/staff_dashboard.py")
 
     st.stop()
-# -----------------------------
+
+# ========================================================
 # FILTER ITEMS & PRESERVE ROW DATA
-# -----------------------------
+# ========================================================
+
 mode = st.session_state.mode
 
 # We build a list of dicts that hold item name, its UMO, and its original spreadsheet row index
@@ -248,22 +304,18 @@ if st.button("⬅ Back"):
     st.session_state.mode = None
     st.rerun()
 
-# -----------------------------
+# ========================================================
 # DATE
-# -----------------------------
+# ========================================================
 
 yesterday = datetime.now().date() - timedelta(days=1)
 date = st.date_input("Select Date", value=yesterday)
 date_str = str(date)
 
-
-
-
-# -----------------------------
+# ========================================================
 # FORCE NUMERIC KEYPAD ON MOBILE
-# -----------------------------
-# This script targets all text inputs and forces them to show the number pad
-# without changing the visual appearance or functionality of the input box.
+# ========================================================
+
 components.html("""
 <script>
     function setNumericKeypad() {
@@ -277,9 +329,11 @@ components.html("""
     setTimeout(setNumericKeypad, 500);
 </script>
 """, height=0)
-# -----------------------------
+
+# ========================================================
 # INPUT FORM
-# -----------------------------
+# ========================================================
+
 st.markdown("## Enter Stock")
 
 inputs = {}
@@ -306,9 +360,10 @@ with st.form("stock_form", clear_on_submit=False):
 
                 inputs[item] = value.strip() if value.strip() else None
 
-# -----------------------------
-    # 3. VALIDATION & SUBMISSION
-    # -----------------------------
+    # ========================================================
+    # VALIDATION & SUBMISSION
+    # ========================================================
+    
     submitted = st.form_submit_button("🔍 Review Stock")
 
     if submitted:
@@ -329,9 +384,11 @@ with st.form("stock_form", clear_on_submit=False):
             st.session_state.review_mode = True
             st.session_state.scroll_to_review = True
             st.rerun()
-# -----------------------------
+
+# ========================================================
 # 5-COLUMN COMPACT REVIEW
-# -----------------------------
+# ========================================================
+
 if st.session_state.review_mode:
     st.markdown('<div id="review_section"></div>', unsafe_allow_html=True)
     
@@ -376,19 +433,25 @@ if st.session_state.review_mode:
         st.session_state.proceed_submit = True
         st.rerun()
 
-# -----------------------------
+# ========================================================
 # AUTO SCROLL
-# -----------------------------
+# ========================================================
+
 if st.session_state.get("scroll_to_review", False):
     # This must be called AFTER the div with id="review_section" is rendered
     scroll_to_review()
     st.session_state.scroll_to_review = False
-# -----------------------------
-# FINAL SUBMIT
-# -----------------------------
+
+# ========================================================
+# FINAL SUBMIT (WITH DUAL CREDENTIALS)
+# ========================================================
+
 if st.session_state.proceed_submit:
     try:
         with st.spinner("Saving stock..."):
+            # Get client with automatic retry on alternate credentials
+            client = get_gs_client()
+            
             # Headers configuration remain unchanged
             headers = sheet_data[0]
             submission_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -414,7 +477,10 @@ if st.session_state.proceed_submit:
             if cells:
                 sheet.update_cells(cells, value_input_option="USER_ENTERED")
 
-            # ---------------- EMAIL ----------------
+            # ========================================================
+            # EMAIL NOTIFICATION
+            # ========================================================
+            
             report = f"""
 Stock Submission Report
 
@@ -427,19 +493,22 @@ Mode: {st.session_state.mode}
 STATUS: STOCK SUBMITTED SUCCESSFULLY
 """
 
-            sender_email = "yashu8088234@gmail.com"
-            sender_password = st.secrets["EMAIL_PASSWORD"]
+            try:
+                sender_email = "yashu8088234@gmail.com"
+                sender_password = st.secrets["EMAIL_PASSWORD"]
 
-            msg = MIMEText(report)
-            msg["Subject"] = "New Stock Submission"
-            msg["From"] = sender_email
-            msg["To"] = "yash2002anitha@gmail.com"
+                msg = MIMEText(report)
+                msg["Subject"] = "New Stock Submission"
+                msg["From"] = sender_email
+                msg["To"] = "yash2002anitha@gmail.com"
 
-            server = smtplib.SMTP("smtp.gmail.com", 587)
-            server.starttls()
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, "yash2002anitha@gmail.com", msg.as_string())
-            server.quit()
+                server = smtplib.SMTP("smtp.gmail.com", 587)
+                server.starttls()
+                server.login(sender_email, sender_password)
+                server.sendmail(sender_email, "yash2002anitha@gmail.com", msg.as_string())
+                server.quit()
+            except Exception as email_err:
+                st.warning(f"Stock saved but email notification failed: {email_err}")
 
             st.session_state.proceed_submit = False
             st.session_state.review_mode = False
@@ -451,9 +520,10 @@ STATUS: STOCK SUBMITTED SUCCESSFULLY
     except Exception as e:
         st.error(f"Error: {e}")
 
-# -----------------------------
+# ========================================================
 # SUCCESS SCREEN
-# -----------------------------
+# ========================================================
+
 if st.session_state.show_success:
     st.markdown("""
     <div style="

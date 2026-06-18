@@ -9,6 +9,8 @@ import hashlib
 import io
 import plotly.express as px
 from datetime import datetime, timedelta
+from google.oauth2.service_account import Credentials
+import gspread
 
 
 
@@ -40,6 +42,7 @@ if "show_manager" not in st.session_state:
 @st.cache_data(ttl=3600)
 def load_manager_mapping():
     # Connect to your new sheet
+    client = get_gs_client()
     sheet = client.open_by_key("1UtHUn7miqYzaP-NnrwMR_5wnSgLnaYPRQX2c4I7_9B0").worksheet("Sheet1")
     data = sheet.get_all_records()
     return pd.DataFrame(data)
@@ -105,18 +108,25 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-@st.cache_resource
-def get_client():
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(
-        creds_dict,
-        scope
-    )
-    return gspread.authorize(creds)
-
-client = get_client()
-
-
-
+def get_gs_client():
+    if "client_pool" not in st.session_state:
+        # Load your keys from secrets
+        keys = ["GOOGLE_CREDS_JSON", "GOOGLE_CREDS_JSON1"] # Add more as needed
+        pool = []
+        scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        
+        for k in keys:
+            if k in st.secrets:
+                creds = Credentials.from_service_account_info(dict(st.secrets[k]), scopes=scopes)
+                pool.append(gspread.authorize(creds))
+        
+        st.session_state.client_pool = pool
+        st.session_state.client_index = 0
+    
+    # Round-Robin Rotation
+    idx = st.session_state.client_index
+    st.session_state.client_index = (idx + 1) % len(st.session_state.client_pool)
+    return st.session_state.client_pool[idx]
 
 
 # Definition now expects TWO arguments: report_data and date_str
@@ -186,8 +196,9 @@ def to_excel_bytes(data_frames):
 # LOAD BRANCHES
 # ========================================================
 
-@st.cache_data(ttl=None)
+@st.cache_data(ttl=3600)
 def load_branches():
+    client = get_gs_client()
     sheet = client.open("MASTERBRANCHSHEET").sheet1
     data = sheet.get_all_records()
 
@@ -246,6 +257,8 @@ branch_cache = {}
 def fetch_branch(branch):
     name = branch["BranchName"]
     try:
+        # Call the pool manager instead of global 'client'
+        client = get_gs_client() 
         ws = client.open_by_key(branch["SheetID"]).worksheet("Stocks")
         data = ws.get_all_values()
         branch_cache[name] = data

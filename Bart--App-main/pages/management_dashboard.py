@@ -294,7 +294,7 @@ def load_all_data(branches):
     progress = st.progress(0)
     status = st.empty()
 
-    with ThreadPoolExecutor(max_workers=15) as ex:
+    with ThreadPoolExecutor(max_workers=30) as ex:
         futures = {ex.submit(fetch_branch, b): b for b in branches}
         done = 0
 
@@ -320,7 +320,7 @@ def load_all_data(branches):
         time.sleep(RETRY_DELAY)
         new_failed = []
 
-        with ThreadPoolExecutor(max_workers=15) as ex:
+        with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(fetch_branch, b): b for b in failed}
             for f in as_completed(futures):
                 name, data = f.result()

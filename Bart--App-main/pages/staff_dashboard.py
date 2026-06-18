@@ -12,12 +12,7 @@ import pandas as pd
 import time
 
 
-if "gs_client" not in st.session_state:
-    creds_dict = st.secrets["GOOGLE_CREDS_JSON"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=[
-        "https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"
-    ])
-    st.session_state.gs_client = gspread.authorize(creds)
+
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(layout="wide", page_title="BART Staff Dashboard")

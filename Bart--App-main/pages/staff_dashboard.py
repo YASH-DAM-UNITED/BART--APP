@@ -523,7 +523,7 @@ if st.session_state.authenticated:
 # STOCK VIEW SECTION (CACHED FOR INSTANT PERFORMANCE)
 # ========================================================
 
-@st.cache_data(ttl=600) # Caches data for 10 minutes
+@st.cache_data(ttl=6000) # Caches data for 10 minutes
 def fetch_stock_data(sheet_id):
     """Fetch and parse data once, then store in memory."""
     client = get_gs_client()

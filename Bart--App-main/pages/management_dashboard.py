@@ -281,7 +281,7 @@ def load_all_data(branches):
     progress = st.progress(0)
     status = st.empty()
 
-    with ThreadPoolExecutor(max_workers=7) as ex:
+    with ThreadPoolExecutor(max_workers=15) as ex:
         futures = {ex.submit(fetch_branch, b): b for b in branches}
         done = 0
 

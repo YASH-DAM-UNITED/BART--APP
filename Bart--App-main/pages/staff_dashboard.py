@@ -343,7 +343,7 @@ check_timeout()
 # LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED)
 # ========================================================
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=20)
 def load_master_branch_data():
     """Load branch data with dual credential pool support"""
     client = get_gs_client()

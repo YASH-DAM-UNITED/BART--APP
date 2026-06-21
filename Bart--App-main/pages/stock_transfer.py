@@ -99,23 +99,33 @@ def success_dialog(message):
 # ========================================================
 
 def prepare_batch_updates(ws, cart, mode="subtract"):
-    """Batch update with error handling"""
+    """Batch update targeting the column matching yesterday's date."""
     try:
         all_data = ws.get_all_values()
         if not all_data:
             return "Error: Sheet is empty"
         
-        items_column = [row[0] for row in all_data]
-        col_index = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
+        # 1. Calculate yesterday's date string
+        # Adjust the format '%d-%m-%Y' to match exactly how your dates look in the sheet headers
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%d-%m-%Y')
         
+        # 2. Find the column index that matches yesterday's date
+        headers = all_data[0]
+        try:
+            col_index = headers.index(yesterday)
+        except ValueError:
+            return f"Error: Column for date {yesterday} not found in sheet."
+        
+        items_column = [row[0] for row in all_data]
         batch_list = []
+        
         for entry in cart:
             if entry['item'] in items_column:
                 row_idx = items_column.index(entry['item'])
                 current_val = all_data[row_idx][col_index]
                 current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
                 
-                # Subtraction for origin, Addition for destination
+                # Apply math
                 if mode == "subtract":
                     new_val = current_num - int(entry['qty'])
                 else:
@@ -123,7 +133,7 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
                 
                 cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
                 batch_list.append({"range": cell_address, "values": [[new_val]]})
-                
+        
         if batch_list:
             ws.batch_update(batch_list)
             return "Success"
@@ -131,7 +141,6 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
     except Exception as e:
         st.error(f"Error in batch update: {e}")
         return f"Error: {str(e)}"
-
 # ========================================================
 # MAIN APP LOGIC
 # ========================================================

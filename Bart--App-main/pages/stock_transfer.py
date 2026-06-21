@@ -152,6 +152,9 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
 # ========================================================
 
 st.title("🚚 Internal Stock Transfer")
+# Place this wherever you want the refresh button
+if st.button("🔄 Refresh Page"):
+    st.rerun()
 
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []

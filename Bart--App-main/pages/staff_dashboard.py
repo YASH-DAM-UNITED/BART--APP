@@ -343,7 +343,7 @@ check_timeout()
 # LOAD BRANCHES & PASSWORDS (CONSOLIDATED & CACHED)
 # ========================================================
 
-@st.cache_data(ttl=100)
+@st.cache_data(ttl=None)
 def load_master_branch_data():
     """Load branch data with dual credential pool support"""
     client = get_gs_client()
@@ -537,6 +537,7 @@ if st.session_state.authenticated:
 # ========================================================
 
  # Caches data for 10 minutes
+@st.cache_data(ttl=None)
 def fetch_stock_data(sheet_id):
     """Fetch and parse data once, then store in memory."""
     client = get_gs_client()

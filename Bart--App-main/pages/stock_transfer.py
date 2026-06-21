@@ -176,6 +176,7 @@ if "transfer_cart" not in st.session_state:
 
 if "current_stocks" not in st.session_state:
     st.error("No stock data found. Please return to the Dashboard.")
+    ensure_branch_data()
     if st.button("⬅ Go Back to Dashboard"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()

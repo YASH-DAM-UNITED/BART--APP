@@ -102,7 +102,7 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
         
         # 1. Calculate yesterday's date string
         # Adjust the format '%d-%m-%Y' to match exactly how your dates look in the sheet headers
-        yesterday = (datetime.now() - timedelta(days=1)).strftime('%d-%m-%Y')
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         
         # 2. Find the column index that matches yesterday's date
         headers = all_data[0]

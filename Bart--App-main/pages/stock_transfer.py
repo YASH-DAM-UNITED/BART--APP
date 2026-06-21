@@ -293,6 +293,7 @@ if st.session_state.transfer_cart:
                     res_add = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, "add")
                     
                     if res_sub == "Success" and res_add == "Success":
+
                         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                         transfer_sheet.append_row([
                             transfer_id, origin_branch_raw, str(destination), 
@@ -301,6 +302,9 @@ if st.session_state.transfer_cart:
                             reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
                         ])
                         st.session_state.transfer_cart = []
+                        st.session_state.is_submitting = False 
+                        st.session_state.transfer_cart = []
+                        st.rerun()
                         success_dialog(f"Transfer successful! ID: {transfer_id}")
                     else:
                         st.error(f"Transfer Failed: Origin({res_sub}) | Destination({res_add})")

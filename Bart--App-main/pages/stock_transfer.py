@@ -270,7 +270,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                 except Exception as e:
                     st.error(f"Transfer recorded but failed to log: {e}")
             else:
-                st.error(f"Transfer Failed: Origin({res_sub}) | Destination({res_add})")
+                st.warning("⚠️ **Data Error:** Yesterday's data column is missing. Kindly contact the developer for queries.")
                 
     except Exception as e:
         st.error(f"Critical Error: {e}")

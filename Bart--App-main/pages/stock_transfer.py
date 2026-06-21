@@ -178,7 +178,8 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
 # ========================================================
 # CART AND DESTINATION SECTION
 # ========================================================
-
+st.session_state.branch_map.get(origin_id)
+st.session_state.branch_map.get(dest_id)
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")
     for i, entry in enumerate(st.session_state.transfer_cart):

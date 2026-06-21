@@ -94,19 +94,22 @@ def success_dialog(message):
     if st.button("Close", key="close_dialog"):
         st.switch_page("pages/staff_dashboard.py")
 
-# ========================================================
-# PREPARE BATCH UPDATES WITH ERROR HANDLING
-# ========================================================
-
 def prepare_batch_updates(ws, cart, mode="subtract"):
-    """Batch update with error handling"""
+    """Batch update with error handling, matching yesterday's date column."""
     try:
         all_data = ws.get_all_values()
         if not all_data:
             return "Error: Sheet is empty"
         
+        # Calculate yesterday's date string (Match this format to your sheet's header)
+        target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        headers = all_data[0]
+        
+        if target_date not in headers:
+            return f"Error: Column for {target_date} not found"
+        
+        col_index = headers.index(target_date)
         items_column = [row[0] for row in all_data]
-        col_index = [i for i, h in enumerate(all_data[0]) if h and str(h).strip()][-1]
         
         batch_list = []
         for entry in cart:
@@ -115,7 +118,6 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
                 current_val = all_data[row_idx][col_index]
                 current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
                 
-                # Subtraction for origin, Addition for destination
                 if mode == "subtract":
                     new_val = current_num - int(entry['qty'])
                 else:
@@ -129,9 +131,7 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
             return "Success"
         return "Error: Items not found"
     except Exception as e:
-        st.error(f"Error in batch update: {e}")
         return f"Error: {str(e)}"
-
 # ========================================================
 # MAIN APP LOGIC
 # ========================================================
@@ -222,10 +222,21 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             ws_origin = sh_origin.worksheet("Stocks")
             
             # --- PRE-VALIDATION CHECK ---
+# --- PRE-VALIDATION CHECK ---
             try:
                 all_origin_data = ws_origin.get_all_values()
                 origin_items = [row[0] for row in all_origin_data]
-                col_index = len(all_origin_data[0]) - 1
+                
+                # Calculate column index for yesterday's date
+                # Ensure the format '%Y-%m-%d' matches exactly what is in your Sheet headers
+                target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+                headers = all_origin_data[0]
+                
+                if target_date not in headers:
+                    st.error(f"❌ Could not find column for yesterday's date: {target_date} in the Origin sheet.")
+                    st.stop()
+                    
+                col_index = headers.index(target_date)
                 
                 insufficient_items = []
                 for entry in st.session_state.transfer_cart:
@@ -243,6 +254,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
             except Exception as e:
                 st.error(f"Error validating stock: {e}")
                 st.stop()
+            # ----------------------------
             
             # ----------------------------
             

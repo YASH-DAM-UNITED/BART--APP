@@ -212,6 +212,12 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
 # CART AND DESTINATION SECTION
 # ========================================================
 
+
+if "is_submitting" not in st.session_state:
+    st.session_state.is_submitting = False
+    
+        
+
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")
     for i, entry in enumerate(st.session_state.transfer_cart):
@@ -236,8 +242,8 @@ if st.session_state.transfer_cart:
     )
     
     reason = st.text_area("Reason for Transfer", key="reason_input")
-    if "is_submitting" not in st.session_state:
-        st.session_state.is_submitting = False
+
+        
         
     
     

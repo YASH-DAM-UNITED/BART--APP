@@ -306,7 +306,7 @@ if st.session_state.transfer_cart:
                         st.session_state.transfer_cart = []
                         st.session_state.is_submitting = False 
                         st.session_state.transfer_cart = []
-                        st.rerun()
+                       
                         success_dialog(f"Transfer successful! ID: {transfer_id}")
                     else:
                         st.error(f"Transfer Failed: Origin({res_sub}) | Destination({res_add})")

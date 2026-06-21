@@ -235,10 +235,14 @@ if st.session_state.transfer_cart:
     )
     
     reason = st.text_area("Reason for Transfer", key="reason_input")
+    if "is_submitting" not in st.session_state:
+    st.session_state.is_submitting = False
     
     # 2. Only show the confirmation button if a destination is selected
     if destination:
-        if st.button("Confirm and Send All", key="confirm_btn"):
+        if st.button("Confirm and Send All", key="confirm_btn", disabled=st.session_state.is_submitting):
+            st.session_state.is_submitting = True # Disable it immediately upon click
+            st.rerun()
             jeddah_time = datetime.now() + timedelta(hours=3)
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
             origin_branch_raw = st.session_state.selected_branch

@@ -2,7 +2,8 @@ import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread.utils
-
+from datetime import datetime, timedelta
+import gspread.utils
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -254,23 +255,35 @@ def update_transfer_status(transfer_id, status, transfer_data):
         else:
             st.error("Could not find branch map IDs to complete the reversal.")
 
+from datetime import datetime, timedelta
+import gspread.utils
+
 def prepare_batch_updates(ws, cart, mode="subtract"):
-    """Batch update with error handling"""
+    """Batch update targeting the column matching yesterday's date."""
     try:
+        # 1. Calculate yesterday's date in the format used in your headers
+        # Adjust the format string '%Y-%m-%d' to match your actual header format
+        yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        
         all_data = ws.get_all_values()
         if not all_data: 
             return "Error: Sheet is empty"
         
-        # Identify item column and stock column
+        # 2. Find the column index for the date
+        headers = all_data[0]
+        try:
+            # Assumes column headers start from index 1 (0-based)
+            col_index = headers.index(yesterday) + 1 
+        except ValueError:
+            return f"Error: Could not find column header for date {yesterday}"
+        
         items_column = [row[0] for row in all_data]
-        # Assuming last column is the stock column
-        col_index = len(all_data[0]) - 1 
         
         batch_list = []
         for entry in cart:
             if entry['item'] in items_column:
                 row_idx = items_column.index(entry['item'])
-                current_val = all_data[row_idx][col_index]
+                current_val = all_data[row_idx][col_index - 1]
                 current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
                 
                 if mode == "subtract":
@@ -278,7 +291,7 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
                 else:
                     new_val = current_num + int(entry['qty'])
                     
-                cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+                cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index)
                 batch_list.append({"range": cell_address, "values": [[new_val]]})
                 
         if batch_list:

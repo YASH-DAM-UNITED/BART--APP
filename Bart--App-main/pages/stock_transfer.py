@@ -52,32 +52,27 @@ def get_gs_client():
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
-# ========================================================
-# LOAD BRANCH MAP ON STARTUP
-# ========================================================
 
+# Ensure these exist before the rest of the app runs
 if "branch_map" not in st.session_state:
+    st.session_state.branch_map = {}
+if "branch_list" not in st.session_state:
+    st.session_state.branch_list = []
+
+# Now attempt to populate them
+if not st.session_state.branch_list:
     with st.spinner("Initializing connection..."):
         try:
             client = get_gs_client()
-            
-            # Load the Branch Map from the Master Sheet
-            master_sh = client.open("MASTERBRANCHSHEET")
-            branch_ws = master_sh.worksheet("Branches")
-            data = branch_ws.get_all_values()[1:]
-            
-            # Create a dictionary: {'B001': '1VF7g...', 'B002': '1cEku...', ...}
-            st.session_state.branch_map = {row[0]: row[1] for row in data}
-            
-            # --- ADD THIS LINE TO INITIALIZE THE LIST ---
-            # Assuming row[0] is ID and row[2] is Branch Name, adjust index as needed
-            st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
-            
+            if client:
+                master_sh = client.open("MASTERBRANCHSHEET")
+                branch_ws = master_sh.worksheet("Branches")
+                data = branch_ws.get_all_values()[1:]
+                
+                st.session_state.branch_map = {row[0]: row[1] for row in data}
+                st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
         except Exception as e:
             st.error(f"Failed to initialize: {e}")
-            st.session_state.branch_map = {}
-            st.session_state.branch_list = [] # Initialize empty list to prevent crash
-
 # ========================================================
 # PAGE CONFIG
 # ========================================================

@@ -236,7 +236,9 @@ if st.session_state.transfer_cart:
     
     reason = st.text_area("Reason for Transfer", key="reason_input")
     if "is_submitting" not in st.session_state:
-    st.session_state.is_submitting = False
+        st.session_state.is_submitting = False
+        
+    
     
     # 2. Only show the confirmation button if a destination is selected
     if destination:

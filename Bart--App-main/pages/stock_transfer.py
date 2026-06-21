@@ -19,16 +19,6 @@ client_lock = threading.Lock()
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
 
-
-# ========================================================
-# INITIALIZE ESSENTIAL STATE KEYS
-# ========================================================
-if "branch_map" not in st.session_state:
-    st.session_state.branch_map = {}
-if "branch_list" not in st.session_state:
-    st.session_state.branch_list = []
-
-
 def get_gs_client():
     """
     Round-robin client pool manager with dual credential keys.
@@ -152,9 +142,6 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
 # ========================================================
 
 st.title("🚚 Internal Stock Transfer")
-# Place this wherever you want the refresh button
-if st.button("🔄 Refresh Page"):
-    st.rerun()
 
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []

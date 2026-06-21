@@ -215,7 +215,9 @@ if st.button("Confirm and Send All", key="confirm_btn"):
     dest_id = str(destination).split(" - ")[0]
 
     try:
+        # Get client with automatic round-robin rotation
         client = get_gs_client()
+        
         origin_key = st.session_state.branch_map.get(origin_id)
         dest_key = st.session_state.branch_map.get(dest_id)
         
@@ -230,13 +232,11 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                 st.stop()
             
             ws_origin = sh_origin.worksheet("Stocks")
-            ws_dest = sh_dest.worksheet("Stocks")
             
-            # --- PRE-VALIDATION CHECK (Preserved) ---
+            # --- PRE-VALIDATION CHECK ---
             try:
                 all_origin_data = ws_origin.get_all_values()
                 origin_items = [row[0] for row in all_origin_data]
-                # Note: Validation remains dynamic to the last column as per your original code
                 col_index = len(all_origin_data[0]) - 1
                 
                 insufficient_items = []
@@ -256,28 +256,14 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                 st.error(f"Error validating stock: {e}")
                 st.stop()
             
-            # --- CATEGORY-BASED BATCH UPDATES (The Fix) ---
-            daily_items = [item for item in st.session_state.transfer_cart if item.get('category') == "Daily Items"]
-            weekly_items = [item for item in st.session_state.transfer_cart if item.get('category') == "Weekly Items"]
+            # ----------------------------
             
-            errors = []
+            ws_dest = sh_dest.worksheet("Stocks")
             
-            # Process Daily
-            if daily_items:
-                res_sub = prepare_batch_updates(ws_origin, daily_items, "subtract", "Daily Items")
-                res_add = prepare_batch_updates(ws_dest, daily_items, "add", "Daily Items")
-                if res_sub != "Success" or res_add != "Success":
-                    errors.append(f"Daily: {res_sub} / {res_add}")
-
-            # Process Weekly
-            if weekly_items:
-                res_sub = prepare_batch_updates(ws_origin, weekly_items, "subtract", "Weekly Items")
-                res_add = prepare_batch_updates(ws_dest, weekly_items, "add", "Weekly Items")
-                if res_sub != "Success" or res_add != "Success":
-                    errors.append(f"Weekly: {res_sub} / {res_add}")
+            res_sub = prepare_batch_updates(ws_origin, st.session_state.transfer_cart, "subtract")
+            res_add = prepare_batch_updates(ws_dest, st.session_state.transfer_cart, "add")
             
-            # --- FINAL LOGGING (Preserved) ---
-            if not errors:
+            if res_sub == "Success" and res_add == "Success":
                 try:
                     transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                     transfer_sheet.append_row([
@@ -292,7 +278,7 @@ if st.button("Confirm and Send All", key="confirm_btn"):
                 except Exception as e:
                     st.error(f"Transfer recorded but failed to log: {e}")
             else:
-                st.warning(f"⚠️ **Data Error:** {', '.join(errors)}")
+                st.warning("⚠️ **Data Error:** Yesterday's data column is missing. Kindly contact the developer for queries.")
                 
     except Exception as e:
         st.error(f"Critical Error: {e}")

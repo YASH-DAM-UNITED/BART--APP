@@ -117,6 +117,9 @@ if "branch_map" not in st.session_state:
 # ========================================================
 
 st.set_page_config(page_title="Stock Transfer", layout="centered")
+# Add this near your other session_state initializations
+if "is_submitting" not in st.session_state:
+    st.session_state.is_submitting = False
 
 # ========================================================
 # DIALOG DEFINITION

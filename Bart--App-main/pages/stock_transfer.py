@@ -176,6 +176,11 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
 
 st.title("🚚 Internal Stock Transfer")
 
+# Place this inside your error handling block (where the stock is insufficient)
+if st.button("🔄 Reset and Try Again"):
+    
+    st.rerun()
+
 if "transfer_cart" not in st.session_state:
     st.session_state.transfer_cart = []
 

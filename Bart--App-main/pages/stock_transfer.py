@@ -19,6 +19,34 @@ client_lock = threading.Lock()
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
 
+
+# ========================================================
+# INITIALIZE ESSENTIAL STATE KEYS
+# ========================================================
+if "branch_map" not in st.session_state:
+    st.session_state.branch_map = {}
+if "branch_list" not in st.session_state:
+    st.session_state.branch_list = []
+
+# ========================================================
+# LOAD BRANCH MAP (If empty, try to fetch)
+# ========================================================
+if not st.session_state.branch_list:
+    with st.spinner("Initializing connection..."):
+        try:
+            client = get_gs_client()
+            master_sh = client.open("MASTERBRANCHSHEET")
+            branch_ws = master_sh.worksheet("Branches")
+            data = branch_ws.get_all_values()[1:]
+            
+            st.session_state.branch_map = {row[0]: row[1] for row in data}
+            st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+            
+        except Exception as e:
+            st.error(f"Failed to initialize: {e}")
+            # Ensure the app doesn't crash if loading fails
+            st.session_state.branch_list = ["Error: Could not load branches"]
+
 def get_gs_client():
     """
     Round-robin client pool manager with dual credential keys.

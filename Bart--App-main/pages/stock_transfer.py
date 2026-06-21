@@ -295,7 +295,7 @@ if st.session_state.transfer_cart:
                         st.error("❌ **INSUFFICIENT STOCK**")
                         for error_msg in insufficient_items:
                             st.write(error_msg)
-                            st.session_state.is_submitting = False
+                            
                         st.stop()
                     
                     # --- EXECUTE TRANSFER ---

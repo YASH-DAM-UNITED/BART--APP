@@ -20,7 +20,8 @@ import threading
 # ========================================================
 
 client_lock = threading.Lock()
-
+def disable_button():
+    st.session_state.is_submitting = True
 
 def get_gs_client():
     """
@@ -252,8 +253,8 @@ if st.session_state.transfer_cart:
     
     # 2. Only show the confirmation button if a destination is selected
     if destination:
-        if st.button("Confirm and Send All", key="confirm_btn", disabled=st.session_state.is_submitting):
-            st.session_state.is_submitting = True # Disable it immediately upon click
+        if st.button("Confirm and Send All", key="confirm_btn", on_click=disable_button, disabled=st.session_state.is_submitting):
+            
             
             jeddah_time = datetime.now() + timedelta(hours=3)
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
@@ -315,10 +316,12 @@ if st.session_state.transfer_cart:
                             reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
                         ])
                         st.session_state.transfer_cart = []
-                        st.session_state.is_submitting = False 
+                         
                         st.session_state.transfer_cart = []
                        
                         success_dialog(f"Transfer successful! ID: {transfer_id}")
+                        st.session_state.is_submitting = False
+                        
                     else:
                         st.error(f"Transfer Failed: Origin({res_sub}) | Destination({res_add})")
             except Exception as e:

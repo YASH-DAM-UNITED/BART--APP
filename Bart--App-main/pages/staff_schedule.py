@@ -71,7 +71,8 @@ ROLE_OPTIONS = ["Team-Member", "Acting_Team_Leader", "Team_Leader", "Acting_Supe
 def success_dialog():
     st.success("Your schedule has been successfully submitted to the Master Schedule.")
     if st.button("Close", use_container_width=True):
-        st.rerun()
+        st.switch_page("pages/staff_dashboard.py")
+        
 
 
 

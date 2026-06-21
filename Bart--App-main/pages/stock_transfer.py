@@ -20,8 +20,7 @@ import threading
 # ========================================================
 
 client_lock = threading.Lock()
-if "is_submitting" not in st.session_state:
-    st.session_state.is_submitting = False
+
 
 def get_gs_client():
     """

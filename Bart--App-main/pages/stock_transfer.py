@@ -200,7 +200,12 @@ if st.session_state.transfer_cart:
 
     st.markdown("---")
     st.subheader("📦 Finalize Transfer")
-    destination = st.selectbox("Select Destination Branch", st.session_state.branch_list, key="dest_sel")
+    destination = st.selectbox(
+    "Select Destination Branch", 
+    st.session_state.get("branch_list", []), 
+    key="dest_sel"
+    )
+
     reason = st.text_area("Reason for Transfer", key="reason_input")
     
     # 2. Button Logic

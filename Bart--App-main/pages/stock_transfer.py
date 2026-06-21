@@ -220,7 +220,7 @@ if st.session_state.transfer_cart:
         col2.write(f"{entry['qty']} {entry['uom']}")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
-            st.session_state.is_submitting = False
+            
             st.rerun()
 
     st.markdown("---")
@@ -288,6 +288,7 @@ if st.session_state.transfer_cart:
                         st.error("❌ **INSUFFICIENT STOCK**")
                         for error_msg in insufficient_items:
                             st.write(error_msg)
+                            st.session_state.is_submitting = False
                         st.stop()
                     
                     # --- EXECUTE TRANSFER ---

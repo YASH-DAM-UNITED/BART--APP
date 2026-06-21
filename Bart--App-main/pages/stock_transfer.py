@@ -8,6 +8,37 @@ from datetime import datetime, timedelta
 import gspread.utils
 import threading
 
+
+
+
+
+
+
+
+# ========================================================
+# ENSURE INITIALIZATION FUNCTION
+# ========================================================
+
+def ensure_branch_data():
+    """Ensures branch data exists in session_state."""
+    if "branch_map" not in st.session_state or "branch_list" not in st.session_state:
+        with st.spinner("Initializing connection..."):
+            try:
+                client = get_gs_client()
+                master_sh = client.open("MASTERBRANCHSHEET")
+                branch_ws = master_sh.worksheet("Branches")
+                data = branch_ws.get_all_values()[1:]
+                
+                st.session_state.branch_map = {row[0]: row[1] for row in data}
+                st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+            except Exception as e:
+                st.error(f"Failed to initialize: {e}")
+                st.session_state.branch_map = {}
+                st.session_state.branch_list = []
+                st.stop() # Stop execution if we can't get the data
+
+# CALL THIS FIRST THING
+ensure_branch_data()
 # ========================================================
 # DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
 # ========================================================

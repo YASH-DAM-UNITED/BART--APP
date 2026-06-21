@@ -244,7 +244,7 @@ if st.session_state.transfer_cart:
     if destination:
         if st.button("Confirm and Send All", key="confirm_btn", disabled=st.session_state.is_submitting):
             st.session_state.is_submitting = True # Disable it immediately upon click
-            st.rerun()
+            
             jeddah_time = datetime.now() + timedelta(hours=3)
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
             origin_branch_raw = st.session_state.selected_branch

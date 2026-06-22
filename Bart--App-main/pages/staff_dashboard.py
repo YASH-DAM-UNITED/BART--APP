@@ -595,6 +595,12 @@ def render_stock_view(branch_info):
     """Display cached data instantly."""
     try:
         stocks = fetch_stock_data(branch_info["SheetID"])
+        config = {
+            "Item": st.column_config.Column(
+                "Item",
+                pinned=True
+            )
+        }
         
         st.subheader("📦 Daily Items Stock")
         st.dataframe(pd.DataFrame(stocks["daily"]), use_container_width=True, height=400)

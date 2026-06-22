@@ -30,7 +30,7 @@ st.markdown("""
 
 
 # Cached function to prevent excessive API calls
-@st.cache_data(ttl=300) # Caches data for 5 minutes
+@st.cache_data(ttl=None) # Caches data for 5 minutes
 def get_master_data():
     try:
         ws = master_sheet.worksheet("StaffSchedule")

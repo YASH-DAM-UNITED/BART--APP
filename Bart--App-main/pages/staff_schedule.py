@@ -408,6 +408,8 @@ if edit_mode:
 
 
 else:
+    if "refresh_trigger" not in st.session_state:
+        st.session_state.refresh_trigger = 0
     if st.button("🔄 Refresh Data"):
         st.session_state.refresh_trigger += 1
         st.rerun()
@@ -416,8 +418,7 @@ else:
     
 
     all_values = get_master_data(st.session_state.refresh_trigger)
-    if "refresh_trigger" not in st.session_state:
-        st.session_state.refresh_trigger = 0
+    
         
     
     

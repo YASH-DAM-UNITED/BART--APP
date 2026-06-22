@@ -595,6 +595,7 @@ def render_stock_view(branch_info):
     """Display cached data instantly."""
     try:
         stocks = fetch_stock_data(branch_info["SheetID"])
+        df_daily = pd.DataFrame(stocks["daily"])
         
         
         st.subheader("📦 Daily Items Stock")

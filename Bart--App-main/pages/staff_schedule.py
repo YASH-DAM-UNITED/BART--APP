@@ -30,15 +30,15 @@ st.markdown("""
 
 
 # Cached function to prevent excessive API calls
-@st.cache_data(ttl=None) # Caches data for 5 minutes
-def get_master_data():
+# The 'manual_refresh' argument acts as a trigger
+@st.cache_data(ttl=None)
+def get_master_data(manual_refresh):
     try:
         ws = master_sheet.worksheet("StaffSchedule")
         return ws.get_all_values()
     except Exception as e:
-        st.error(f"Error fetching data: {e}")
+        st.error(f"Error: {e}")
         return None
-
 # =========================
 # AUTH CHECK
 # =========================
@@ -404,12 +404,17 @@ if edit_mode:
 # =========================
 # VIEW MODE
 # =========================
+
+
+if "refresh_trigger" not in st.session_state:
+    st.session_state.refresh_trigger = 0
 else:
     if st.button("🔄 Refresh Data"):
-        st.cache_data.clear() # Clears cache to force a fresh API call
+        st.session_state.refresh_trigger += 1
+        st.rerun()
         st.rerun()
 
-    all_values = get_master_data()
+    all_values = get_master_data(st.session_state.refresh_trigger)
     
     if not all_values or len(all_values) < 2:
         st.warning("No data found or connection issue.")

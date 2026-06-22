@@ -23,6 +23,22 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+
+
+
+
+
+# Cached function to prevent excessive API calls
+@st.cache_data(ttl=300) # Caches data for 5 minutes
+def get_master_data():
+    try:
+        ws = master_sheet.worksheet("StaffSchedule")
+        return ws.get_all_values()
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return None
+
 # =========================
 # AUTH CHECK
 # =========================
@@ -390,25 +406,19 @@ if edit_mode:
 # =========================
 else:
     if st.button("🔄 Refresh Data"):
-        st.session_state.cached_df = None
+        st.cache_data.clear() # Clears cache to force a fresh API call
         st.rerun()
 
-    # 1. Fetch raw data
-    try:
-        ws = master_sheet.worksheet("StaffSchedule")
-        all_values = ws.get_all_values()
-    except Exception as e:
-        st.error(f"Error accessing sheet: {e}")
-        st.stop()
+    all_values = get_master_data()
     
     if not all_values or len(all_values) < 2:
-        st.warning("No data found.")
+        st.warning("No data found or connection issue.")
         st.stop()
 
     headers = all_values[0]
     data_rows = all_values[1:]
     
-    # 2. Identify indices for key columns
+    # Identify indices for key columns
     try:
         idx_branch = headers.index("Branch")
         idx_name = headers.index("Name")
@@ -417,62 +427,38 @@ else:
         st.error("Sheet headers are missing 'Branch', 'Name', or 'Role'.")
         st.stop()
     
-    # 3. Calculate target columns for the selected week
+    # Calculate target columns
     week_cols = [day_labels[d] for d in DAYS]
     start_date_comparison = datetime(2026, 6, 1)
     week_start_dt = datetime.combine(week_start, datetime.min.time())
     week_diff = (week_start_dt - start_date_comparison).days // 7
     ot_col_name = "Over-Time" if week_diff == 0 else f"Over-Time {week_diff}"
     
-    target_headers = ["Name", "Role","CONTACT"] + week_cols + [ot_col_name]
-    
-    # Map headers to indices
+    target_headers = ["Name", "Role"] + week_cols + [ot_col_name]
     header_to_idx = {h: i for i, h in enumerate(headers)}
     indices_to_extract = {h: header_to_idx[h] for h in target_headers if h in header_to_idx}
             
-    # 4. Extract data ONLY for selected branch
-    clean_data = []
-    for row in data_rows:
-        if row[idx_branch] == st.session_state.selected_branch:
-            new_row = {}
-            for h, idx in indices_to_extract.items():
-                new_row[h] = row[idx] if idx < len(row) else ""
-            clean_data.append(new_row)
+    # Extract data for selected branch
+    clean_data = [
+        {h: row[idx] for h, idx in indices_to_extract.items() if idx < len(row)}
+        for row in data_rows if row[idx_branch] == st.session_state.selected_branch
+    ]
         
     df_display = pd.DataFrame(clean_data)
 
-    # 5. Render the Grid and Download Button
     if df_display.empty:
         st.info("No schedule data found for this branch this week.")
     else:
-        # Prepare CSV for download
+        # Render the Grid
         csv = df_display.to_csv(index=False).encode('utf-8')
-        
         col1, col2 = st.columns([0.8, 0.2])
         with col2:
-            st.download_button(
-                label="📥 Download Schedule ",
-                data=csv,
-                file_name=f"Schedule_{st.session_state.selected_branch}_{week_start_str}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+            st.download_button("📥 Download Schedule", data=csv, 
+                               file_name=f"Schedule_{st.session_state.selected_branch}.csv", 
+                               mime="text/csv", use_container_width=True)
 
-        column_defs = [
-            {"headerName": col, "field": col, "pinned": "left" if col in ["Name", "Role"] else None}
-            for col in df_display.columns
-        ]
+        AgGrid(df_display, gridOptions={"columnDefs": [{"headerName": col, "field": col} for col in df_display.columns]}, 
+               height=500, fit_columns_on_grid_load=True)
 
-        AgGrid(
-            df_display, 
-            gridOptions={
-                "columnDefs": column_defs, 
-                "defaultColDef": {"resizable": True}
-            }, 
-            height=500,
-            fit_columns_on_grid_load=True
-        )
-
-# Final navigation button
 if st.button("⬅ Back"):
     st.switch_page("pages/staff_dashboard.py")

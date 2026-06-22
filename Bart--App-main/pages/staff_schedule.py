@@ -413,10 +413,13 @@ else:
         st.rerun()
         st.rerun()
 
-    if "refresh_trigger" not in st.session_state:
-    st.session_state.refresh_trigger = 0
+    
 
     all_values = get_master_data(st.session_state.refresh_trigger)
+    if "refresh_trigger" not in st.session_state:
+        st.session_state.refresh_trigger = 0
+        
+    
     
     if not all_values or len(all_values) < 2:
         st.warning("No data found or connection issue.")

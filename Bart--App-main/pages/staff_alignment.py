@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 import re
 from google.oauth2.service_account import Credentials
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import pytz
 
 # --- INITIAL SETUP ---
@@ -16,10 +16,6 @@ st.set_page_config(
     page_title="Ops Control Center",
     initial_sidebar_state="collapsed"
 )
-
-# --- CONFIGURATION & STATE ---
-
-
 
 # --- INITIALIZATION ---
 if "start_min" not in st.session_state:
@@ -58,12 +54,9 @@ def get_shift(cell):
     if not cell or not isinstance(cell, str): 
         return []
     
-    # 1. Clean the string
     cell = str(cell).replace('\xa0', ' ').replace('\u202f', ' ').replace("–", "-").replace("—", "-")
     cell = re.sub(r"\(.*?\)", "", cell).strip()
     
-    # 2. Split by | for split shifts
-    # If there is no |, parts will just be a list with the original string (Old logic compatibility)
     parts = cell.split('|')
     shift_intervals = []
     
@@ -88,17 +81,13 @@ def is_active_in_range(shift_val, start_min, end_min):
     if not intervals: 
         return False
     
-    # Loop through all blocks (handles old logic as a list of one)
     for s_start, s_end in intervals:
         if s_start < s_end:
-            # Standard shift: overlaps if it doesn't end before start OR start after end
             if not (s_end <= start_min or s_start >= end_min):
                 return True
         else:
-            # Overnight shift: overlaps if it is NOT (ends before start AND starts after end)
             if not (s_end <= start_min and s_start >= end_min):
                 return True
-                
     return False
 
 def compute(df, start_min, end_min):
@@ -122,7 +111,8 @@ def safe_df(df):
 # --- UI & DATA LOADING ---
 st.title("STAFF Schedule Control Center")
 df_full = safe_df(load_data(st.session_state.data_refresh_token))
-meta_cols = ["Branch", "Name", "Role"]
+
+meta_cols = ["Name", "Role","CONTACT"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
 today_day_month = date.today().strftime("%d %b")
 default_index = next((i for i, col in enumerate(shift_cols) if extract_day_month(col) == today_day_month), len(shift_cols) - 1)
@@ -136,7 +126,7 @@ with col2:
         st.session_state.data_refresh_token += 1
         st.rerun()
 with col3:
-    if st.button("⬅", use_container_width=True):
+    if st.button("⬅Back", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
 
 # --- CUSTOM RANGE UI ---
@@ -145,7 +135,6 @@ st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
 if "start_time_str" not in st.session_state: st.session_state.start_time_str = "12:00 AM"
 if "end_time_str" not in st.session_state: st.session_state.end_time_str = "11:59 PM"
 
-# 1. Use vertical_alignment="bottom" to align items across the row
 col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1], vertical_alignment="bottom")
 
 with col1:
@@ -171,15 +160,20 @@ with col5:
         st.session_state.end_time_str = f"{end_val} {end_period}"
         st.rerun()
 
-# Ensure variables exist for the subheader
-start_input = st.session_state.start_time_str
-end_input = st.session_state.end_time_str
-
-# These ensure the variables exist for the rest of your app logic
 start_input = st.session_state.start_time_str
 end_input = st.session_state.end_time_str
 
 # --- CORE CALCULATION ---
+selected_date_str = extract_day_month(shift_col)
+current_date = datetime.strptime(f"{selected_date_str} 2026", "%d %b %Y")
+sunday = current_date - timedelta(days=(current_date.weekday() + 1) % 7)
+
+week_days = [(sunday + timedelta(days=i)).strftime("(%d %b)") for i in range(7)]
+
+cols_to_show = ["Name", "Role", "CONTACT", "Branch"] + week_days
+if "Overtime 1" in df_full.columns: cols_to_show.append("Overtime 1")
+if "Overtime 2" in df_full.columns: cols_to_show.append("Overtime 2")
+
 df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
@@ -204,8 +198,18 @@ with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
 df_branch = df_work[df_work["Branch"] == selected_branch]
 b_act, b_inact = compute(df_branch, start_m, end_m)
 
+# Ensure columns exist in computed dataframes to prevent KeyError
+for df_temp in [b_act, b_inact]:
+    for col in cols_to_show:
+        if col not in df_temp.columns:
+            df_temp[col] = ""
+
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
 sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
-st.subheader("🔥 Active Staff"); st.dataframe(b_act, use_container_width=True, hide_index=True)
-st.subheader("📊 Full Branch Data"); st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)
+
+st.subheader("🔥 Active Staff")
+st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
+
+st.subheader("📊 Full Branch Data")
+st.dataframe(pd.concat([b_act, b_inact], ignore_index=True)[cols_to_show], use_container_width=True, hide_index=True)

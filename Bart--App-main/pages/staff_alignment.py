@@ -5,7 +5,6 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date, time
 import pytz
-from datetime import datetime, date, time, timedelta
 
 # --- INITIAL SETUP ---
 saudi_tz = pytz.timezone("Asia/Riyadh")
@@ -102,20 +101,14 @@ def is_active_in_range(shift_val, start_min, end_min):
                 
     return False
 
-def compute(df, start_min, end_min, target_col):
+def compute(df, start_min, end_min):
     active, inactive = [], []
-    # We create a working copy to ensure we have the Shift data
-    df_temp = df.copy()
-    # Explicitly map the chosen shift column to a 'Shift' column for calculations
-    df_temp["Shift"] = df_temp[target_col]
-    
-    cols = df_temp.columns.tolist()
-    for _, row in df_temp.iterrows():
+    cols = df.columns.tolist()
+    for _, row in df.iterrows():
         if is_active_in_range(str(row["Shift"]), start_min, end_min):
             active.append(row.to_dict())
         else:
             inactive.append(row.to_dict())
-            
     return pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols), \
            pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols)
 
@@ -125,40 +118,26 @@ def extract_day_month(col):
 
 def safe_df(df):
     return df.loc[:, ~df.columns.duplicated()].copy()
+
 # --- UI & DATA LOADING ---
 st.title("STAFF Schedule Control Center")
 df_full = safe_df(load_data(st.session_state.data_refresh_token))
-
-# Keep this for your other logic (week calculation, etc.)
-meta_cols = ["Name", "Role", "CONTACT"]
+meta_cols = ["Branch", "Name", "Role"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
+today_day_month = date.today().strftime("%d %b")
+default_index = next((i for i, col in enumerate(shift_cols) if extract_day_month(col) == today_day_month), len(shift_cols) - 1)
 
-# --- CALENDAR UI ---
 col1, col2, col3 = st.columns([4, 1, 1], vertical_alignment="center")
-
 with col1:
-    # 1. User picks a date
-    selected_date = st.date_input("Select Date", value=date.today())
-    formatted_date = selected_date.strftime("(%d %b)")
-    
-    # 2. Logic to find the matching column from your list
-    matching_cols = [c for c in shift_cols if formatted_date in c]
-    shift_col = matching_cols[0] if matching_cols else None
-
+    shift_col = st.selectbox("Shift Column", shift_cols, index=default_index, label_visibility="collapsed")
 with col2:
     if st.button("🔄", use_container_width=True):
         load_data.clear()
         st.session_state.data_refresh_token += 1
         st.rerun()
-
 with col3:
-    if st.button("⬅Back", use_container_width=True):
+    if st.button("⬅", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
-
-# --- VALIDATION ---
-if not shift_col:
-    st.warning(f"No column found for {selected_date.strftime('%d %b')}")
-    st.stop()
 
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")
@@ -201,79 +180,32 @@ start_input = st.session_state.start_time_str
 end_input = st.session_state.end_time_str
 
 # --- CORE CALCULATION ---
-
-
-
-# --- CORE CALCULATION ---
-# 1. Calculate the week columns
-selected_date_str = extract_day_month(shift_col)
-current_date = datetime.strptime(f"{selected_date_str} 2026", "%d %b %Y")
-sunday = current_date - timedelta(days=(current_date.weekday() + 1) % 7)
-
-# Generate the 7 days of the week string list: "(DD MMM)"
-week_days = [(sunday + timedelta(days=i)).strftime("(%d %b)") for i in range(7)]
-
-# Define the columns to show (Meta + Week Days + Overtime)
-# We check if Overtime columns exist in the original sheet
-cols_to_show = ["Name", "Role", "CONTACT", "Branch"] + week_days
-if "Overtime 1" in df_full.columns: cols_to_show.append("Overtime 1")
-if "Overtime 2" in df_full.columns: cols_to_show.append("Overtime 2")
-
-# Create a safe copy and ensure missing columns appear as empty strings
 df_work = df_full.copy()
-for col in cols_to_show:
-    if col not in df_work.columns:
-        df_work[col] = ""
-
-# --- UI DISPLAY ---
-# Ensure we have a working copy for display
-df_display = df_full.copy()
-df_display["Shift"] = df_display[shift_col]
-
-# Ensure ALL columns in cols_to_show exist in our display dataframe
-for col in cols_to_show:
-    if col not in df_display.columns:
-        df_display[col] = ""
-
-branches = sorted(df_display["Branch"].dropna().unique().tolist())
+df_work["Shift"] = df_work[shift_col]
+branches = sorted(df_work["Branch"].dropna().unique().tolist())
 start_m, end_m = st.session_state.start_min, st.session_state.end_min
 
 # Universal Overview
-u_act, u_inact = compute(df_display, start_m, end_m, shift_col)
+u_act, u_inact = compute(df_work, start_m, end_m)
 st.subheader(f"STAFF Universal Overview ({start_input} to {end_input})")
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("🏢 Branches", len(branches)); c2.metric("👥 Staff", len(df_display)); c3.metric("🟢 Active", len(u_act)); c4.metric("⚪ Inactive", len(u_inact))
+c1.metric("🏢 Branches", len(branches)); c2.metric("👥 Staff", len(df_work)); c3.metric("🟢 Active", len(u_act)); c4.metric("⚪ Inactive", len(u_inact))
 st.divider()
 
 # Branchwise Status
 st.subheader("👥 Branchwise Status")
-summary_data = []
-for b in branches:
-    b_df = df_display[df_display["Branch"] == b]
-    act, inact = compute(b_df, start_m, end_m, shift_col)
-    summary_data.append({"Branch": b, "Active": len(act), "Inactive": len(inact)})
-st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
+summary = [{"Branch": b, "Active": len(compute(df_work[df_work["Branch"] == b], start_m, end_m)[0]), "Inactive": len(compute(df_work[df_work["Branch"] == b], start_m, end_m)[1])} for b in branches]
+st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 st.divider()
 
-# --- Specific Branch View ---
-selected_branch = st.selectbox("🏢 Select Branch", branches)
-df_branch = df_display[df_display["Branch"] == selected_branch]
-b_act, b_inact = compute(df_branch, start_m, end_m,shift_col)
+# Specific Branch View
+s_col1, _ = st.columns([1, 2])
+with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
+df_branch = df_work[df_work["Branch"] == selected_branch]
+b_act, b_inact = compute(df_branch, start_m, end_m)
 
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
 sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
-
-st.subheader("🔥 Active Staff")
-if not b_act.empty:
-    st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
-else:
-    st.info("No active staff found in this range.")
-
-st.subheader("📊 Full Branch Data")
-# Combine and display
-full_branch_df = pd.concat([b_act, b_inact], ignore_index=True)
-if not full_branch_df.empty:
-    st.dataframe(full_branch_df[cols_to_show], use_container_width=True, hide_index=True)
-else:
-    st.info("No data available for this branch.")
+st.subheader("🔥 Active Staff"); st.dataframe(b_act, use_container_width=True, hide_index=True)
+st.subheader("📊 Full Branch Data"); st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)

@@ -220,44 +220,54 @@ for col in cols_to_show:
         df_work[col] = ""
 
 # --- UI DISPLAY ---
-# Use this for your Branchwise and Detailed tables:
-# df_work[cols_to_show]
-df_work = df_full.copy()
-df_work["Shift"] = df_work[shift_col]
-branches = sorted(df_work["Branch"].dropna().unique().tolist())
+# Ensure we have a working copy for display
+df_display = df_full.copy()
+df_display["Shift"] = df_display[shift_col]
+
+# Ensure ALL columns in cols_to_show exist in our display dataframe
+for col in cols_to_show:
+    if col not in df_display.columns:
+        df_display[col] = ""
+
+branches = sorted(df_display["Branch"].dropna().unique().tolist())
 start_m, end_m = st.session_state.start_min, st.session_state.end_min
 
 # Universal Overview
-u_act, u_inact = compute(df_work, start_m, end_m)
+u_act, u_inact = compute(df_display, start_m, end_m)
 st.subheader(f"STAFF Universal Overview ({start_input} to {end_input})")
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("🏢 Branches", len(branches)); c2.metric("👥 Staff", len(df_work)); c3.metric("🟢 Active", len(u_act)); c4.metric("⚪ Inactive", len(u_inact))
+c1.metric("🏢 Branches", len(branches)); c2.metric("👥 Staff", len(df_display)); c3.metric("🟢 Active", len(u_act)); c4.metric("⚪ Inactive", len(u_inact))
 st.divider()
 
 # Branchwise Status
 st.subheader("👥 Branchwise Status")
-summary = [{"Branch": b, "Active": len(compute(df_work[df_work["Branch"] == b], start_m, end_m)[0]), "Inactive": len(compute(df_work[df_work["Branch"] == b], start_m, end_m)[1])} for b in branches]
-st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
+summary_data = []
+for b in branches:
+    b_df = df_display[df_display["Branch"] == b]
+    act, inact = compute(b_df, start_m, end_m)
+    summary_data.append({"Branch": b, "Active": len(act), "Inactive": len(inact)})
+st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
 st.divider()
 
 # --- Specific Branch View ---
-s_col1, _ = st.columns([1, 2])
-with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
-df_branch = df_work[df_work["Branch"] == selected_branch]
+selected_branch = st.selectbox("🏢 Select Branch", branches)
+df_branch = df_display[df_display["Branch"] == selected_branch]
 b_act, b_inact = compute(df_branch, start_m, end_m)
-
-# --- NEW: Ensure the columns exist in the computed dataframes ---
-for df_temp in [b_act, b_inact]:
-    for col in cols_to_show:
-        if col not in df_temp.columns:
-            df_temp[col] = ""
 
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
 sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
 
 st.subheader("🔥 Active Staff")
-st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
+if not b_act.empty:
+    st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
+else:
+    st.info("No active staff found in this range.")
 
 st.subheader("📊 Full Branch Data")
-st.dataframe(pd.concat([b_act, b_inact], ignore_index=True)[cols_to_show], use_container_width=True, hide_index=True)
+# Combine and display
+full_branch_df = pd.concat([b_act, b_inact], ignore_index=True)
+if not full_branch_df.empty:
+    st.dataframe(full_branch_df[cols_to_show], use_container_width=True, hide_index=True)
+else:
+    st.info("No data available for this branch.")

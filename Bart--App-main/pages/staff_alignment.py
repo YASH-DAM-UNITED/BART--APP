@@ -234,15 +234,24 @@ summary = [{"Branch": b, "Active": len(compute(df_work[df_work["Branch"] == b], 
 st.dataframe(pd.DataFrame(summary), use_container_width=True, hide_index=True)
 st.divider()
 
-# Specific Branch View
+# --- Specific Branch View ---
 s_col1, _ = st.columns([1, 2])
 with s_col1: selected_branch = st.selectbox("🏢 Select Branch", branches)
 df_branch = df_work[df_work["Branch"] == selected_branch]
 b_act, b_inact = compute(df_branch, start_m, end_m)
 
+# --- NEW: Ensure the columns exist in the computed dataframes ---
+for df_temp in [b_act, b_inact]:
+    for col in cols_to_show:
+        if col not in df_temp.columns:
+            df_temp[col] = ""
+
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
 sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
-st.subheader("🔥 Active Staff"); st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
-st.subheader("📊 Full Branch Data"); # Replace your current dataframe call with this
+
+st.subheader("🔥 Active Staff")
+st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
+
+st.subheader("📊 Full Branch Data")
 st.dataframe(pd.concat([b_act, b_inact], ignore_index=True)[cols_to_show], use_container_width=True, hide_index=True)

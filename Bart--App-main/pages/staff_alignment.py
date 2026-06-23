@@ -119,34 +119,40 @@ def extract_day_month(col):
 
 def safe_df(df):
     return df.loc[:, ~df.columns.duplicated()].copy()
-
 # --- UI & DATA LOADING ---
 st.title("STAFF Schedule Control Center")
 df_full = safe_df(load_data(st.session_state.data_refresh_token))
 
-
-
-
-
-
-
-
-meta_cols = ["Name", "Role","CONTACT"]
+# Keep this for your other logic (week calculation, etc.)
+meta_cols = ["Name", "Role", "CONTACT"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
-today_day_month = date.today().strftime("%d %b")
-default_index = next((i for i, col in enumerate(shift_cols) if extract_day_month(col) == today_day_month), len(shift_cols) - 1)
 
+# --- CALENDAR UI ---
 col1, col2, col3 = st.columns([4, 1, 1], vertical_alignment="center")
+
 with col1:
-    shift_col = st.selectbox("Shift Column", shift_cols, index=default_index, label_visibility="collapsed")
+    # 1. User picks a date
+    selected_date = st.date_input("Select Date", value=date.today())
+    formatted_date = selected_date.strftime("(%d %b)")
+    
+    # 2. Logic to find the matching column from your list
+    matching_cols = [c for c in shift_cols if formatted_date in c]
+    shift_col = matching_cols[0] if matching_cols else None
+
 with col2:
     if st.button("🔄", use_container_width=True):
         load_data.clear()
         st.session_state.data_refresh_token += 1
         st.rerun()
+
 with col3:
     if st.button("⬅Back", use_container_width=True):
         st.switch_page("pages/management_dashboard.py")
+
+# --- VALIDATION ---
+if not shift_col:
+    st.warning(f"No column found for {selected_date.strftime('%d %b')}")
+    st.stop()
 
 # --- CUSTOM RANGE UI ---
 st.markdown("### 🕒 Analyze Schedule for Custom Time Range")

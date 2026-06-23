@@ -102,14 +102,20 @@ def is_active_in_range(shift_val, start_min, end_min):
                 
     return False
 
-def compute(df, start_min, end_min):
+def compute(df, start_min, end_min, target_col):
     active, inactive = [], []
-    cols = df.columns.tolist()
-    for _, row in df.iterrows():
+    # We create a working copy to ensure we have the Shift data
+    df_temp = df.copy()
+    # Explicitly map the chosen shift column to a 'Shift' column for calculations
+    df_temp["Shift"] = df_temp[target_col]
+    
+    cols = df_temp.columns.tolist()
+    for _, row in df_temp.iterrows():
         if is_active_in_range(str(row["Shift"]), start_min, end_min):
             active.append(row.to_dict())
         else:
             inactive.append(row.to_dict())
+            
     return pd.DataFrame(active, columns=cols) if active else pd.DataFrame(columns=cols), \
            pd.DataFrame(inactive, columns=cols) if inactive else pd.DataFrame(columns=cols)
 
@@ -233,7 +239,7 @@ branches = sorted(df_display["Branch"].dropna().unique().tolist())
 start_m, end_m = st.session_state.start_min, st.session_state.end_min
 
 # Universal Overview
-u_act, u_inact = compute(df_display, start_m, end_m)
+u_act, u_inact = compute(df_display, start_m, end_m, shift_col)
 st.subheader(f"STAFF Universal Overview ({start_input} to {end_input})")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("🏢 Branches", len(branches)); c2.metric("👥 Staff", len(df_display)); c3.metric("🟢 Active", len(u_act)); c4.metric("⚪ Inactive", len(u_inact))
@@ -244,7 +250,7 @@ st.subheader("👥 Branchwise Status")
 summary_data = []
 for b in branches:
     b_df = df_display[df_display["Branch"] == b]
-    act, inact = compute(b_df, start_m, end_m)
+    act, inact = compute(b_df, start_m, end_m, shift_col)
     summary_data.append({"Branch": b, "Active": len(act), "Inactive": len(inact)})
 st.dataframe(pd.DataFrame(summary_data), use_container_width=True, hide_index=True)
 st.divider()
@@ -252,7 +258,7 @@ st.divider()
 # --- Specific Branch View ---
 selected_branch = st.selectbox("🏢 Select Branch", branches)
 df_branch = df_display[df_display["Branch"] == selected_branch]
-b_act, b_inact = compute(df_branch, start_m, end_m)
+b_act, b_inact = compute(df_branch, start_m, end_m,shift_col)
 
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)

@@ -5,6 +5,7 @@ import re
 from google.oauth2.service_account import Credentials
 from datetime import datetime, date, time
 import pytz
+from datetime import datetime, date, time, timedelta
 
 # --- INITIAL SETUP ---
 saudi_tz = pytz.timezone("Asia/Riyadh")
@@ -122,6 +123,14 @@ def safe_df(df):
 # --- UI & DATA LOADING ---
 st.title("STAFF Schedule Control Center")
 df_full = safe_df(load_data(st.session_state.data_refresh_token))
+
+
+
+
+
+
+
+
 meta_cols = ["Name", "Role","CONTACT"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
 today_day_month = date.today().strftime("%d %b")
@@ -180,6 +189,33 @@ start_input = st.session_state.start_time_str
 end_input = st.session_state.end_time_str
 
 # --- CORE CALCULATION ---
+
+
+
+# --- CORE CALCULATION ---
+# 1. Calculate the week columns
+selected_date_str = extract_day_month(shift_col)
+current_date = datetime.strptime(f"{selected_date_str} 2026", "%d %b %Y")
+sunday = current_date - timedelta(days=(current_date.weekday() + 1) % 7)
+
+# Generate the 7 days of the week string list: "(DD MMM)"
+week_days = [(sunday + timedelta(days=i)).strftime("(%d %b)") for i in range(7)]
+
+# Define the columns to show (Meta + Week Days + Overtime)
+# We check if Overtime columns exist in the original sheet
+cols_to_show = ["Name", "Role", "CONTACT", "Branch"] + week_days
+if "Overtime 1" in df_full.columns: cols_to_show.append("Overtime 1")
+if "Overtime 2" in df_full.columns: cols_to_show.append("Overtime 2")
+
+# Create a safe copy and ensure missing columns appear as empty strings
+df_work = df_full.copy()
+for col in cols_to_show:
+    if col not in df_work.columns:
+        df_work[col] = ""
+
+# --- UI DISPLAY ---
+# Use this for your Branchwise and Detailed tables:
+# df_work[cols_to_show]
 df_work = df_full.copy()
 df_work["Shift"] = df_work[shift_col]
 branches = sorted(df_work["Branch"].dropna().unique().tolist())
@@ -207,5 +243,6 @@ b_act, b_inact = compute(df_branch, start_m, end_m)
 st.subheader(f"🏢 {selected_branch} Detailed Overview")
 sc1, sc2, sc3 = st.columns(3)
 sc1.metric("Active", len(b_act)); sc2.metric("Inactive", len(b_inact)); sc3.metric("Total", len(df_branch))
-st.subheader("🔥 Active Staff"); st.dataframe(b_act, use_container_width=True, hide_index=True)
-st.subheader("📊 Full Branch Data"); st.dataframe(pd.concat([b_act, b_inact], ignore_index=True), use_container_width=True, hide_index=True)
+st.subheader("🔥 Active Staff"); st.dataframe(b_act[cols_to_show], use_container_width=True, hide_index=True)
+st.subheader("📊 Full Branch Data"); # Replace your current dataframe call with this
+st.dataframe(pd.concat([b_act, b_inact], ignore_index=True)[cols_to_show], use_container_width=True, hide_index=True)

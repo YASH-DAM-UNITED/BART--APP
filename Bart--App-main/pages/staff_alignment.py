@@ -122,7 +122,7 @@ def safe_df(df):
 # --- UI & DATA LOADING ---
 st.title("STAFF Schedule Control Center")
 df_full = safe_df(load_data(st.session_state.data_refresh_token))
-meta_cols = ["Branch", "Name", "Role","CONTACT"]
+meta_cols = [ "Name", "Role","CONTACT"]
 shift_cols = [c.strip() for c in df_full.columns if c not in meta_cols]
 today_day_month = date.today().strftime("%d %b")
 default_index = next((i for i, col in enumerate(shift_cols) if extract_day_month(col) == today_day_month), len(shift_cols) - 1)

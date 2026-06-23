@@ -323,7 +323,7 @@ if st.session_state.transfer_cart:
                             transfer_id, origin_branch_raw, str(destination), 
                             "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
                             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
-                            reason, "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
+                            str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
                         ])
                         st.session_state.transfer_cart = []
                          

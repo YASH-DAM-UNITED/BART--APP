@@ -200,7 +200,7 @@ end_input = st.session_state.end_time_str
 
 # --- CORE CALCULATION ---
 # 1. Calculate the week columns
-selected_date_str = extract_day_month(shift_col)
+selected_date_str = extract_day_month(shift_cols)
 current_date = datetime.strptime(f"{selected_date_str} 2026", "%d %b %Y")
 sunday = current_date - timedelta(days=(current_date.weekday() + 1) % 7)
 

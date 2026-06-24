@@ -126,6 +126,7 @@ def break_duty_dialog(row_idx, row_name, day_name):
 @st.dialog("⏰ Set Custom Time")
 def custom_time_dialog(row_idx, row_name, day_name):
     st.write(f"Configure shift for **{row_name}** on **{day_name}**")
+    
     col1, col2 = st.columns(2)
     with col1:
         sh = st.selectbox("Start Hour", list(range(1, 13)), index=4)
@@ -133,12 +134,20 @@ def custom_time_dialog(row_idx, row_name, day_name):
     with col2:
         eh = st.selectbox("End Hour", list(range(1, 13)), index=4)
         eap = st.selectbox("AM/PM", ["AM", "PM"], key="eap_modal", index=1)
+    
     apply_all = st.checkbox("Apply to all working days this week")
+    
+    # Calculate duration immediately to show warning if invalid
+    value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
+    
+    if hrs < 9:
+        st.warning(f"⚠️ Current duration is {hrs} hours. Minimum 9 hours required.")
+
     if st.button("Apply Shift", use_container_width=True):
-        value, hrs = format_shift(f"{sh} {sap}", f"{eh} {eap}")
-        if value is None:
-            st.error("❌ Minimum 9 hours required")
+        if hrs < 9:
+            st.error("❌ Cannot apply: Minimum 9 hours required.")
         else:
+            # Proceed with saving
             if apply_all:
                 for day in DAYS:
                     st.session_state.shift_buffer[f"{row_idx}_{day}"] = value

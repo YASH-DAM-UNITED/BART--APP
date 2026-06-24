@@ -41,7 +41,7 @@ if "show_manager" not in st.session_state:
 
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=None)
 def load_manager_mapping():
     # Connect to your new sheet
     client = get_gs_client()
@@ -209,7 +209,7 @@ def to_excel_bytes(data_frames):
 # LOAD BRANCHES
 # ========================================================
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=None)
 def load_branches():
     client = get_gs_client()
     sheet = client.open("MASTERBRANCHSHEET").sheet1

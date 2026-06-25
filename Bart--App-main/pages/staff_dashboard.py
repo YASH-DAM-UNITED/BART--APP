@@ -447,6 +447,8 @@ else:
         st.session_state.last_activity = None
         st.rerun()
     if col2.button("🔄 Refresh "):
+        if "sheet_id" in st.session_state:
+            fetch_stock_data.clear(st.session_state.sheet_id)
         st.rerun()
 
 # ========================================================
@@ -537,7 +539,7 @@ if st.session_state.authenticated:
 # ========================================================
 
 
-
+@st.cache_data(ttl=1800)
 def fetch_stock_data(sheet_id):
     """Fetch and parse data once, then store in memory."""
     client = get_gs_client()

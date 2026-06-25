@@ -417,6 +417,66 @@ div[data-testid="stDataFrame"] tbody td:nth-child(3) {
 </style>
 """, unsafe_allow_html=True)
 
+
+
+
+
+
+
+@st.cache_data(ttl=1800)
+def fetch_stock_data(sheet_id):
+    """Fetch and parse data once, then store in memory."""
+    client = get_gs_client()
+    sheet = client.open_by_key(sheet_id)
+    ws = sheet.worksheet("Stocks")
+    data = ws.get_all_values()
+    
+    headers = data[0]
+    date_columns = headers[1:]
+    daily, weekly = [], []
+    current_section = None
+
+    for row in data:
+        row_text = " ".join(row).strip().lower()
+        if "daily item" in row_text:
+            current_section = "daily"
+            continue
+        if "weekly item" in row_text:
+            current_section = "weekly"
+            continue
+        if current_section is None or not row or not row[0]:
+            continue
+        
+        item = row[0].strip()
+        row_values = row[1:]
+        padding_needed = len(date_columns) - len(row_values)
+        values = row_values + ([""] * max(0, padding_needed))
+        
+        cleaned, total = [], 0
+        for i, v in enumerate(values):
+            if i < 2:
+                cleaned.append(v)
+                continue
+            try:
+                num = float(v) if v != "" else 0
+            except:
+                num = 0
+            cleaned.append(num)
+            total += num
+        
+        row_dict = {"Item": item}
+        for i, col in enumerate(date_columns):
+            row_dict[col] = cleaned[i]
+        row_dict["Total"] = total
+        
+        if current_section == "daily":
+            daily.append(row_dict)
+        else:
+            weekly.append(row_dict)
+            
+    return {"daily": daily, "weekly": weekly}
+
+
 # ========================================================
 # BRANCH SELECT
 # ========================================================
@@ -541,59 +601,6 @@ if st.session_state.authenticated:
 # STOCK VIEW SECTION (CACHED FOR INSTANT PERFORMANCE)
 # ========================================================
 
-
-@st.cache_data(ttl=1800)
-def fetch_stock_data(sheet_id):
-    """Fetch and parse data once, then store in memory."""
-    client = get_gs_client()
-    sheet = client.open_by_key(sheet_id)
-    ws = sheet.worksheet("Stocks")
-    data = ws.get_all_values()
-    
-    headers = data[0]
-    date_columns = headers[1:]
-    daily, weekly = [], []
-    current_section = None
-
-    for row in data:
-        row_text = " ".join(row).strip().lower()
-        if "daily item" in row_text:
-            current_section = "daily"
-            continue
-        if "weekly item" in row_text:
-            current_section = "weekly"
-            continue
-        if current_section is None or not row or not row[0]:
-            continue
-        
-        item = row[0].strip()
-        row_values = row[1:]
-        padding_needed = len(date_columns) - len(row_values)
-        values = row_values + ([""] * max(0, padding_needed))
-        
-        cleaned, total = [], 0
-        for i, v in enumerate(values):
-            if i < 2:
-                cleaned.append(v)
-                continue
-            try:
-                num = float(v) if v != "" else 0
-            except:
-                num = 0
-            cleaned.append(num)
-            total += num
-        
-        row_dict = {"Item": item}
-        for i, col in enumerate(date_columns):
-            row_dict[col] = cleaned[i]
-        row_dict["Total"] = total
-        
-        if current_section == "daily":
-            daily.append(row_dict)
-        else:
-            weekly.append(row_dict)
-            
-    return {"daily": daily, "weekly": weekly}
 
 @st.fragment
 def render_stock_view(branch_info):

@@ -447,8 +447,7 @@ else:
         st.session_state.last_activity = None
         st.rerun()
     if col2.button("🔄 Refresh "):
-        if "sheet_id" in st.session_state:
-            fetch_stock_data.clear(st.session_state.sheet_id)
+        fetch_stock_data.clear()
         st.rerun()
 
 # ========================================================

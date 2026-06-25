@@ -298,18 +298,8 @@ if st.session_state.transfer_cart:
                         if entry['item'] in origin_items:
                             row_idx = origin_items.index(entry['item'])
                             current_stock = int(float(all_origin_data[row_idx][col_index] or 0))
-                            if int(entry['qty']) > current_stock:
-                                insufficient_items.append(f"• **{entry['item']}**: Available {current_stock}, Requested {entry['qty']}")
-
-                    if insufficient_items:
-                        st.error("❌ **INSUFFICIENT STOCK**")
-                        for error_msg in insufficient_items:
                             
-                            st.write(error_msg)
-                            
-                            
-                            
-                        st.stop()
+                    
                     
                     # --- EXECUTE TRANSFER ---
                     ws_dest = sh_dest.worksheet("Stocks")

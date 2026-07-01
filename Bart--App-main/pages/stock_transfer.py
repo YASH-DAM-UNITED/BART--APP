@@ -115,9 +115,7 @@ def render_history_view():
         st.session_state.show_history = False
         st.rerun()
             
-    if st.button("⬅ Back to Transfer"):
-        st.session_state.show_history = False
-        st.rerun()
+  
 
 def render_transfer_form():
     

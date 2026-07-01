@@ -57,11 +57,72 @@ def get_gs_client():
         client = st.session_state.client_pool[idx]
     
     return client
+    pass
 
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
 
+
+
+# Initialize session states
+if "all_transfers" not in st.session_state:
+    st.session_state.all_transfers = [] # To hold your transfer list
+if "history_limit" not in st.session_state:
+    st.session_state.history_limit = 5
+if "show_history" not in st.session_state:
+    st.session_state.show_history = False
+
+def load_data():
+    """Fetches everything once at startup."""
+    client = get_gs_client()
+    master_sh = client.open("MASTERBRANCHSHEET")
+    
+    # Load Branches
+    branch_data = master_sh.worksheet("Branches").get_all_values()[1:]
+    st.session_state.branch_map = {row[0]: row[1] for row in branch_data}
+    st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in branch_data]
+    
+    # Load Transfers
+    st.session_state.all_transfers = master_sh.worksheet("Transfers").get_all_records()
+
+
+
+
+# --- 2. UI FUNCTIONS ---
+def render_history_view():
+    st.subheader("📜 Transfer History")
+    
+    my_branch = st.session_state.get('selected_branch', '')
+    # Filter: User is either sender OR receiver
+    filtered = [t for t in st.session_state.all_transfers 
+                if t['sender'] == my_branch or t['receiver'] == my_branch]
+    
+    # Sort by date (newest first)
+    filtered.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    for entry in filtered[:st.session_state.history_limit]:
+        with st.container(border=True):
+            col1, col2 = st.columns([3, 1])
+            col1.write(f"**ID:** {entry['transfer_id']}")
+            col2.write(f"**{entry['status']}**")
+            st.write(f"**To:** {entry['receiver']}")
+            st.write(f"**Details:** {entry['items']}")
+            
+    if st.session_state.history_limit < len(filtered):
+        if st.button("Load More"):
+            st.session_state.history_limit += 5
+            st.rerun()
+            
+    if st.button("⬅ Back to Transfer"):
+        st.session_state.show_history = False
+        st.rerun()
+
+def render_transfer_form():
+    st.title("🚚 Internal Stock Transfer")
+    if st.button("📜 View Transfer History"):
+        st.session_state.show_history = True
+        st.rerun()
 
 # ========================================================
 # ENSURE INITIALIZATION FUNCTION
@@ -330,6 +391,21 @@ if st.session_state.transfer_cart:
         st.info("Please select a destination branch to finalize the transfer.")
 else:
     st.info("Add items to your cart to proceed with the transfer.")
+
+if "all_transfers" not in st.session_state:
+    load_data()
+    st.session_state.history_limit = 5
+    st.session_state.show_history = False
+
+# Router
+if st.session_state.show_history:
+    render_history_view()
+else:
+    render_transfer_form()
+
+
+
+
 
 st.markdown("---")
 if st.button("⬅ Back to Dashboard"):

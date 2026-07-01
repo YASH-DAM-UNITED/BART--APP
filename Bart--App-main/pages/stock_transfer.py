@@ -115,7 +115,7 @@ def render_history_view():
             st.session_state.history_limit += 3
             st.rerun()
             
-    if st.button("⬅ Back to Transfer"):
+    if st.button("⬅ Close Transfer History"):
         # Reset limit when going back to keep it clean for next time
         st.session_state.history_limit = 3 
         st.session_state.show_history = False

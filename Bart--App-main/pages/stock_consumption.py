@@ -319,7 +319,7 @@ if st.session_state.page == "mode_select":
             st.session_state.page = "stock_entry"
             st.rerun()
             
-    if c3.button("🍞 Bakery", use_container_width=True):
+    if c3.button("🍞 Bakery [Morning Shift {Only}]", use_container_width=True):
         st.session_state.mode = "bakery"
         st.session_state.stock_inputs = {}
         st.session_state.page = "stock_entry"

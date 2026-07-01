@@ -353,7 +353,7 @@ if st.session_state.page == "mode_select":
 mode = st.session_state.mode
 date_str = st.session_state.selected_date
 # Define your specific target SKUs
-BAKERY_SKUS = {"F066", "F081", "CB054", "S019", "CB055", "CB076", "CB056"}
+BAKERY_SKUS = {"F066", "F081", "CB054", "S019", "CB055", "CB076", "CB056", "K154", "K256", "CB078"}
 
 processed_items = []
 

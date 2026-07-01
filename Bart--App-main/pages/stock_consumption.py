@@ -303,26 +303,32 @@ if st.session_state.page == "mode_select":
     st.stop()
 
 # ============================================================
-# BUILD ITEM LIST (FIXED)
+# BUILD ITEM LIST (FIXED TO READ COLUMN B FOR SKUS)
 # ============================================================
 mode = st.session_state.mode
 date_str = st.session_state.selected_date
+# Define your specific target SKUs
 BAKERY_SKUS = {"F066", "F081", "CB054", "S019", "CB055", "CB076", "CB056"}
 
 processed_items = []
 
 if mode == "bakery":
-    # Scan every single row in the sheet to find the matching SKUs
+    # Scan the whole sheet to find matches in Column B (index 1)
     for idx, row in enumerate(sheet_data):
-        if idx == 0: continue # Skip header
-        item_name = row[0].strip() if row and row[0].strip() else ""
+        if idx == 0: continue # Skip header row
         
-        # Check if ANY of the SKUs exist anywhere inside the item_name string
-        if any(sku in item_name for sku in BAKERY_SKUS):
+        # Ensure row has at least 2 columns (A and B)
+        if len(row) < 2: continue
+        
+        item_name = row[0].strip() # Column A (Name)
+        sku_code = row[1].strip()  # Column B (SKU)
+        
+        # Check if the code in Column B is in your list
+        if sku_code in BAKERY_SKUS:
             umo = row[2].strip() if len(row) >= 3 and row[2] else ""
             processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
 else:
-    # Existing Daily/Weekly logic
+    # Existing Daily/Weekly logic (still looks at Column A/Sections)
     start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
     end_idx = weekly_start if mode == "daily" else len(sheet_data)
     for idx in range(start_idx, end_idx):
@@ -335,12 +341,10 @@ else:
 
 # Clean orphaned keys and add new items
 current_item_names = {item["name"] for item in processed_items}
-# Only remove items that are in the CURRENT mode's scope
 for orphan in [k for k in st.session_state.stock_inputs if k not in current_item_names]:
     del st.session_state.stock_inputs[orphan]
 for item in processed_items:
     st.session_state.stock_inputs.setdefault(item["name"], "")
-
 # ============================================================
 # STOCK ENTRY PAGE — header bar
 # ============================================================

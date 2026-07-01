@@ -410,26 +410,21 @@ with c1:
         st.session_state.search_query = ""
         st.session_state.review_mode = False
         st.rerun()
-
 with c2:
     if st.button("❌ Clear", use_container_width=True):
-        # 1. Clear the server-side vault
+        # 1. Clear the server-side vault (RAM)
         branch = st.session_state.get('selected_branch', 'Branch')
         vault.clear_draft(branch, date_str, mode)
         
-        # 2. Wipe the dictionary of stored values
+        # 2. Clear your local record of inputs
         st.session_state.stock_inputs = {}
         
-        # 3. CRITICAL: Remove all widget keys from session_state
-        # This forces the text_inputs to reset to empty on the next render
-        for key in list(st.session_state.keys()):
+        # 3. Force every text box on the screen to go blank
+        for key in st.session_state.keys():
             if key.startswith("input_"):
-                del st.session_state[key]
+                st.session_state[key] = ""
         
-        st.session_state.draft_data = {}
-        st.session_state.review_mode = False
-        
-        # 4. Rerun to rebuild the UI with empty fields
+        # 4. Refresh the page to show empty fields
         st.rerun()
 # ============================================================
 # FORCE NUMERIC KEYPAD ON MOBILE (skip search bar)

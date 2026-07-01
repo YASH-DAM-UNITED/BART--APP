@@ -517,7 +517,7 @@ if st.session_state.review_mode:
                 unsafe_allow_html=True,
             )
 
-st.markdown("---")
+    st.markdown("---")
     c1, c2, c3 = st.columns(3)
 
     if c1.button("⬅ Edit", use_container_width=True):

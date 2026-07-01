@@ -303,26 +303,28 @@ if st.session_state.page == "mode_select":
     st.stop()
 
 # ============================================================
-# BUILD ITEM LIST (UPDATED WITH BAKERY FILTER)
+# BUILD ITEM LIST (FIXED)
 # ============================================================
 mode = st.session_state.mode
 date_str = st.session_state.selected_date
 BAKERY_SKUS = {"F066", "F081", "CB054", "S019", "CB055", "CB076", "CB056"}
 
+processed_items = []
+
 if mode == "bakery":
-    # Search all items regardless of sections
-    processed_items = []
+    # Scan every single row in the sheet to find the matching SKUs
     for idx, row in enumerate(sheet_data):
+        if idx == 0: continue # Skip header
         item_name = row[0].strip() if row and row[0].strip() else ""
-        # Check if item starts with one of our target SKUs
-        if any(item_name.startswith(sku) for sku in BAKERY_SKUS):
+        
+        # Check if ANY of the SKUs exist anywhere inside the item_name string
+        if any(sku in item_name for sku in BAKERY_SKUS):
             umo = row[2].strip() if len(row) >= 3 and row[2] else ""
             processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
 else:
     # Existing Daily/Weekly logic
     start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
     end_idx = weekly_start if mode == "daily" else len(sheet_data)
-    processed_items = []
     for idx in range(start_idx, end_idx):
         if idx >= len(sheet_data): break
         row = sheet_data[idx]
@@ -333,6 +335,7 @@ else:
 
 # Clean orphaned keys and add new items
 current_item_names = {item["name"] for item in processed_items}
+# Only remove items that are in the CURRENT mode's scope
 for orphan in [k for k in st.session_state.stock_inputs if k not in current_item_names]:
     del st.session_state.stock_inputs[orphan]
 for item in processed_items:

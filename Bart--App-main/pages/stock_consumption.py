@@ -288,7 +288,7 @@ def is_submitted(mode, date_str):
     return False
 
 # ============================================================
-# PAGE: MODE SELECT (MULTI-DRAFT SUPPORT)
+# PAGE: MODE SELECT (FULL BLOCK)
 # ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -300,28 +300,7 @@ if st.session_state.page == "mode_select":
     
     branch = st.session_state.get("selected_branch", "Branch")
 
-    # 1. DRAFT DETECTION
-    # Find all modes that have a saved draft for this branch/date
-    available_drafts = []
-    for m in ["daily", "weekly", "bakery"]:
-        if vault.get_draft(branch, date_str, m):
-            available_drafts.append(m)
-
-    # 2. DRAFT UI (Dynamic buttons based on saved data)
-    if available_drafts:
-        st.markdown("### 📂 Resume Saved Drafts")
-        # Layout: one button per available draft
-        cols = st.columns(len(available_drafts))
-        for idx, m in enumerate(available_drafts):
-            if cols[idx].button(f"Resume {m.title()}", key=f"resume_{m}", type="primary", use_container_width=True):
-                st.session_state.mode = m
-                st.session_state.stock_inputs = vault.get_draft(branch, date_str, m)
-                st.session_state.page = "stock_entry"
-                st.rerun()
-        st.markdown("---")
-
-    # 3. STANDARD MODE SELECTION
-    st.markdown("### Select New Entry")
+    # 1. STANDARD MODE SELECTION (Big Buttons)
     c1, c2, c3 = st.columns(3)
 
     if c1.button("📦 Daily", use_container_width=True):
@@ -346,11 +325,28 @@ if st.session_state.page == "mode_select":
         st.session_state.page = "stock_entry"
         st.rerun()
 
+    # 2. COMPACT DRAFT UI (Small Buttons below)
+    available_drafts = []
+    for m in ["daily", "weekly", "bakery"]:
+        if vault.get_draft(branch, date_str, m):
+            available_drafts.append(m)
+
+    if available_drafts:
+        st.markdown("---")
+        st.caption("📂 Resume Saved Drafts:")
+        # 6 columns makes these buttons very small (1/6th width)
+        cols = st.columns(6) 
+        for idx, m in enumerate(available_drafts):
+            if cols[idx].button(f"Resume {m.title()}", key=f"resume_{m}", use_container_width=True):
+                st.session_state.mode = m
+                st.session_state.stock_inputs = vault.get_draft(branch, date_str, m)
+                st.session_state.page = "stock_entry"
+                st.rerun()
+
     st.markdown("---")
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
-
 # ============================================================
 # BUILD ITEM LIST (FIXED TO READ COLUMN B FOR SKUS)
 # ============================================================

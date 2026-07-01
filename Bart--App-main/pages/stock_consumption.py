@@ -11,6 +11,32 @@ import time
 import uuid
 
 # ============================================================
+# GLOBAL DRAFT VAULT (Server-side Persistence)
+# ============================================================
+class DraftVault:
+    def __init__(self):
+        self.data = {}  # Format: {"branch_date_mode": {item: qty}}
+
+    def save_draft(self, branch, date, mode, inputs):
+        key = f"{branch}_{date}_{mode}"
+        self.data[key] = inputs
+
+    def get_draft(self, branch, date, mode):
+        key = f"{branch}_{date}_{mode}"
+        return self.data.get(key, {})
+
+    def clear_draft(self, branch, date, mode):
+        key = f"{branch}_{date}_{mode}"
+        if key in self.data:
+            del self.data[key]
+
+@st.cache_resource
+def get_vault():
+    return DraftVault()
+
+vault = get_vault()
+
+# ============================================================
 # PAGE CONFIG — must be FIRST Streamlit call, no exceptions
 # ============================================================
 st.set_page_config(page_title="Stock System", layout="wide")
@@ -262,7 +288,7 @@ def is_submitted(mode, date_str):
     return False
 
 # ============================================================
-# PAGE: MODE SELECT (UPDATED)
+# PAGE: MODE SELECT (UPDATED WITH DRAFT LOADER)
 # ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -271,7 +297,33 @@ if st.session_state.page == "mode_select":
     selected_date = st.date_input("Select Date", value=yesterday, key="mode_select_date")
     date_str = str(selected_date)
     st.session_state.selected_date = date_str
+    
+    branch = st.session_state.get("selected_branch", "Branch")
 
+    # 1. DRAFT LOADING SECTION
+    # Check if any draft exists for this branch/date
+    has_draft = False
+    for m in ["daily", "weekly", "bakery"]:
+        if vault.get_draft(branch, date_str, m):
+            has_draft = True
+            break
+            
+    if has_draft:
+        if st.button("📂 Resume Pending Draft", type="primary", use_container_width=True):
+            found_draft = False
+            for m in ["daily", "weekly", "bakery"]:
+                d = vault.get_draft(branch, date_str, m)
+                if d:
+                    st.session_state.mode = m
+                    st.session_state.stock_inputs = d
+                    st.session_state.page = "stock_entry"
+                    found_draft = True
+                    break
+            if found_draft:
+                st.rerun()
+
+    # 2. STANDARD MODE SELECTION
+    st.markdown("---")
     c1, c2, c3 = st.columns(3)
 
     if c1.button("📦 Daily", use_container_width=True):
@@ -291,16 +343,16 @@ if st.session_state.page == "mode_select":
             st.rerun()
             
     if c3.button("🥐 Bakery", use_container_width=True):
-        if is_submitted("bakery", date_str): show_duplicate_warning()
-        else:
-            st.session_state.mode = "bakery"
-            st.session_state.stock_inputs = {}
-            st.session_state.page = "stock_entry"
-            st.rerun()
+        # Bakery mode is set to always allow entry (overwrite logic)
+        st.session_state.mode = "bakery"
+        st.session_state.stock_inputs = {}
+        st.session_state.page = "stock_entry"
+        st.rerun()
 
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
+
 
 # ============================================================
 # BUILD ITEM LIST (FIXED TO READ COLUMN B FOR SKUS)
@@ -405,8 +457,15 @@ filtered_items = [
 # INPUT FIELDS — persistent, no st.form
 # ============================================================
 def on_input_change(item_name):
-    raw = st.session_state.get(f"input_{item_name}", "")
-    st.session_state.stock_inputs[item_name] = str(raw).strip()
+    # Get current value
+    val = st.session_state.get(f"input_{item_name}", "")
+    st.session_state.stock_inputs[item_name] = str(val).strip()
+    
+    # Save to Server-Side Vault
+    branch = st.session_state.get("selected_branch", "Branch")
+    date = st.session_state.selected_date
+    mode = st.session_state.mode
+    vault.save_draft(branch, date, mode, st.session_state.stock_inputs)
 
 st.markdown("## Enter Stock")
 
@@ -536,6 +595,9 @@ if st.session_state.proceed_submit:
             if cells:
                 write_sheet.update_cells(cells, value_input_option="USER_ENTERED")
 
+        branch = st.session_state.get('selected_branch', 'Branch')
+        vault.clear_draft(branch, date_str, mode)
+
         # Sheet write succeeded — fire email in background (non-blocking)
         report = (
             f"Stock Submission Report\n\n"
@@ -560,6 +622,7 @@ if st.session_state.proceed_submit:
         t.start()
 
         st.session_state.proceed_submit = False
+        
         st.session_state.review_mode    = False
         st.session_state.show_success   = True
         st.session_state.submitted      = True

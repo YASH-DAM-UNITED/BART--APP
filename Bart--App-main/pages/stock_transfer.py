@@ -7,7 +7,7 @@ import re
 from datetime import datetime, timedelta
 import gspread.utils
 import threading
-
+import pandas as pd
 
 
 
@@ -80,36 +80,40 @@ def load_data():
     # This will pull everything as a list of dicts
     st.session_state.all_transfers = transfer_ws.get_all_records()
 
+
+
 def render_history_view():
     st.subheader("📜 Transfer History")
     
-    # Get current branch (ensure this matches the format in your 'Origin' column)
-    # Based on your sheet, this is likely "B00X - NAME"
     my_branch = st.session_state.get('selected_branch', '')
     
-    # 1. Filter: Match your actual column names: 'Origin' and 'Destination'
+    # Filter
     filtered = [t for t in st.session_state.all_transfers 
                 if t.get('Origin') == my_branch or t.get('Destination') == my_branch]
     
-    # 2. Sort: Use your 'Timestamp' column
     filtered.sort(key=lambda x: x.get('Timestamp', ''), reverse=True)
     
     if not filtered:
-        st.info("No transfer records found for this branch.")
+        st.info("No records found.")
     else:
-        for entry in filtered[:st.session_state.history_limit]:
-            with st.container(border=True):
-                col1, col2 = st.columns([3, 1])
-                # 3. Access data using exact column names from your screenshot
-                col1.write(f"**ID:** {entry.get('ID')}")
-                col2.write(f"**{entry.get('Status')}**")
-                st.write(f"**Items:** {entry.get('Items')}")
-                st.write(f"**Date:** {entry.get('Timestamp')}")
+        # Convert to DataFrame for a clean, table-like view
+        df = pd.DataFrame(filtered[:st.session_state.history_limit])
+        
+        # Select and rename columns for a cleaner display
+        display_df = df[['ID', 'Destination', 'Items', 'Status', 'Timestamp']]
+        
+        # Display as a compact table
+        st.table(display_df)
             
+    # Load More logic
     if st.session_state.history_limit < len(filtered):
         if st.button("Load More"):
             st.session_state.history_limit += 5
             st.rerun()
+            
+    if st.button("⬅ Back to Transfer"):
+        st.session_state.show_history = False
+        st.rerun()
             
     if st.button("⬅ Back to Transfer"):
         st.session_state.show_history = False

@@ -261,7 +261,7 @@ def is_submitted(mode, date_str):
     return False
 
 # ============================================================
-# PAGE: MODE SELECT
+# PAGE: MODE SELECT (UPDATED)
 # ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -269,66 +269,71 @@ if st.session_state.page == "mode_select":
     yesterday = datetime.now().date() - timedelta(days=1)
     selected_date = st.date_input("Select Date", value=yesterday, key="mode_select_date")
     date_str = str(selected_date)
-
-    # Store once so the entire stock-entry flow uses the same date
     st.session_state.selected_date = date_str
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
 
-    if c1.button("📦 Daily Stock", use_container_width=True):
-        if is_submitted("daily", date_str):
-            show_duplicate_warning()
+    if c1.button("📦 Daily", use_container_width=True):
+        if is_submitted("daily", date_str): show_duplicate_warning()
         else:
             st.session_state.mode = "daily"
-            st.session_state.stock_inputs = {}   # clear stale data from previous mode
+            st.session_state.stock_inputs = {}
             st.session_state.page = "stock_entry"
             st.rerun()
 
-    if c2.button("📊 Weekly Stock", use_container_width=True):
-        if is_submitted("weekly", date_str):
-            show_duplicate_warning()
+    if c2.button("📊 Weekly", use_container_width=True):
+        if is_submitted("weekly", date_str): show_duplicate_warning()
         else:
             st.session_state.mode = "weekly"
-            st.session_state.stock_inputs = {}   # clear stale data from previous mode
+            st.session_state.stock_inputs = {}
+            st.session_state.page = "stock_entry"
+            st.rerun()
+            
+    if c3.button("🥐 Bakery", use_container_width=True):
+        if is_submitted("bakery", date_str): show_duplicate_warning()
+        else:
+            st.session_state.mode = "bakery"
+            st.session_state.stock_inputs = {}
             st.session_state.page = "stock_entry"
             st.rerun()
 
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
-
     st.stop()
 
 # ============================================================
-# BUILD ITEM LIST
-# FIX #4: Detect if the sheet structure changed mid-session and
-# reconcile stock_inputs so orphaned keys can't silently submit.
+# BUILD ITEM LIST (UPDATED WITH BAKERY FILTER)
 # ============================================================
-mode     = st.session_state.mode
-date_str = st.session_state.selected_date   # always the date chosen at mode-select
+mode = st.session_state.mode
+date_str = st.session_state.selected_date
+BAKERY_SKUS = {"F066", "F081", "CB054", "S019", "CB055", "CB076", "CB056"}
 
-start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
-end_idx   = weekly_start      if mode == "daily" else len(sheet_data)
+if mode == "bakery":
+    # Search all items regardless of sections
+    processed_items = []
+    for idx, row in enumerate(sheet_data):
+        item_name = row[0].strip() if row and row[0].strip() else ""
+        # Check if item starts with one of our target SKUs
+        if any(item_name.startswith(sku) for sku in BAKERY_SKUS):
+            umo = row[2].strip() if len(row) >= 3 and row[2] else ""
+            processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
+else:
+    # Existing Daily/Weekly logic
+    start_idx = (daily_start + 1) if mode == "daily" else (weekly_start + 1)
+    end_idx = weekly_start if mode == "daily" else len(sheet_data)
+    processed_items = []
+    for idx in range(start_idx, end_idx):
+        if idx >= len(sheet_data): break
+        row = sheet_data[idx]
+        item_name = row[0].strip() if row and row[0].strip() else ""
+        if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]: continue
+        umo = row[2].strip() if len(row) >= 3 and row[2] else ""
+        processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
 
-processed_items = []
-for idx in range(start_idx, end_idx):
-    if idx >= len(sheet_data):
-        break
-    row = sheet_data[idx]
-    item_name = row[0].strip() if row and row[0].strip() else ""
-    if not item_name or item_name.upper() in ["DAILY ITEM", "WEEKLY ITEM"]:
-        continue
-    umo = row[2].strip() if len(row) >= 3 and row[2] else ""
-    processed_items.append({"name": item_name, "umo": umo, "row_idx": idx + 1})
-
-# Build the canonical set of item names from the sheet right now
+# Clean orphaned keys and add new items
 current_item_names = {item["name"] for item in processed_items}
-
-# Remove any keys in stock_inputs that no longer exist in the sheet
-# (prevents phantom submissions if the sheet was edited mid-session)
 for orphan in [k for k in st.session_state.stock_inputs if k not in current_item_names]:
     del st.session_state.stock_inputs[orphan]
-
-# Add keys for any new items
 for item in processed_items:
     st.session_state.stock_inputs.setdefault(item["name"], "")
 

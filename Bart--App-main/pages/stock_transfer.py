@@ -63,6 +63,8 @@ def get_gs_client():
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
 
+
+
 def load_data():
     client = get_gs_client()
     master_sh = client.open("MASTERBRANCHSHEET")
@@ -114,6 +116,12 @@ def render_history_view():
     
     if st.button("⬅ Back to Transfer"):
         st.session_state.show_history = False
+        st.rerun()
+
+def render_transfer_form():
+    st.title("🚚 Internal Stock Transfer")
+    if st.button("📜 View Transfer History"):
+        st.session_state.show_history = True
         st.rerun()
 
 # ========================================================

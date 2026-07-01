@@ -237,7 +237,13 @@ st.title("🚚 Internal Stock Transfer")
 # Place this inside your error handling block (where the stock is insufficient)
 if st.button("🔄 Refresh"):
     st.session_state.is_submitting = False
-    
+
+# Router
+if st.session_state.show_history:
+    render_history_view()
+else:
+    render_transfer_form()
+
     
     
 
@@ -394,11 +400,6 @@ if "all_transfers" not in st.session_state:
     st.session_state.history_limit = 5
     st.session_state.show_history = False
 
-# Router
-if st.session_state.show_history:
-    render_history_view()
-else:
-    render_transfer_form()
 
 
 

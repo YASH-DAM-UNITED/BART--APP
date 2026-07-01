@@ -245,15 +245,16 @@ if daily_start is None or weekly_start is None:
 # HELPER: CHECK IF DATE ALREADY SUBMITTED
 # ============================================================
 def is_submitted(mode, date_str):
+    # Bakery mode is now excluded from the duplicate check
+    if mode == "bakery":
+        return False 
+        
     headers = sheet_data[0]
-    if date_str not in headers:
-        return False
+    if date_str not in headers: return False
     col_index = headers.index(date_str)
-    search_range = (
-        range(daily_start + 1, weekly_start)
-        if mode == "daily"
-        else range(weekly_start + 1, len(sheet_data))
-    )
+    
+    # Existing Daily/Weekly range logic
+    search_range = (range(daily_start + 1, weekly_start) if mode == "daily" else range(weekly_start + 1, len(sheet_data)))
     for row_idx in search_range:
         row_content = sheet_data[row_idx]
         if col_index < len(row_content) and str(row_content[col_index]).strip():

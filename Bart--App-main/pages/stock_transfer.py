@@ -63,65 +63,57 @@ def get_gs_client():
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
 
-
-
-# Initialize session states
-if "all_transfers" not in st.session_state:
-    st.session_state.all_transfers = [] # To hold your transfer list
-if "history_limit" not in st.session_state:
-    st.session_state.history_limit = 5
-if "show_history" not in st.session_state:
-    st.session_state.show_history = False
-
 def load_data():
-    """Fetches everything once at startup."""
     client = get_gs_client()
     master_sh = client.open("MASTERBRANCHSHEET")
     
     # Load Branches
-    branch_data = master_sh.worksheet("Branches").get_all_values()[1:]
+    branch_ws = master_sh.worksheet("Branches")
+    branch_data = branch_ws.get_all_values()[1:]
     st.session_state.branch_map = {row[0]: row[1] for row in branch_data}
     st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in branch_data]
     
     # Load Transfers
-    st.session_state.all_transfers = master_sh.worksheet("Transfers").get_all_records()
+    transfer_ws = master_sh.worksheet("Transfers")
+    # This will pull everything as a list of dicts
+    st.session_state.all_transfers = transfer_ws.get_all_records()
 
-
-
-
-# --- 2. UI FUNCTIONS ---
 def render_history_view():
     st.subheader("📜 Transfer History")
     
-    my_branch = st.session_state.get('selected_branch', '')
-    # Filter: User is either sender OR receiver
-    filtered = [t for t in st.session_state.all_transfers 
-                if t['sender'] == my_branch or t['receiver'] == my_branch]
-    
-    # Sort by date (newest first)
-    filtered.sort(key=lambda x: x['timestamp'], reverse=True)
-    
-    for entry in filtered[:st.session_state.history_limit]:
-        with st.container(border=True):
-            col1, col2 = st.columns([3, 1])
-            col1.write(f"**ID:** {entry['transfer_id']}")
-            col2.write(f"**{entry['status']}**")
-            st.write(f"**To:** {entry['receiver']}")
-            st.write(f"**Details:** {entry['items']}")
-            
-    if st.session_state.history_limit < len(filtered):
-        if st.button("Load More"):
-            st.session_state.history_limit += 5
+    # DEBUG: Check if we have data at all
+    if not st.session_state.all_transfers:
+        st.error("No transfer records found in the system.")
+        if st.button("Retry Load"):
+            load_data()
             st.rerun()
+    else:
+        my_branch = st.session_state.get('selected_branch', '')
+        
+        # DEBUG: Show current filtering criteria
+        st.write(f"Filtering for branch: **{my_branch}**")
+        
+        # Filter: Match keys exactly as they appear in the first row of your sheet
+        # If your header is "sender", keep it 'sender'. 
+        filtered = [t for t in st.session_state.all_transfers 
+                    if str(t.get('sender', '')).strip() == str(my_branch).strip() or 
+                       str(t.get('receiver', '')).strip() == str(my_branch).strip()]
+        
+        if not filtered:
+            st.warning("No transfers found for this specific branch.")
+            st.write("Available branches in data:", list(set([t.get('sender') for t in st.session_state.all_transfers])))
+        else:
+            # Sort by date
+            filtered.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
             
+            for entry in filtered[:st.session_state.history_limit]:
+                with st.container(border=True):
+                    st.write(f"**ID:** {entry.get('transfer_id', 'N/A')}")
+                    st.write(f"**Status:** {entry.get('status', 'N/A')}")
+                    st.write(f"**Items:** {entry.get('items', 'N/A')}")
+    
     if st.button("⬅ Back to Transfer"):
         st.session_state.show_history = False
-        st.rerun()
-
-def render_transfer_form():
-    st.title("🚚 Internal Stock Transfer")
-    if st.button("📜 View Transfer History"):
-        st.session_state.show_history = True
         st.rerun()
 
 # ========================================================

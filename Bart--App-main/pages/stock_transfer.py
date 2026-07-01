@@ -83,37 +83,34 @@ def load_data():
 def render_history_view():
     st.subheader("📜 Transfer History")
     
-    # DEBUG: Check if we have data at all
-    if not st.session_state.all_transfers:
-        st.error("No transfer records found in the system.")
-        if st.button("Retry Load"):
-            load_data()
-            st.rerun()
-    else:
-        my_branch = st.session_state.get('selected_branch', '')
-        
-        # DEBUG: Show current filtering criteria
-        st.write(f"Filtering for branch: **{my_branch}**")
-        
-        # Filter: Match keys exactly as they appear in the first row of your sheet
-        # If your header is "sender", keep it 'sender'. 
-        filtered = [t for t in st.session_state.all_transfers 
-                    if str(t.get('sender', '')).strip() == str(my_branch).strip() or 
-                       str(t.get('receiver', '')).strip() == str(my_branch).strip()]
-        
-        if not filtered:
-            st.warning("No transfers found for this specific branch.")
-            st.write("Available branches in data:", list(set([t.get('sender') for t in st.session_state.all_transfers])))
-        else:
-            # Sort by date
-            filtered.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-            
-            for entry in filtered[:st.session_state.history_limit]:
-                with st.container(border=True):
-                    st.write(f"**ID:** {entry.get('transfer_id', 'N/A')}")
-                    st.write(f"**Status:** {entry.get('status', 'N/A')}")
-                    st.write(f"**Items:** {entry.get('items', 'N/A')}")
+    # Get current branch (ensure this matches the format in your 'Origin' column)
+    # Based on your sheet, this is likely "B00X - NAME"
+    my_branch = st.session_state.get('selected_branch', '')
     
+    # 1. Filter: Match your actual column names: 'Origin' and 'Destination'
+    filtered = [t for t in st.session_state.all_transfers 
+                if t.get('Origin') == my_branch or t.get('Destination') == my_branch]
+    
+    # 2. Sort: Use your 'Timestamp' column
+    filtered.sort(key=lambda x: x.get('Timestamp', ''), reverse=True)
+    
+    if not filtered:
+        st.info("No transfer records found for this branch.")
+    else:
+        for entry in filtered[:st.session_state.history_limit]:
+            with st.container(border=True):
+                col1, col2 = st.columns([3, 1])
+                # 3. Access data using exact column names from your screenshot
+                col1.write(f"**ID:** {entry.get('ID')}")
+                col2.write(f"**{entry.get('Status')}**")
+                st.write(f"**Items:** {entry.get('Items')}")
+                st.write(f"**Date:** {entry.get('Timestamp')}")
+            
+    if st.session_state.history_limit < len(filtered):
+        if st.button("Load More"):
+            st.session_state.history_limit += 5
+            st.rerun()
+            
     if st.button("⬅ Back to Transfer"):
         st.session_state.show_history = False
         st.rerun()

@@ -518,7 +518,7 @@ if st.session_state.review_mode:
             )
 
     st.markdown("---")
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
 
     if c1.button("⬅ Edit", use_container_width=True):
         st.session_state.review_mode = False
@@ -527,18 +527,7 @@ if st.session_state.review_mode:
     if c2.button("✅ Submit", type="primary", use_container_width=True):
         st.session_state.proceed_submit = True
         st.rerun()
-        
-    # NEW CLEAR BUTTON
-    if c3.button("❌ Clear Data", type="secondary", use_container_width=True):
-        # 1. Clear the server-side vault
-        branch = st.session_state.get('selected_branch', 'Branch')
-        vault.clear_draft(branch, date_str, mode)
-        # 2. Reset the session state
-        st.session_state.stock_inputs = {}
-        st.session_state.draft_data = {}
-        st.session_state.review_mode = False
-        st.session_state.page = "mode_select"
-        st.rerun()
+
 # ============================================================
 # AUTO SCROLL — fires after review div is rendered
 # ============================================================

@@ -288,7 +288,7 @@ def is_submitted(mode, date_str):
     return False
 
 # ============================================================
-# PAGE: MODE SELECT (COMPACT DRAFT + MODE BUTTONS)
+# PAGE: MODE SELECT (MULTI-DRAFT SUPPORT)
 # ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -300,28 +300,30 @@ if st.session_state.page == "mode_select":
     
     branch = st.session_state.get("selected_branch", "Branch")
 
-    # 1. PREPARE DRAFT STATUS
-    # Find which (if any) mode has a saved draft
-    active_draft_mode = None
+    # 1. DRAFT DETECTION
+    # Find all modes that have a saved draft for this branch/date
+    available_drafts = []
     for m in ["daily", "weekly", "bakery"]:
         if vault.get_draft(branch, date_str, m):
-            active_draft_mode = m
-            break
+            available_drafts.append(m)
 
-    # 2. BUTTON LAYOUT
-    # If a draft exists, we use 4 columns, otherwise we use 3
-    if active_draft_mode:
-        c1, c2, c3, c4 = st.columns(4)
-        with c4:
-            if st.button(f"📂 Resume {active_draft_mode.title()}", type="primary", use_container_width=True):
-                st.session_state.mode = active_draft_mode
-                st.session_state.stock_inputs = vault.get_draft(branch, date_str, active_draft_mode)
+    # 2. DRAFT UI (Dynamic buttons based on saved data)
+    if available_drafts:
+        st.markdown("### 📂 Resume Saved Drafts")
+        # Layout: one button per available draft
+        cols = st.columns(len(available_drafts))
+        for idx, m in enumerate(available_drafts):
+            if cols[idx].button(f"Resume {m.title()}", key=f"resume_{m}", type="primary", use_container_width=True):
+                st.session_state.mode = m
+                st.session_state.stock_inputs = vault.get_draft(branch, date_str, m)
                 st.session_state.page = "stock_entry"
                 st.rerun()
-    else:
-        c1, c2, c3 = st.columns(3)
+        st.markdown("---")
 
-    # 3. STANDARD MODE BUTTONS
+    # 3. STANDARD MODE SELECTION
+    st.markdown("### Select New Entry")
+    c1, c2, c3 = st.columns(3)
+
     if c1.button("📦 Daily", use_container_width=True):
         if is_submitted("daily", date_str): show_duplicate_warning()
         else:
@@ -338,7 +340,7 @@ if st.session_state.page == "mode_select":
             st.session_state.page = "stock_entry"
             st.rerun()
             
-    if c3.button("🍞 Bakery", use_container_width=True):
+    if c3.button("🥐 Bakery", use_container_width=True):
         st.session_state.mode = "bakery"
         st.session_state.stock_inputs = {}
         st.session_state.page = "stock_entry"
@@ -348,7 +350,6 @@ if st.session_state.page == "mode_select":
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
-
 
 # ============================================================
 # BUILD ITEM LIST (FIXED TO READ COLUMN B FOR SKUS)

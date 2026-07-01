@@ -288,7 +288,7 @@ def is_submitted(mode, date_str):
     return False
 
 # ============================================================
-# PAGE: MODE SELECT (UPDATED WITH DRAFT LOADER)
+# PAGE: MODE SELECT (COMPACT DRAFT + MODE BUTTONS)
 # ============================================================
 if st.session_state.page == "mode_select":
     st.markdown("## Select Date & Option")
@@ -300,32 +300,28 @@ if st.session_state.page == "mode_select":
     
     branch = st.session_state.get("selected_branch", "Branch")
 
-    # 1. DRAFT LOADING SECTION
-    # Check if any draft exists for this branch/date
-    has_draft = False
+    # 1. PREPARE DRAFT STATUS
+    # Find which (if any) mode has a saved draft
+    active_draft_mode = None
     for m in ["daily", "weekly", "bakery"]:
         if vault.get_draft(branch, date_str, m):
-            has_draft = True
+            active_draft_mode = m
             break
-            
-    if has_draft:
-        if st.button("📂 Resume Pending Draft", type="primary", use_container_width=True):
-            found_draft = False
-            for m in ["daily", "weekly", "bakery"]:
-                d = vault.get_draft(branch, date_str, m)
-                if d:
-                    st.session_state.mode = m
-                    st.session_state.stock_inputs = d
-                    st.session_state.page = "stock_entry"
-                    found_draft = True
-                    break
-            if found_draft:
+
+    # 2. BUTTON LAYOUT
+    # If a draft exists, we use 4 columns, otherwise we use 3
+    if active_draft_mode:
+        c1, c2, c3, c4 = st.columns(4)
+        with c4:
+            if st.button(f"📂 Resume {active_draft_mode.title()}", type="primary", use_container_width=True):
+                st.session_state.mode = active_draft_mode
+                st.session_state.stock_inputs = vault.get_draft(branch, date_str, active_draft_mode)
+                st.session_state.page = "stock_entry"
                 st.rerun()
+    else:
+        c1, c2, c3 = st.columns(3)
 
-    # 2. STANDARD MODE SELECTION
-    st.markdown("---")
-    c1, c2, c3 = st.columns(3)
-
+    # 3. STANDARD MODE BUTTONS
     if c1.button("📦 Daily", use_container_width=True):
         if is_submitted("daily", date_str): show_duplicate_warning()
         else:
@@ -343,12 +339,12 @@ if st.session_state.page == "mode_select":
             st.rerun()
             
     if c3.button("🥐 Bakery", use_container_width=True):
-        # Bakery mode is set to always allow entry (overwrite logic)
         st.session_state.mode = "bakery"
         st.session_state.stock_inputs = {}
         st.session_state.page = "stock_entry"
         st.rerun()
 
+    st.markdown("---")
     if st.button("⬅ Back to Staff"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()

@@ -394,18 +394,33 @@ for orphan in [k for k in st.session_state.stock_inputs if k not in current_item
 for item in processed_items:
     st.session_state.stock_inputs.setdefault(item["name"], "")
 # ============================================================
-# STOCK ENTRY PAGE — header bar
+# STOCK ENTRY PAGE — header bar (UPDATED)
 # ============================================================
 st.info(f"Mode: {mode.upper()} | Date: {date_str} | Items: {len(processed_items)}")
 
-if st.button("⬅ Back", key="back_to_mode"):
-    st.session_state.page        = "mode_select"
-    st.session_state.mode        = None
-    st.session_state.stock_inputs = {}
-    st.session_state.search_query = ""
-    st.session_state.review_mode  = False
-    st.rerun()
+# Layout: Back button on the left, Clear Data on the right
+c_back, c_clear = st.columns([1, 1])
 
+with c_back:
+    if st.button("⬅ Back", key="back_to_mode", use_container_width=True):
+        st.session_state.page = "mode_select"
+        st.session_state.mode = None
+        st.session_state.stock_inputs = {}
+        st.session_state.search_query = ""
+        st.session_state.review_mode = False
+        st.rerun()
+
+with c_clear:
+    if st.button("❌ Clear Data", type="secondary", use_container_width=True):
+        # 1. Clear the server-side vault
+        branch = st.session_state.get('selected_branch', 'Branch')
+        vault.clear_draft(branch, date_str, mode)
+        # 2. Reset the session state
+        st.session_state.stock_inputs = {}
+        st.session_state.draft_data = {}
+        st.session_state.review_mode = False
+        # 3. Refresh the page to show an empty state
+        st.rerun()
 # ============================================================
 # FORCE NUMERIC KEYPAD ON MOBILE (skip search bar)
 # ============================================================

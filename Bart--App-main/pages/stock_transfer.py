@@ -116,7 +116,7 @@ def render_history_view():
         st.rerun()
 
 def render_transfer_form():
-    st.title("🚚 Internal Stock Transfer")
+    
     if st.button("📜 View Transfer History"):
         st.session_state.show_history = True
         st.rerun()

@@ -62,10 +62,7 @@ def get_gs_client():
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
-if st.session_state.show_history:
-    render_history_view()
-else:
-    render_transfer_form()
+
 
 
 def load_data():
@@ -85,6 +82,51 @@ def load_data():
 
 
 
+def render_history_view():
+    st.subheader("📜 Transfer History")
+    
+    my_branch = st.session_state.get('selected_branch', '')
+    
+    # Filter
+    filtered = [t for t in st.session_state.all_transfers 
+                if t.get('Origin') == my_branch or t.get('Destination') == my_branch]
+    
+    filtered.sort(key=lambda x: x.get('Timestamp', ''), reverse=True)
+    
+    if not filtered:
+        st.info("No records found.")
+    else:
+        # Display only the first 2 or 3 records initially
+        df = pd.DataFrame(filtered[:st.session_state.history_limit])
+        
+        # Select key columns for a clean, compact view
+        display_df = df[['ID', 'Origin', 'Destination', 'Status', 'Timestamp']]
+        
+        # Display as an interactive dataframe
+        st.dataframe(
+            display_df, 
+            use_container_width=True, 
+            hide_index=True
+        )
+            
+    # Load More logic (Increments by 3)
+    if st.session_state.history_limit < len(filtered):
+        if st.button("Load More"):
+            st.session_state.history_limit += 3
+            st.rerun()
+            
+    if st.button("⬅ Close Transfer History"):
+        # Reset limit when going back to keep it clean for next time
+        st.session_state.history_limit = 3 
+        st.session_state.show_history = False
+        st.rerun()
+  
+
+def render_transfer_form():
+    
+    if st.button("📜 View Transfer History"):
+        st.session_state.show_history = True
+        st.rerun()
 
 # ========================================================
 # ENSURE INITIALIZATION FUNCTION
@@ -112,6 +154,7 @@ def ensure_branch_data():
 ensure_branch_data()
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
+# ========================================================
 
 if "branch_map" not in st.session_state:
     with st.spinner("Initializing connection..."):
@@ -203,61 +246,12 @@ if st.button("🔄 Refresh"):
     st.session_state.is_submitting = False
 
 # Router
+if st.session_state.show_history:
+    render_history_view()
+else:
+    render_transfer_form()
 
-
-
-
-
-
-
-
-
-def render_history_view():
-    st.subheader("📜 Transfer History")
     
-    my_branch = st.session_state.get('selected_branch', '')
-    
-    # Filter
-    filtered = [t for t in st.session_state.all_transfers 
-                if t.get('Origin') == my_branch or t.get('Destination') == my_branch]
-    
-    filtered.sort(key=lambda x: x.get('Timestamp', ''), reverse=True)
-    
-    if not filtered:
-        st.info("No records found.")
-    else:
-        # Display only the first 2 or 3 records initially
-        df = pd.DataFrame(filtered[:st.session_state.history_limit])
-        
-        # Select key columns for a clean, compact view
-        display_df = df[['ID', 'Origin', 'Destination', 'Status', 'Timestamp']]
-        
-        # Display as an interactive dataframe
-        st.dataframe(
-            display_df, 
-            use_container_width=True, 
-            hide_index=True
-        )
-            
-    # Load More logic (Increments by 3)
-    if st.session_state.history_limit < len(filtered):
-        if st.button("Load More"):
-            st.session_state.history_limit += 3
-            st.rerun()
-            
-    if st.button("⬅ Close Transfer History"):
-        # Reset limit when going back to keep it clean for next time
-        st.session_state.history_limit = 3 
-        st.session_state.show_history = False
-        st.rerun()
-  
-
-def render_transfer_form():
-    
-    if st.button("📜 View Transfer History"):
-        st.session_state.show_history = True
-        st.rerun()
-
     
 
 if "transfer_cart" not in st.session_state:

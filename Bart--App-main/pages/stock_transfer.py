@@ -62,7 +62,10 @@ def get_gs_client():
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
-
+if st.session_state.show_history:
+    render_history_view()
+else:
+    render_transfer_form()
 
 
 def load_data():
@@ -109,8 +112,7 @@ def ensure_branch_data():
 ensure_branch_data()
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
-# ========================================================
-render_history_view()
+
 if "branch_map" not in st.session_state:
     with st.spinner("Initializing connection..."):
         try:
@@ -201,10 +203,7 @@ if st.button("🔄 Refresh"):
     st.session_state.is_submitting = False
 
 # Router
-if st.session_state.show_history:
-    render_history_view()
-else:
-    render_transfer_form()
+
 
 
 

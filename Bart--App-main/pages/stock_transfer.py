@@ -16,6 +16,26 @@ import pandas as pd
 
 
 # ========================================================
+# INITIALIZE ALL SESSION STATE KEYS
+# ========================================================
+def init_session_state():
+    defaults = {
+        "show_history": False,
+        "history_limit": 5,
+        "is_submitting": False,
+        "transfer_cart": [],
+        "branch_map": {},
+        "branch_list": []
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+# Initialize before anything else
+init_session_state()
+
+
+# ========================================================
 # DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
 # ========================================================
 

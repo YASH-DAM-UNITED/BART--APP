@@ -17,23 +17,6 @@ import pandas as pd
 
 # ========================================================
 # INITIALIZE ALL SESSION STATE KEYS
-# ========================================================
-def init_session_state():
-    defaults = {
-        "show_history": False,
-        "history_limit": 5,
-        "is_submitting": False,
-        "transfer_cart": [],
-        "branch_map": {},
-        "branch_list": [],
-        "all_transfers": [] # <--- THIS IS THE MISSING KEY
-    }
-    for key, value in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = value
-
-# Initialize before anything else
-init_session_state()
 
 
 # ========================================================
@@ -207,6 +190,28 @@ st.set_page_config(page_title="Stock Transfer", layout="centered")
 # Add this near your other session_state initializations
 if "is_submitting" not in st.session_state:
     st.session_state.is_submitting = False
+
+
+
+
+# ========================================================
+def init_session_state():
+    defaults = {
+        "show_history": False,
+        "history_limit": 5,
+        "is_submitting": False,
+        "transfer_cart": [],
+        "branch_map": {},
+        "branch_list": [],
+        "all_transfers": [] # <--- THIS IS THE MISSING KEY
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+# Initialize before anything else
+init_session_state()
+
 
 # ========================================================
 # DIALOG DEFINITION

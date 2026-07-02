@@ -25,7 +25,8 @@ def init_session_state():
         "is_submitting": False,
         "transfer_cart": [],
         "branch_map": {},
-        "branch_list": []
+        "branch_list": [],
+        "all_transfers": [] # <--- THIS IS THE MISSING KEY
     }
     for key, value in defaults.items():
         if key not in st.session_state:

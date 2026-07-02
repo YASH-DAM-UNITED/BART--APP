@@ -110,7 +110,7 @@ ensure_branch_data()
 # ========================================================
 # LOAD BRANCH MAP ON STARTUP
 # ========================================================
-
+render_history_view()
 if "branch_map" not in st.session_state:
     with st.spinner("Initializing connection..."):
         try:

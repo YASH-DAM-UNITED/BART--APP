@@ -187,6 +187,20 @@ st.set_page_config(page_title="Stock Transfer", layout="centered")
 if "is_submitting" not in st.session_state:
     st.session_state.is_submitting = False
 
+
+
+# Ensure history UI state exists before any reads
+if "show_history" not in st.session_state:
+    st.session_state.show_history = False
+
+# Default number of records shown in history
+if "history_limit" not in st.session_state:
+    st.session_state.history_limit = 3
+
+
+
+
+
 # ========================================================
 # DIALOG DEFINITION
 # ========================================================
@@ -263,6 +277,8 @@ if "current_stocks" not in st.session_state:
     if st.button("⬅ Go Back to Dashboard"):
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
+
+
 
 # ========================================================
 # ADD ITEMS SECTION

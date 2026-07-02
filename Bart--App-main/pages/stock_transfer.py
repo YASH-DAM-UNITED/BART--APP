@@ -9,7 +9,14 @@ import gspread.utils
 import threading
 import pandas as pd
 
+if "show_history" not in st.session_state:
+    st.session_state.show_history = False
 
+if "history_limit" not in st.session_state:
+    st.session_state.history_limit = 3
+
+if "is_submitting" not in st.session_state:
+    st.session_state.is_submitting = False
 
 
 

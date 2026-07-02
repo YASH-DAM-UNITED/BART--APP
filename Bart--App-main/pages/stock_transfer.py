@@ -120,7 +120,7 @@ def render_history_view():
         df = pd.DataFrame(filtered[:limit])
         
         # Select key columns for a clean, compact view if they exist
-        desired_cols = ['ID', 'Origin', 'Destination', 'Status', 'Timestamp']
+        desired_cols = ['ID', 'Origin', 'Destination', 'Status', 'Timestamp','Items']
         available_cols = [c for c in desired_cols if c in df.columns]
         if available_cols:
             display_df = df[available_cols]

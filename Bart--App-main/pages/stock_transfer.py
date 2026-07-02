@@ -9,23 +9,51 @@ import gspread.utils
 import threading
 import pandas as pd
 
-if "show_history" not in st.session_state:
-    st.session_state.show_history = False
-
-if "history_limit" not in st.session_state:
-    st.session_state.history_limit = 3
-
-if "is_submitting" not in st.session_state:
-    st.session_state.is_submitting = False
 
 
+
+
+
+# 1. Update the initialization function to include transfers
+def initialize_app_data():
+    """Ensures all required data exists in session_state."""
+    if "branch_map" not in st.session_state:
+        st.session_state.branch_map = {}
+    if "branch_list" not in st.session_state:
+        st.session_state.branch_list = []
+    
+    # Initialize all_transfers as an empty list if not present
+    if "all_transfers" not in st.session_state:
+        st.session_state.all_transfers = []
+        
+    # Now try to load the actual data
+    if not st.session_state.branch_map:
+        try:
+            client = get_gs_client()
+            master_sh = client.open("MASTERBRANCHSHEET")
+            
+            # Load Branches
+            branch_ws = master_sh.worksheet("Branches")
+            data = branch_ws.get_all_values()[1:]
+            st.session_state.branch_map = {row[0]: row[1] for row in data}
+            st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+            
+            # Load Transfers
+            transfer_ws = master_sh.worksheet("Transfers")
+            st.session_state.all_transfers = transfer_ws.get_all_records()
+            
+        except Exception as e:
+            st.error(f"Failed to initialize data: {e}")
+
+# 2. Call this at the VERY TOP of your script, right after imports and session_state setup
+initialize_app_data()
 
 
 
 # ========================================================
 # DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
 # ========================================================
-
+initialize_app_data()
 client_lock = threading.Lock()
 def disable_button():
     st.session_state.is_submitting = True

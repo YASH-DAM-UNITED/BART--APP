@@ -15,6 +15,7 @@ import pandas as pd
 
 
 
+
 # ========================================================
 # DUAL GOOGLE CREDENTIALS POOL (WITH THREADING LOCK)
 # ========================================================
@@ -44,6 +45,7 @@ def get_gs_client():
         
         if not pool:
             st.error("No Google credentials found in secrets!")
+            st.stop()
             return None
             
         st.session_state.client_pool = pool
@@ -72,8 +74,17 @@ def load_data():
     # Load Branches
     branch_ws = master_sh.worksheet("Branches")
     branch_data = branch_ws.get_all_values()[1:]
-    st.session_state.branch_map = {row[0]: row[1] for row in branch_data}
-    st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in branch_data]
+
+    # robust parsing: skip malformed rows
+    branch_map = {}
+    branch_list = []
+    for row in branch_data:
+        if len(row) >= 3:
+            branch_map[row[0]] = row[1]
+            branch_list.append(f"{row[0]} - {row[2]}")
+
+    st.session_state.branch_map = branch_map
+    st.session_state.branch_list = branch_list
     
     # Load Transfers
     transfer_ws = master_sh.worksheet("Transfers")
@@ -82,8 +93,16 @@ def load_data():
 
 
 
+
 def render_history_view():
     st.subheader("📜 Transfer History")
+    # Ensure transfers are loaded
+    if "all_transfers" not in st.session_state:
+        try:
+            load_data()
+        except Exception:
+            st.error("Failed to load transfer history.")
+            return
     
     my_branch = st.session_state.get('selected_branch', '')
     
@@ -96,11 +115,17 @@ def render_history_view():
     if not filtered:
         st.info("No records found.")
     else:
-        # Display only the first 2 or 3 records initially
-        df = pd.DataFrame(filtered[:st.session_state.history_limit])
+        # Display only the first N records initially
+        limit = st.session_state.get('history_limit', 3)
+        df = pd.DataFrame(filtered[:limit])
         
-        # Select key columns for a clean, compact view
-        display_df = df[['ID', 'Origin', 'Destination', 'Status', 'Timestamp']]
+        # Select key columns for a clean, compact view if they exist
+        desired_cols = ['ID', 'Origin', 'Destination', 'Status', 'Timestamp']
+        available_cols = [c for c in desired_cols if c in df.columns]
+        if available_cols:
+            display_df = df[available_cols]
+        else:
+            display_df = df
         
         # Display as an interactive dataframe
         st.dataframe(
@@ -110,9 +135,9 @@ def render_history_view():
         )
             
     # Load More logic (Increments by 3)
-    if st.session_state.history_limit < len(filtered):
+    if len(filtered) > st.session_state.get('history_limit', 3):
         if st.button("Load More"):
-            st.session_state.history_limit += 3
+            st.session_state.history_limit = st.session_state.get('history_limit', 3) + 3
             st.rerun()
             
     if st.button("⬅ Close Transfer History"):
@@ -123,7 +148,6 @@ def render_history_view():
   
 
 def render_transfer_form():
-    
     if st.button("📜 View Transfer History"):
         st.session_state.show_history = True
         st.rerun()
@@ -142,8 +166,15 @@ def ensure_branch_data():
                 branch_ws = master_sh.worksheet("Branches")
                 data = branch_ws.get_all_values()[1:]
                 
-                st.session_state.branch_map = {row[0]: row[1] for row in data}
-                st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+                branch_map = {}
+                branch_list = []
+                for row in data:
+                    if len(row) >= 3:
+                        branch_map[row[0]] = row[1]
+                        branch_list.append(f"{row[0]} - {row[2]}")
+
+                st.session_state.branch_map = branch_map
+                st.session_state.branch_list = branch_list
             except Exception as e:
                 st.error(f"Failed to initialize: {e}")
                 st.session_state.branch_map = {}
@@ -167,11 +198,15 @@ if "branch_map" not in st.session_state:
             data = branch_ws.get_all_values()[1:]
             
             # Create a dictionary: {'B001': '1VF7g...', 'B002': '1cEku...', ...}
-            st.session_state.branch_map = {row[0]: row[1] for row in data}
-            
-            # --- ADD THIS LINE TO INITIALIZE THE LIST ---
-            # Assuming row[0] is ID and row[2] is Branch Name, adjust index as needed
-            st.session_state.branch_list = [f"{row[0]} - {row[2]}" for row in data]
+            branch_map = {}
+            branch_list = []
+            for row in data:
+                if len(row) >= 3:
+                    branch_map[row[0]] = row[1]
+                    branch_list.append(f"{row[0]} - {row[2]}")
+
+            st.session_state.branch_map = branch_map
+            st.session_state.branch_list = branch_list
             
         except Exception as e:
             st.error(f"Failed to initialize: {e}")
@@ -187,8 +222,6 @@ st.set_page_config(page_title="Stock Transfer", layout="centered")
 if "is_submitting" not in st.session_state:
     st.session_state.is_submitting = False
 
-
-
 # Ensure history UI state exists before any reads
 if "show_history" not in st.session_state:
     st.session_state.show_history = False
@@ -197,9 +230,9 @@ if "show_history" not in st.session_state:
 if "history_limit" not in st.session_state:
     st.session_state.history_limit = 3
 
-
-
-
+# Ensure transfer_cart exists
+if "transfer_cart" not in st.session_state:
+    st.session_state.transfer_cart = []
 
 # ========================================================
 # DIALOG DEFINITION
@@ -215,32 +248,49 @@ def prepare_batch_updates(ws, cart, mode="subtract"):
     """Batch update with error handling, matching yesterday's date column."""
     try:
         all_data = ws.get_all_values()
-        if not all_data:
-            return "Error: Sheet is empty"
+        if not all_data or len(all_data) < 2:
+            return "Error: Sheet is empty or has no data rows"
         
         # Calculate yesterday's date string (Match this format to your sheet's header)
         target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         headers = all_data[0]
+        data_rows = all_data[1:]
         
         if target_date not in headers:
             return f"Error: Column for {target_date} not found"
         
         col_index = headers.index(target_date)
-        items_column = [row[0] for row in all_data]
+        items_column = [row[0] for row in data_rows if len(row) > 0]
         
         batch_list = []
         for entry in cart:
             if entry['item'] in items_column:
-                row_idx = items_column.index(entry['item'])
-                current_val = all_data[row_idx][col_index]
-                current_num = int(float(current_val)) if current_val and str(current_val).strip() else 0
+                data_idx = items_column.index(entry['item'])
+                row_idx = data_idx  # index into data_rows
+                # Get current value safely
+                current_val = ""
+                if col_index < len(data_rows[row_idx]):
+                    current_val = data_rows[row_idx][col_index]
+                # sanitize
+                try:
+                    if isinstance(current_val, str):
+                        sanitized = current_val.replace(',', '').strip()
+                        current_num = int(float(sanitized)) if sanitized else 0
+                    elif current_val is None:
+                        current_num = 0
+                    else:
+                        current_num = int(float(current_val))
+                except Exception:
+                    current_num = 0
                 
                 if mode == "subtract":
                     new_val = current_num - int(entry['qty'])
                 else:
                     new_val = current_num + int(entry['qty'])
                 
-                cell_address = gspread.utils.rowcol_to_a1(row_idx + 1, col_index + 1)
+                # compute sheet row number (header is row 1, data_rows start at row 2)
+                sheet_row = row_idx + 2
+                cell_address = gspread.utils.rowcol_to_a1(sheet_row, col_index + 1)
                 batch_list.append({"range": cell_address, "values": [[new_val]]})
                 
         if batch_list:
@@ -260,16 +310,13 @@ if st.button("🔄 Refresh"):
     st.session_state.is_submitting = False
 
 # Router
-if st.session_state.show_history:
+if st.session_state.get('show_history', False):
     render_history_view()
 else:
     render_transfer_form()
 
-    
-    
 
-if "transfer_cart" not in st.session_state:
-    st.session_state.transfer_cart = []
+
 
 if "current_stocks" not in st.session_state:
     st.error("No stock data found. Please return to the Dashboard.")
@@ -278,81 +325,87 @@ if "current_stocks" not in st.session_state:
         st.switch_page("pages/staff_dashboard.py")
     st.stop()
 
-
-
 # ========================================================
 # ADD ITEMS SECTION
 # ========================================================
 
 with st.expander("➕ Add Items to Transfer", expanded=True):
     category = st.radio("Select Item Category", ["Daily Items", "Weekly Items"], horizontal=True, key="cat_radio")
-    target_list = st.session_state.current_stocks['daily'] if category == "Daily Items" else st.session_state.current_stocks['weekly']
+    target_list = st.session_state.current_stocks.get('daily', []) if category == "Daily Items" else st.session_state.current_stocks.get('weekly', [])
     
     # ADDED: Check if list is empty
     if not target_list:
         st.warning(f"No items available in {category}.")
     else:
-        item_names = [list(row.values())[0] for row in target_list]
-        selected_item = st.selectbox("Select Item", item_names, key="item_sel")
+        item_names = [list(row.values())[0] for row in target_list if row]
+        if not item_names:
+            st.warning("No valid item names found.")
+        else:
+            selected_item = st.selectbox("Select Item", item_names, key="item_sel")
 
-        # Now only perform lookups if target_list actually had items
-        selected_row = next(row for row in target_list if list(row.values())[0] == selected_item)
-        uom_display = selected_row.get('DATE->  UOM', 'units') 
-        
-        col1, col2 = st.columns([3, 1])
-        qty = col1.number_input("Quantity", min_value=1, step=1, key="qty_input")
-        col2.markdown("<br>", unsafe_allow_html=True) 
-        col2.write(f"**{uom_display}**")
-        
-        if st.button("Add to List", key="add_btn"):
-            st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
-            st.success(f"Added {selected_item} to cart!")
+            # Now only perform lookups if target_list actually had items
+            selected_row = next((row for row in target_list if list(row.values())[0] == selected_item), None)
+            uom_display = selected_row.get('DATE->  UOM', 'units') if selected_row else 'units'
+            
+            col1, col2 = st.columns([3, 1])
+            qty = col1.number_input("Quantity", min_value=1, step=1, key="qty_input")
+            col2.markdown("<br>", unsafe_allow_html=True) 
+            col2.write(f"**{uom_display}**")
+            
+            if st.button("Add to List", key="add_btn"):
+                st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
+                st.success(f"Added {selected_item} to cart!")
 # ========================================================
 # CART AND DESTINATION SECTION
 # ========================================================
 
 
 
-    
-        
+
 
 if st.session_state.transfer_cart:
     st.subheader("📋 Current Transfer List")
-    for i, entry in enumerate(st.session_state.transfer_cart):
+    for i, entry in enumerate(list(st.session_state.transfer_cart)):
         col1, col2, col3 = st.columns([3, 1, 1])
         col1.write(f"**{entry['item']}**")
         col2.write(f"{entry['qty']} {entry['uom']}")
         if col3.button("Remove", key=f"del_{i}"):
             st.session_state.transfer_cart.pop(i)
-            
             st.rerun()
 
     st.markdown("---")
     st.subheader("📦 Finalize Transfer")
     
     # 1. Select destination (index=None forces user interaction)
-    destination = st.selectbox(
-        "Select Destination Branch", 
-        options=st.session_state.branch_list, 
-        index=None, 
-        placeholder="Choose a branch...",
-        key="dest_sel"
-    )
+    if st.session_state.get('branch_list'):
+        destination = st.selectbox(
+            "Select Destination Branch", 
+            options=st.session_state.branch_list, 
+            index=None, 
+            placeholder="Choose a branch...",
+            key="dest_sel"
+        )
+    else:
+        destination = None
+        st.warning("No destination branches available. Contact admin.")
     
     reason = st.text_area("Reason for Transfer", key="reason_input")
 
         
         
     
-    
     # 2. Only show the confirmation button if a destination is selected
     if destination:
-        if st.button("Confirm and Send All", key="confirm_btn", on_click=disable_button, disabled=st.session_state.is_submitting):
+        if st.button("Confirm and Send All", key="confirm_btn", on_click=disable_button, disabled=st.session_state.get('is_submitting', False)):
             
             
             jeddah_time = datetime.now() + timedelta(hours=3)
             transfer_id = f"TR-{jeddah_time.strftime('%Y%m%d')}-{''.join(random.choices(string.ascii_uppercase + string.digits, k=4))}"
-            origin_branch_raw = st.session_state.selected_branch
+            origin_branch_raw = st.session_state.get('selected_branch')
+            if not origin_branch_raw:
+                st.error("Origin branch not set. Please return to Dashboard and select a branch.")
+                st.session_state.is_submitting = False
+                st.stop()
             
             origin_id = origin_branch_raw.split(" - ")[0]
             dest_id = str(destination).split(" - ")[0]
@@ -371,7 +424,13 @@ if st.session_state.transfer_cart:
                     
                     # --- PRE-VALIDATION CHECK ---
                     all_origin_data = ws_origin.get_all_values()
-                    origin_items = [row[0] for row in all_origin_data]
+                    if not all_origin_data or len(all_origin_data) < 2:
+                        st.error("Origin stocks sheet is empty or malformed.")
+                        st.session_state.is_submitting = False
+                        st.stop()
+
+                    data_rows = all_origin_data[1:]
+                    origin_items = [row[0] for row in data_rows if len(row) > 0]
                     target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
                     headers = all_origin_data[0]
                     
@@ -384,9 +443,24 @@ if st.session_state.transfer_cart:
                     for entry in st.session_state.transfer_cart:
                         if entry['item'] in origin_items:
                             row_idx = origin_items.index(entry['item'])
-                            current_stock = int(float(all_origin_data[row_idx][col_index] or 0))
-                            
-                    
+                            # safe val
+                            current_val = ""
+                            if col_index < len(data_rows[row_idx]):
+                                current_val = data_rows[row_idx][col_index]
+                            try:
+                                cur = int(float(str(current_val).replace(',', '').strip() or 0))
+                            except Exception:
+                                cur = 0
+
+                            if cur < int(entry['qty']):
+                                insufficient_items.append({"item": entry['item'], "have": cur, "need": entry['qty']})
+                        else:
+                            insufficient_items.append({"item": entry['item'], "have": 0, "need": entry['qty']})
+
+                    if insufficient_items:
+                        st.error("Insufficient stock for some items:\n" + "\n".join([f"{it['item']}: have {it['have']} need {it['need']}" for it in insufficient_items]))
+                        st.session_state.is_submitting = False
+                        st.stop()
                     
                     # --- EXECUTE TRANSFER ---
                     ws_dest = sh_dest.worksheet("Stocks")
@@ -419,7 +493,10 @@ else:
     st.info("Add items to your cart to proceed with the transfer.")
 
 if "all_transfers" not in st.session_state:
-    load_data()
+    try:
+        load_data()
+    except Exception:
+        st.error("Failed to load transfers.")
     st.session_state.history_limit = 5
     st.session_state.show_history = False
 

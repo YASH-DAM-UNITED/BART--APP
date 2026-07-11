@@ -479,10 +479,7 @@ def build_df(data_dict, branch_names):
 # CATEGORY LOGIC (FIXED LOGIC PIPELINE)
 # ========================================================
 
-# Insert this right before your Category View section to debug
-st.write("--- DEBUG: Check Category Counts ---")
-for cat, df in category_dfs.items():
-    st.write(f"Category: {cat} | Rows found: {len(df)}")
+
 
 def normalize_sku(value):
     return str(value).replace(" ", "").strip().upper()
@@ -512,6 +509,10 @@ def detect_category(sku):
         
     # 3. Dynamic Uncategorized Safety bucket
     return "UNCATEGORIZED DETECTED"
+
+
+
+
 
 def build_category_dfs(df):
     cats = {
@@ -889,6 +890,11 @@ else:
 # CATEGORY VIEW (COMBINED & BULLETPROOF SKU MATCHING)
 # ========================================================
 st.subheader("📊 Category Wise Stock Overview")
+
+# Insert this right before your Category View section to debug
+st.write("--- DEBUG: Check Category Counts ---")
+for cat, df in category_dfs.items():
+    st.write(f"Category: {cat} | Rows found: {len(df)}")
 
 # 1. Prepare data
 combined_stock = pd.concat([daily_df, weekly_df], ignore_index=True)

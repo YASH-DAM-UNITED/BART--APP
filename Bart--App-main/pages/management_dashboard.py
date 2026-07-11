@@ -479,6 +479,11 @@ def build_df(data_dict, branch_names):
 # CATEGORY LOGIC (FIXED LOGIC PIPELINE)
 # ========================================================
 
+# Insert this right before your Category View section to debug
+st.write("--- DEBUG: Check Category Counts ---")
+for cat, df in category_dfs.items():
+    st.write(f"Category: {cat} | Rows found: {len(df)}")
+
 def normalize_sku(value):
     return str(value).replace(" ", "").strip().upper()
 

@@ -891,10 +891,7 @@ else:
 # ========================================================
 st.subheader("📊 Category Wise Stock Overview")
 
-# Insert this right before your Category View section to debug
-st.write("--- DEBUG: Check Category Counts ---")
-for cat, df in category_dfs.items():
-    st.write(f"Category: {cat} | Rows found: {len(df)}")
+
 
 # 1. Prepare data
 combined_stock = pd.concat([daily_df, weekly_df], ignore_index=True)

@@ -57,7 +57,37 @@ def get_filtered_branches(manager_name, full_branch_list, mapping_df):
 # The "Toggle" function to change the state
 def toggle_manager():
     st.session_state.show_manager = not st.session_state.show_manager
+def get_custom_excel(df, manager_name, date_str):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        if manager_name == "Bari":
+            # 1. Work on a copy to avoid affecting other exports
+            bari_df = df.copy()
+            
+            # 2. Skip the first row (the header row or top row)
+            bari_df = bari_df.iloc[1:]
+            
+            # 3. Rename "Branch Name" to "Branch"
+            # If your index is named 'Branch Name', rename it
+            bari_df.index.name = 'Branch'
+            
+            # 4. Remove 'Item Name' and replace 'UOM' with date_str
+            # Note: Assuming your columns are structured in a way you can drop/rename
+            if 'Item Name' in bari_df.columns:
+                bari_df = bari_df.drop(columns=['Item Name'])
+            
+            # Replace UOM column with date (if it exists)
+            if 'UOM' in bari_df.columns:
+                bari_df = bari_df.rename(columns={'UOM': date_str})
+                
+            # 5. Map Branch Name to Branch Code
+            # (Ensure you have a way to map this, e.g., using a dictionary)
+            # bari_df.index = bari_df.index.map(lambda x: branch_code_map.get(x, x))
 
+            bari_df.to_excel(writer, sheet_name="Bari_Report")
+        else:
+            df.to_excel(writer, sheet_name="Report")
+    return output.getvalue()
 
 
 
@@ -885,13 +915,7 @@ if not search_pool.empty:
         c1, c2 = st.columns(2)
         
         # Helper logic for custom exports
-        def get_custom_excel(df, manager_name):
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # If Bari, skip the first row (the first index of the dataframe)
-                df_to_save = df.iloc[1:] if manager_name == "Bari" else df
-                df_to_save.to_excel(writer, sheet_name="Report")
-            return output.getvalue()
+
 
         # Bari Download
         bari_data = get_custom_excel(final_export_df, "Bari")

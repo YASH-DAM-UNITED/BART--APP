@@ -852,7 +852,6 @@ if not search_pool.empty:
             make_grid(result_df, search_grid_key)
             
         # --- TRANSPOSE FOR DOWNLOAD ---
-        # 1. Melt to get individual branch values
         melted_df = result_df.melt(
             id_vars=["Item Name", "SKU", "UOM"], 
             value_vars=branch_names + ["Total"], 
@@ -860,7 +859,6 @@ if not search_pool.empty:
             value_name="Quantity"
         )
         
-        # 2. Pivot: Branches as rows, Items/SKU/UOM as columns
         pivoted_df = melted_df.pivot_table(
             index="Branch Name", 
             columns=["Item Name", "SKU", "UOM"], 
@@ -868,22 +866,52 @@ if not search_pool.empty:
             aggfunc='sum'
         )
         
-        # 3. Explicitly reorder rows to match your exact branch list + Total
-        # This prevents alphabetical sorting and keeps your desired sequence
         ordered_index = branch_names + (["Total"] if "Total" in pivoted_df.index else [])
         final_export_df = pivoted_df.reindex(ordered_index)
         
-        # 4. Final Export
-        excel_data = to_excel_bytes({"Selected_Items": final_export_df})
+        # --- DOWNLOAD BUTTONS BLOCK ---
+        st.markdown("### 📥 Download Reports")
         
+        # 1. Standard Download
+        excel_data = to_excel_bytes({"Selected_Items": final_export_df})
         st.download_button(
-            label=f"📥 Download {len(selected_options)} Items Transposed to Excel",
-            data=excel_data,
-            file_name=f"Selected_Items_Transposed_{selected_date_str}.xlsx",
+            label="📥 Download Standard Transposed", 
+            data=excel_data, 
+            file_name=f"Standard_{selected_date_str}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+        # 2. Manager Custom Buttons
+        c1, c2 = st.columns(2)
+        
+        # Helper logic for custom exports
+        def get_custom_excel(df, manager_name):
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                # If Bari, skip the first row (the first index of the dataframe)
+                df_to_save = df.iloc[1:] if manager_name == "Bari" else df
+                df_to_save.to_excel(writer, sheet_name="Report")
+            return output.getvalue()
+
+        # Bari Download
+        bari_data = get_custom_excel(final_export_df, "Bari")
+        c1.download_button(
+            label="📥 Download for Mr.Bari",
+            data=bari_data,
+            file_name=f"Bari_Report_{selected_date_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+        # Rameez Download
+        rameez_data = get_custom_excel(final_export_df, "Rameez")
+        c2.download_button(
+            label="📥 Download for Mr.Rameez",
+            data=rameez_data,
+            file_name=f"Rameez_Report_{selected_date_str}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
         st.markdown("---")
-            
 else:
     st.info("No stock data available to search for this date.")
 # ========================================================

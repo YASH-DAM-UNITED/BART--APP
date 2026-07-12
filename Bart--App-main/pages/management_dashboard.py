@@ -918,7 +918,7 @@ if not search_pool.empty:
 
 
         # Bari Download
-        bari_data = get_custom_excel(final_export_df, "Bari")
+        bari_data = get_custom_excel(final_export_df, "Bari", selected_date_str)
         c1.download_button(
             label="📥 Download for Mr.Bari",
             data=bari_data,

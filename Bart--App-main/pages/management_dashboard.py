@@ -927,7 +927,7 @@ if not search_pool.empty:
         )
 
         # Rameez Download
-        rameez_data = get_custom_excel(final_export_df, "Rameez")
+        rameez_data = get_custom_excel(final_export_df, "Rameez",selected_date_str)
         c2.download_button(
             label="📥 Download for Mr.Rameez",
             data=rameez_data,

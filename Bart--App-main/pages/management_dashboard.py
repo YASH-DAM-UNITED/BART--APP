@@ -464,8 +464,9 @@ def build_df(data_dict, branch_names):
     rows = []
     for _, v in data_dict.items():
         row = {
-            "Item Name": v["Item Name"],
             "SKU": v["SKU"],
+            "Item Name": v["Item Name"],
+            
             "UOM": v["UOM"]
         }
         for b in branch_names:

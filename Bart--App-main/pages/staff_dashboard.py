@@ -203,6 +203,9 @@ def parse_transfer_items(transfer_data):
     cart = []
     # Loop through the shorter list to avoid index errors
     for i in range(min(len(items), len(qtys))):
+        raw_item = items[i]
+        if "]" in raw_item:
+            raw_item = raw_item.split("]", 1)[1].strip()
         # Extract item name if it has extra detail like "(Qty UOM)"
         item_name = items[i].split(" (")[0].strip()
         cart.append({"item": item_name, "qty": qtys[i]})

@@ -472,7 +472,7 @@ if st.session_state.transfer_cart:
                         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                         transfer_sheet.append_row([
                             transfer_id, origin_branch_raw, str(destination), 
-                            "\n".join([f"• [{e.get('sku', 'N/A')}] {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+                            "\n".join([f"• [{e.get('sku', 'N/A')}] {e['item','sku']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
                             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
                             str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
                         ])

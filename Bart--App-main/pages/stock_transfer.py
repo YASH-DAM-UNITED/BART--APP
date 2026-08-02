@@ -353,7 +353,8 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
             col2.write(f"**{uom_display}**")
             
             if st.button("Add to List", key="add_btn"):
-                st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
+                sku_val = selected_row.get('SKU', '') if selected_row else ''
+                st.session_state.transfer_cart.append({"item": selected_item , "sku": sku_val, "qty": qty, "uom": uom_display})
                 st.success(f"Added {selected_item} to cart!")
 # ========================================================
 # CART AND DESTINATION SECTION

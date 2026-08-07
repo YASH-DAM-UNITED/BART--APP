@@ -436,6 +436,7 @@ if st.session_state.transfer_cart:
                     
                     if target_date not in headers:
                         st.error(f"❌ Could not find column for yesterday's date: {target_date}")
+                        st.session_state.is_submitting = False
                         st.stop()
                         
                     col_index = headers.index(target_date)

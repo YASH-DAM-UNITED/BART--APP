@@ -397,7 +397,8 @@ if st.session_state.transfer_cart:
     
     # 2. Only show the confirmation button if a destination is selected
     if destination:
-        if st.button("Confirm and Send All", key="confirm_btn", on_click=disable_button, disabled=st.session_state.get('is_submitting', False)):
+        if st.button("Confirm and Send All", key="confirm_btn", disabled=st.session_state.get('is_submitting', False)):
+            st.session_state.is_submitting = True
             
             
             jeddah_time = datetime.now() + timedelta(hours=3)

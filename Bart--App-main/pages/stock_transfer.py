@@ -397,6 +397,7 @@ if st.session_state.transfer_cart:
         
         if confirm_clicked:
             st.session_state.is_submitting = True
+            st.rerun()
             
             try:
                 jeddah_time = datetime.now() + timedelta(hours=3)

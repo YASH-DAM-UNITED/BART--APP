@@ -353,7 +353,8 @@ with st.expander("➕ Add Items to Transfer", expanded=True):
             col2.write(f"**{uom_display}**")
             
             if st.button("Add to List", key="add_btn"):
-                st.session_state.transfer_cart.append({"item": selected_item, "qty": qty, "uom": uom_display})
+                sku_val = selected_row.get('SKU', '') if selected_row else ''
+                st.session_state.transfer_cart.append({"item": selected_item , "sku": sku_val, "qty": qty, "uom": uom_display})
                 st.success(f"Added {selected_item} to cart!")
 # ========================================================
 # CART AND DESTINATION SECTION
@@ -396,7 +397,7 @@ if st.session_state.transfer_cart:
     
     # 2. Only show the confirmation button if a destination is selected
     if destination:
-        if st.button("Confirm and Send All", key="confirm_btn",  disabled=st.session_state.get('is_submitting', False)):
+        if st.button("Confirm and Send All", key="confirm_btn", disabled=st.session_state.get('is_submitting', False)):
             
             
             jeddah_time = datetime.now() + timedelta(hours=3)
@@ -472,7 +473,7 @@ if st.session_state.transfer_cart:
                         transfer_sheet = client.open("MASTERBRANCHSHEET").worksheet("Transfers")
                         transfer_sheet.append_row([
                             transfer_id, origin_branch_raw, str(destination), 
-                            "\n".join([f"• {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
+                            "\n".join([f"• [{e.get('sku', '')}] {e['item']} ({e['qty']} {e['uom']})" for e in st.session_state.transfer_cart]), 
                             "\n".join([str(e['qty']) for e in st.session_state.transfer_cart]), 
                             str(reason), "Pending", jeddah_time.strftime("%Y-%m-%d %I:%M:%S %p")
                         ])

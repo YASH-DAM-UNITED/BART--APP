@@ -997,3 +997,252 @@ with col2:
 
 
 
+
+
+
+
+# ========================================================
+# TWO-DATE STOCK COMPARISON REPORT
+# ========================================================
+
+st.markdown("---")
+st.subheader("🔄 Two-Date Stock Comparison")
+
+compare_col1, compare_col2 = st.columns(2)
+
+with compare_col1:
+    comparison_date_1 = st.date_input(
+        "📅 First Date",
+        value=datetime.now().date() - timedelta(days=1),
+        key="comparison_date_1"
+    )
+
+with compare_col2:
+    comparison_date_2 = st.date_input(
+        "📅 Second Date",
+        value=datetime.now().date(),
+        key="comparison_date_2"
+    )
+
+
+def create_comparison_excel(all_data, date1, date2, branch_names):
+
+    date1_str = date1.strftime("%Y-%m-%d")
+    date2_str = date2.strftime("%Y-%m-%d")
+
+    # Process both dates using the already loaded branch data
+    daily_1, weekly_1 = process_stock(
+        all_data,
+        date1_str,
+        branch_names
+    )
+
+    daily_2, weekly_2 = process_stock(
+        all_data,
+        date2_str,
+        branch_names
+    )
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+
+        workbook = writer.book
+
+        # Formats
+        branch_fmt = workbook.add_format({
+            "bold": True,
+            "bg_color": "#F2F2F2",
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        item_fmt = workbook.add_format({
+            "bold": True,
+            "bg_color": "#FFFF00",
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        date_fmt = workbook.add_format({
+            "bold": True,
+            "bg_color": "#E8E8E8",
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        data_fmt = workbook.add_format({
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        def write_comparison_sheet(
+            sheet_name,
+            data1,
+            data2
+        ):
+
+            ws = workbook.add_worksheet(sheet_name)
+
+            # ------------------------------------------------
+            # Build item list using both dates
+            # ------------------------------------------------
+            all_keys = list(dict.fromkeys(
+                list(data1.keys()) + list(data2.keys())
+            ))
+
+            # Keep original item order
+            items = []
+
+            for key in all_keys:
+
+                source = data1.get(key) or data2.get(key)
+
+                items.append({
+                    "key": key,
+                    "Item Name": source["Item Name"],
+                    "SKU": source["SKU"],
+                    "UOM": source["UOM"]
+                })
+
+            # ------------------------------------------------
+            # Header
+            # ------------------------------------------------
+            ws.write(0, 0, "Branch", item_fmt)
+
+            col = 1
+
+            for item in items:
+
+                # Merge item name across two date columns
+                ws.merge_range(
+                    0,
+                    col,
+                    0,
+                    col + 1,
+                    item["Item Name"],
+                    item_fmt
+                )
+
+                ws.write(
+                    1,
+                    col,
+                    date1.strftime("%d-%b"),
+                    date_fmt
+                )
+
+                ws.write(
+                    1,
+                    col + 1,
+                    date2.strftime("%d-%b"),
+                    date_fmt
+                )
+
+                col += 2
+
+            # ------------------------------------------------
+            # Branch rows
+            # ------------------------------------------------
+            for row_idx, branch in enumerate(branch_names, start=2):
+
+                ws.write(
+                    row_idx,
+                    0,
+                    branch,
+                    branch_fmt
+                )
+
+                col = 1
+
+                for item in items:
+
+                    key = item["key"]
+
+                    value1 = 0
+                    value2 = 0
+
+                    if key in data1:
+                        value1 = data1[key].get(branch, 0)
+
+                    if key in data2:
+                        value2 = data2[key].get(branch, 0)
+
+                    ws.write(
+                        row_idx,
+                        col,
+                        value1,
+                        data_fmt
+                    )
+
+                    ws.write(
+                        row_idx,
+                        col + 1,
+                        value2,
+                        data_fmt
+                    )
+
+                    col += 2
+
+            # ------------------------------------------------
+            # Column widths
+            # ------------------------------------------------
+            ws.set_column(0, 0, 22)
+
+            if items:
+                ws.set_column(1, len(items) * 2, 12)
+
+            # Freeze branch + date headers
+            ws.freeze_panes(2, 1)
+
+        # Create Daily comparison
+        write_comparison_sheet(
+            "Daily Comparison",
+            daily_1,
+            daily_2
+        )
+
+        # Create Weekly comparison
+        write_comparison_sheet(
+            "Weekly Comparison",
+            weekly_1,
+            weekly_2
+        )
+
+    return output.getvalue()
+
+
+# --------------------------------------------------------
+# DOWNLOAD BUTTON
+# --------------------------------------------------------
+
+if comparison_date_1 == comparison_date_2:
+
+    st.warning("⚠️ Please select two different dates.")
+
+else:
+
+    comparison_excel = create_comparison_excel(
+        all_data,
+        comparison_date_1,
+        comparison_date_2,
+        branch_names
+    )
+
+    st.download_button(
+        label="📥 Download Two-Date Comparison Report",
+        data=comparison_excel,
+        file_name=(
+            f"BART_Comparison_"
+            f"{comparison_date_1.strftime('%Y-%m-%d')}_"
+            f"{comparison_date_2.strftime('%Y-%m-%d')}.xlsx"
+        ),
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key="two_date_comparison_download"
+    )
+
+

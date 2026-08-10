@@ -1000,67 +1000,105 @@ with col2:
 
 
 
-
 # ========================================================
-# TWO-DATE STOCK COMPARISON REPORT
+# DATE RANGE STOCK MOVEMENT REPORT
 # ========================================================
 
 st.markdown("---")
-st.subheader("🔄 Two-Date Stock Comparison")
+st.subheader("📈 Date Range Stock Movement Report")
 
-compare_col1, compare_col2 = st.columns(2)
+range_col1, range_col2 = st.columns(2)
 
-with compare_col1:
-    comparison_date_1 = st.date_input(
-        "📅 First Date",
-        value=datetime.now().date() - timedelta(days=1),
-        key="comparison_date_1"
+with range_col1:
+    range_start_date = st.date_input(
+        "📅 From Date",
+        value=datetime.now().date() - timedelta(days=7),
+        key="range_start_date"
     )
 
-with compare_col2:
-    comparison_date_2 = st.date_input(
-        "📅 Second Date",
+with range_col2:
+    range_end_date = st.date_input(
+        "📅 To Date",
         value=datetime.now().date(),
-        key="comparison_date_2"
+        key="range_end_date"
     )
 
+# --------------------------------------------------------
+# BUILD SEARCHABLE SKU LIST
+# --------------------------------------------------------
 
-def create_comparison_excel(all_data, date1, date2, branch_names):
+all_sku_data = pd.concat(
+    [
+        daily_df[["Item Name", "SKU", "UOM"]],
+        weekly_df[["Item Name", "SKU", "UOM"]]
+    ],
+    ignore_index=True
+).drop_duplicates()
 
-    date1_str = date1.strftime("%Y-%m-%d")
-    date2_str = date2.strftime("%Y-%m-%d")
+all_sku_data["SKU"] = all_sku_data["SKU"].astype(str).str.strip()
 
-    # Process both dates using the already loaded branch data
-    daily_1, weekly_1 = process_stock(
-        all_data,
-        date1_str,
-        branch_names
-    )
+all_sku_data = all_sku_data[
+    (all_sku_data["SKU"] != "") &
+    (all_sku_data["SKU"].str.upper() != "NAN")
+]
 
-    daily_2, weekly_2 = process_stock(
-        all_data,
-        date2_str,
-        branch_names
-    )
+sku_search_options = sorted(
+    all_sku_data.apply(
+        lambda r: f"{r['SKU']} | {r['Item Name']} | {r['UOM']}",
+        axis=1
+    ).unique()
+)
+
+selected_fast_skus = st.multiselect(
+    "🔎 Fast Moving Items — Search and select SKUs",
+    options=sku_search_options,
+    placeholder="Type SKU or item name to search...",
+    key="date_range_fast_sku_selector"
+)
+
+# --------------------------------------------------------
+# EXCEL REPORT CREATOR
+# --------------------------------------------------------
+
+def create_date_range_excel(
+    all_data,
+    start_date,
+    end_date,
+    branch_names,
+    selected_fast_skus
+):
 
     output = io.BytesIO()
+
+    # Create every date in the selected range
+    date_list = []
+
+    current_date = start_date
+
+    while current_date <= end_date:
+        date_list.append(current_date)
+        current_date += timedelta(days=1)
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
         workbook = writer.book
 
-        # Formats
-        branch_fmt = workbook.add_format({
-            "bold": True,
-            "bg_color": "#F2F2F2",
-            "border": 1,
-            "align": "center",
-            "valign": "vcenter"
-        })
+        # ------------------------------------------------
+        # FORMATS
+        # ------------------------------------------------
 
-        item_fmt = workbook.add_format({
+        item_header_fmt = workbook.add_format({
             "bold": True,
             "bg_color": "#FFFF00",
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter",
+            "text_wrap": True
+        })
+
+        branch_header_fmt = workbook.add_format({
+            "bold": True,
+            "bg_color": "#D9EAD3",
             "border": 1,
             "align": "center",
             "valign": "vcenter"
@@ -1071,178 +1109,380 @@ def create_comparison_excel(all_data, date1, date2, branch_names):
             "bg_color": "#E8E8E8",
             "border": 1,
             "align": "center",
-            "valign": "vcenter"
+            "valign": "center"
         })
 
-        data_fmt = workbook.add_format({
+        text_fmt = workbook.add_format({
             "border": 1,
             "align": "center",
-            "valign": "vcenter"
+            "valign": "center"
         })
 
-        def write_comparison_sheet(
+        quantity_fmt = workbook.add_format({
+            "border": 1,
+            "align": "center",
+            "valign": "center",
+            "num_format": "0.##"
+        })
+
+        # ------------------------------------------------
+        # PROCESS ALL DATES
+        # ------------------------------------------------
+
+        daily_by_date = {}
+        weekly_by_date = {}
+
+        for selected_day in date_list:
+
+            date_str = selected_day.strftime("%Y-%m-%d")
+
+            d_daily, d_weekly = process_stock(
+                all_data,
+                date_str,
+                branch_names
+            )
+
+            daily_by_date[date_str] = d_daily
+            weekly_by_date[date_str] = d_weekly
+
+        # ------------------------------------------------
+        # CREATE ONE SHEET
+        # ------------------------------------------------
+
+        def create_sheet(
             sheet_name,
-            data1,
-            data2
+            date_data,
+            sku_filter=None
         ):
 
             ws = workbook.add_worksheet(sheet_name)
 
-            # ------------------------------------------------
-            # Build item list using both dates
-            # ------------------------------------------------
-            all_keys = list(dict.fromkeys(
-                list(data1.keys()) + list(data2.keys())
-            ))
+            # --------------------------------------------
+            # BUILD COMPLETE ITEM LIST
+            # --------------------------------------------
 
-            # Keep original item order
-            items = []
+            item_map = {}
 
-            for key in all_keys:
+            for date_str in date_data:
 
-                source = data1.get(key) or data2.get(key)
+                for key, item in date_data[date_str].items():
 
-                items.append({
-                    "key": key,
-                    "Item Name": source["Item Name"],
-                    "SKU": source["SKU"],
-                    "UOM": source["UOM"]
-                })
+                    sku = str(item.get("SKU", "")).strip()
 
-            # ------------------------------------------------
-            # Header
-            # ------------------------------------------------
-            ws.write(0, 0, "Branch", item_fmt)
+                    # Apply Fast Moving SKU filter
+                    if sku_filter is not None:
 
-            col = 1
+                        if sku.upper() not in sku_filter:
+                            continue
 
-            for item in items:
+                    if key not in item_map:
 
-                # Merge item name across two date columns
-                ws.merge_range(
-                    0,
-                    col,
-                    0,
-                    col + 1,
-                    item["Item Name"],
-                    item_fmt
-                )
+                        item_map[key] = {
+                            "Item Name": item.get("Item Name", ""),
+                            "SKU": item.get("SKU", ""),
+                            "UOM": item.get("UOM", "")
+                        }
 
-                ws.write(
-                    1,
-                    col,
-                    date1.strftime("%d-%b"),
-                    date_fmt
-                )
+            # Sort items by Item Name
+            item_list = sorted(
+                item_map.items(),
+                key=lambda x: str(
+                    x[1]["Item Name"]
+                ).lower()
+            )
 
-                ws.write(
-                    1,
-                    col + 1,
-                    date2.strftime("%d-%b"),
-                    date_fmt
-                )
+            # --------------------------------------------
+            # HEADER
+            # --------------------------------------------
 
-                col += 2
+            ws.write(0, 0, "Item Name", item_header_fmt)
+            ws.write(0, 1, "SKU", item_header_fmt)
+            ws.write(0, 2, "UOM", item_header_fmt)
+            ws.write(0, 3, "Date", item_header_fmt)
 
-            # ------------------------------------------------
-            # Branch rows
-            # ------------------------------------------------
-            for row_idx, branch in enumerate(branch_names, start=2):
+            for branch_index, branch in enumerate(
+                branch_names,
+                start=4
+            ):
 
                 ws.write(
-                    row_idx,
                     0,
+                    branch_index,
                     branch,
-                    branch_fmt
+                    branch_header_fmt
                 )
 
-                col = 1
+            # --------------------------------------------
+            # DATA
+            # --------------------------------------------
 
-                for item in items:
+            current_row = 1
 
-                    key = item["key"]
+            for key, item in item_list:
 
-                    value1 = 0
-                    value2 = 0
+                start_item_row = current_row
 
-                    if key in data1:
-                        value1 = data1[key].get(branch, 0)
+                for selected_day in date_list:
 
-                    if key in data2:
-                        value2 = data2[key].get(branch, 0)
-
-                    ws.write(
-                        row_idx,
-                        col,
-                        value1,
-                        data_fmt
+                    date_str = selected_day.strftime(
+                        "%Y-%m-%d"
                     )
 
-                    ws.write(
-                        row_idx,
-                        col + 1,
-                        value2,
-                        data_fmt
+                    current_data = date_data.get(
+                        date_str,
+                        {}
                     )
 
-                    col += 2
+                    item_data = current_data.get(
+                        key,
+                        {}
+                    )
 
-            # ------------------------------------------------
-            # Column widths
-            # ------------------------------------------------
-            ws.set_column(0, 0, 22)
+                    # Item Name
+                    ws.write(
+                        current_row,
+                        0,
+                        item["Item Name"],
+                        text_fmt
+                    )
 
-            if items:
-                ws.set_column(1, len(items) * 2, 12)
+                    # SKU
+                    ws.write(
+                        current_row,
+                        1,
+                        item["SKU"],
+                        text_fmt
+                    )
 
-            # Freeze branch + date headers
-            ws.freeze_panes(2, 1)
+                    # UOM
+                    ws.write(
+                        current_row,
+                        2,
+                        item["UOM"],
+                        text_fmt
+                    )
 
-        # Create Daily comparison
-        write_comparison_sheet(
-            "Daily Comparison",
-            daily_1,
-            daily_2
+                    # Date
+                    ws.write(
+                        current_row,
+                        3,
+                        selected_day.strftime("%d-%b-%Y"),
+                        date_fmt
+                    )
+
+                    # Branch quantities
+                    for branch_index, branch in enumerate(
+                        branch_names,
+                        start=4
+                    ):
+
+                        quantity = item_data.get(
+                            branch,
+                            0
+                        )
+
+                        ws.write(
+                            current_row,
+                            branch_index,
+                            quantity,
+                            quantity_fmt
+                        )
+
+                    current_row += 1
+
+                # ----------------------------------------
+                # MERGE ITEM / SKU / UOM FOR DATE RANGE
+                # ----------------------------------------
+
+                end_item_row = current_row - 1
+
+                if end_item_row > start_item_row:
+
+                    ws.merge_range(
+                        start_item_row,
+                        0,
+                        end_item_row,
+                        0,
+                        item["Item Name"],
+                        text_fmt
+                    )
+
+                    ws.merge_range(
+                        start_item_row,
+                        1,
+                        end_item_row,
+                        1,
+                        item["SKU"],
+                        text_fmt
+                    )
+
+                    ws.merge_range(
+                        start_item_row,
+                        2,
+                        end_item_row,
+                        2,
+                        item["UOM"],
+                        text_fmt
+                    )
+
+            # --------------------------------------------
+            # COLUMN WIDTHS
+            # --------------------------------------------
+
+            ws.set_column(0, 0, 30)
+            ws.set_column(1, 1, 14)
+            ws.set_column(2, 2, 12)
+            ws.set_column(3, 3, 16)
+
+            if branch_names:
+
+                ws.set_column(
+                    4,
+                    3 + len(branch_names),
+                    12
+                )
+
+            # Freeze headers + first four columns
+            ws.freeze_panes(1, 4)
+
+            # Autofilter
+            if current_row > 1:
+
+                ws.autofilter(
+                    0,
+                    0,
+                    current_row - 1,
+                    3 + len(branch_names)
+                )
+
+        # ------------------------------------------------
+        # DAILY TAB
+        # ------------------------------------------------
+
+        create_sheet(
+            "Daily Items",
+            daily_by_date
         )
 
-        # Create Weekly comparison
-        write_comparison_sheet(
-            "Weekly Comparison",
-            weekly_1,
-            weekly_2
+        # ------------------------------------------------
+        # WEEKLY TAB
+        # ------------------------------------------------
+
+        create_sheet(
+            "Weekly Items",
+            weekly_by_date
         )
+
+        # ------------------------------------------------
+        # COMBINED DAILY + WEEKLY TAB
+        # ------------------------------------------------
+        #
+        # Combined means ALL Daily + Weekly items in
+        # one report while keeping their quantities
+        # from their respective schedule.
+        #
+        # Schedule is kept internally so Daily/Weekly
+        # items are not incorrectly added together.
+        # ------------------------------------------------
+
+        combined_by_date = {}
+
+        for date_str in date_data_keys if False else []:
+            pass
+
+        for date_str in [
+            d.strftime("%Y-%m-%d")
+            for d in date_list
+        ]:
+
+            combined = {}
+
+            # Daily items
+            for key, item in daily_by_date.get(
+                date_str,
+                {}
+            ).items():
+
+                combined[
+                    f"DAILY__{key}"
+                ] = item.copy()
+
+            # Weekly items
+            for key, item in weekly_by_date.get(
+                date_str,
+                {}
+            ).items():
+
+                combined[
+                    f"WEEKLY__{key}"
+                ] = item.copy()
+
+            combined_by_date[date_str] = combined
+
+        create_sheet(
+            "Combined Items",
+            combined_by_date
+        )
+
+        # ------------------------------------------------
+        # FAST MOVING ITEMS
+        # ------------------------------------------------
+
+        if selected_fast_skus:
+
+            fast_sku_set = {
+                str(x).strip().upper()
+                for x in selected_fast_skus
+            }
+
+            # Extract actual SKU from:
+            # SKU | Item Name | UOM
+            fast_sku_set = {
+                x.split(" | ")[0].strip().upper()
+                for x in selected_fast_skus
+            }
+
+            create_sheet(
+                "Fast Moving Items",
+                combined_by_date,
+                sku_filter=fast_sku_set
+            )
 
     return output.getvalue()
 
 
-# --------------------------------------------------------
-# DOWNLOAD BUTTON
-# --------------------------------------------------------
+# ========================================================
+# DOWNLOAD DATE RANGE REPORT
+# ========================================================
 
-if comparison_date_1 == comparison_date_2:
+if range_start_date > range_end_date:
 
-    st.warning("⚠️ Please select two different dates.")
+    st.error(
+        "⚠️ From Date cannot be after To Date."
+    )
 
 else:
 
-    comparison_excel = create_comparison_excel(
+    date_range_excel = create_date_range_excel(
         all_data,
-        comparison_date_1,
-        comparison_date_2,
-        branch_names
+        range_start_date,
+        range_end_date,
+        branch_names,
+        selected_fast_skus
     )
 
     st.download_button(
-        label="📥 Download Two-Date Comparison Report",
-        data=comparison_excel,
+        label="📥 Download Date Range Stock Report",
+        data=date_range_excel,
         file_name=(
-            f"BART_Comparison_"
-            f"{comparison_date_1.strftime('%Y-%m-%d')}_"
-            f"{comparison_date_2.strftime('%Y-%m-%d')}.xlsx"
+            f"BART_Stock_Movement_"
+            f"{range_start_date.strftime('%Y-%m-%d')}_"
+            f"{range_end_date.strftime('%Y-%m-%d')}.xlsx"
         ),
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        mime=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
         use_container_width=True,
-        key="two_date_comparison_download"
+        key="date_range_stock_download"
     )
-
-

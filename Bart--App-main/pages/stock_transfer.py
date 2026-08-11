@@ -392,7 +392,7 @@ if st.session_state.transfer_cart:
         destination = None
         st.warning("No destination branches available. Contact admin.")
     
-    reason = st.text_area("Reason for Transfer", key="reason_input")
+    reason = st.text_area("Reason for Transfer",placeholder="Must Input transfer date ie.. Example: 11 Aug 2026 Time: 02:52:00", key="reason_input")
 
         
         
